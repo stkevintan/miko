@@ -16,6 +16,7 @@ type DownloadResponse struct {
 	SongName       string `json:"song_name" example:"Song Title" description:"Song name"`
 	Artist         string `json:"artist" example:"Artist Name" description:"Artist name"`
 	Album          string `json:"album" example:"Album Name" description:"Album name"`
+	AlPicUrl       string `json:"album_pic_url" example:"https://..." description:"Album picture URL"`
 	DownloadURL    string `json:"download_url" example:"https://..." description:"Direct download URL"`
 	DownloadedPath string `json:"downloaded_path" example:"./downloads/Song Title.flac" description:"Local path where the song is downloaded"`
 	Quality        string `json:"quality" example:"lossless" description:"Actual quality level"`

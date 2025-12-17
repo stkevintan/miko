@@ -29,7 +29,7 @@ func (h *Handler) handleDownload(c *gin.Context) {
 	// Get query parameters
 	resource := c.Query("resource")
 	level := c.DefaultQuery("level", "lossless")
-	output := c.DefaultQuery("output", "./downloads")
+	output := c.DefaultQuery("output", "")
 	timeoutStr := c.DefaultQuery("timeout", "30000")
 
 	// Validate required parameters
@@ -77,6 +77,7 @@ func (h *Handler) handleDownload(c *gin.Context) {
 			SongName:       song.SongName,
 			Artist:         song.Artist,
 			Album:          song.Album,
+			AlPicUrl:       song.AlPicUrl,
 			DownloadURL:    song.DownloadURL,
 			DownloadedPath: song.DownloadedPath,
 			Quality:        song.Quality,

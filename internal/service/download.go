@@ -22,6 +22,7 @@ import (
 	"github.com/chaunsin/netease-cloud-music/pkg/log"
 	"github.com/chaunsin/netease-cloud-music/pkg/utils"
 	"github.com/stkevintan/miko/internal/models"
+	"go.senan.xyz/taglib"
 	"golang.org/x/sync/semaphore"
 )
 
@@ -52,6 +53,7 @@ type DownloadResult struct {
 	SongName       string
 	Artist         string
 	Album          string
+	AlPicUrl       string
 	DownloadURL    string
 	DownloadedPath string
 	Quality        string
@@ -142,6 +144,7 @@ func (s *Service) Download(ctx context.Context, c *DownloadArgs) (*DownloadResul
 		SongName:       songDetail.Name,
 		Artist:         s.formatArtists(songDetail.Ar),
 		Album:          songDetail.Al.Name,
+		AlPicUrl:       songDetail.Al.PicUrl,
 		DownloadURL:    downloadData.Url,
 		DownloadedPath: dest,
 		Quality:        types.LevelString[actualLevel],
@@ -590,6 +593,9 @@ func (s *Service) downloadToLocal(ctx context.Context, cli *api.Client, drd *wea
 	}
 
 	// 设置歌曲tag值
+	if err := s.setMusicTag(file.Name(), music); err != nil {
+		log.Warn("setMusicTag %s err: %v", file.Name(), err)
+	}
 
 	// 避免文件重名
 	for i := 1; utils.FileExists(dest); i++ {
@@ -608,4 +614,76 @@ func (s *Service) downloadToLocal(ctx context.Context, cli *api.Client, drd *wea
 		return "", fmt.Errorf("chmod: %w", err)
 	}
 	return dest, nil
+}
+
+func (s *Service) setMusicTag(filePath string, music *models.Music) error {
+	artistNames := make([]string, 0, len(music.Artist))
+	for _, ar := range music.Artist {
+		artistNames = append(artistNames, ar.Name)
+	}
+	err := taglib.WriteTags(filePath, map[string][]string{
+		// Multi-valued tags allowed
+		taglib.AlbumArtist: artistNames,
+		taglib.Album:       {music.Album.Name},
+		taglib.Title:       {music.Name},
+		taglib.Length:      {fmt.Sprintf("%d", music.Time/1000)}, // convert milliseconds to seconds
+	}, 0)
+	if err != nil {
+		return fmt.Errorf("WriteTags: %w", err)
+	}
+	// picture tag
+	data, err := s.downloadPicture(context.Background(), api.New(s.config.NmApi), music.Album.PicUrl)
+	if err != nil {
+		log.Warn("downloadPicture err: %v", err)
+		return nil // ignore picture download error
+	}
+	err = taglib.WriteImage(filePath, data)
+	if err != nil {
+		log.Warn("write image err: %v", err)
+		return nil
+	}
+	return nil
+}
+
+// https://p2.music.126.net/bfr3FRWXzPBIJSo2HCK2PA==/109951171924374807.jpg
+func (s *Service) downloadPicture(ctx context.Context, cli *api.Client, url string) ([]byte, error) {
+	if url == "" {
+		return nil, fmt.Errorf("image url is empty")
+	}
+
+	// Create a buffer to store the downloaded data
+	var buf strings.Builder
+
+	// Download image data to buffer
+	resp, err := cli.Download(ctx, url, nil, nil, &buf, nil)
+	if err != nil {
+		return nil, fmt.Errorf("failed to download image: %w", err)
+	}
+
+	// Log response for debugging
+	if s.config.NmApi.Debug {
+		dump, err := httputil.DumpResponse(resp, false)
+		if err != nil {
+			log.Debug("DumpResponse err: %s", err)
+		} else {
+			log.Debug("Picture download DumpResponse: %s", dump)
+		}
+	}
+
+	// Check response status
+	if resp.StatusCode != 200 && resp.StatusCode != 206 {
+		return nil, fmt.Errorf("failed to download image: HTTP %d", resp.StatusCode)
+	}
+
+	// Convert string buffer to bytes
+	data := []byte(buf.String())
+
+	// Basic validation - check if we got some data
+	if len(data) == 0 {
+		return nil, fmt.Errorf("downloaded image data is empty")
+	}
+
+	log.Debug("Downloaded image: %s, size: %d bytes", url, len(data))
+
+	return data, nil
 }
