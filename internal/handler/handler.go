@@ -52,6 +52,7 @@ func (h *Handler) Routes() *gin.Engine {
 
 		// Business logic endpoints
 		api.POST("/process", h.handleProcess)
+		api.POST("/login", h.handleLogin)
 	}
 
 	return r
@@ -64,7 +65,7 @@ func (h *Handler) Routes() *gin.Engine {
 // @Accept       json
 // @Produce      json
 // @Success      200  {object}  models.HealthResponse
-// @Router       /api/health [get]
+// @Router       /health [get]
 func (h *Handler) handleHealth(c *gin.Context) {
 	health := h.service.GetHealth()
 	response := models.HealthResponse{
@@ -85,7 +86,7 @@ func (h *Handler) handleHealth(c *gin.Context) {
 // @Success      200 {object} models.ProcessResponse
 // @Failure      400 {object} models.ErrorResponse
 // @Failure      500 {object} models.ErrorResponse
-// @Router       /api/process [post]
+// @Router       /process [post]
 func (h *Handler) handleProcess(c *gin.Context) {
 	var req models.ProcessRequest
 

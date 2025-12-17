@@ -18,9 +18,3 @@ type ProcessRequest struct {
 type ProcessResponse struct {
 	Result string `json:"result" example:"processed: hello world"`
 }
-
-// ErrorResponse represents an error response
-// @Description Error response
-type ErrorResponse struct {
-	Error string `json:"error" example:"Invalid input"`
-}

@@ -17,6 +17,41 @@ definitions:
         example: healthy
         type: string
     type: object
+  models.LoginRequest:
+    description: User login request
+    properties:
+      password:
+        example: password123
+        type: string
+      server:
+        example: netease
+        type: string
+      timeout:
+        example: 30000
+        type: integer
+      uuid:
+        example: user123
+        type: string
+    required:
+    - password
+    - uuid
+    type: object
+  models.LoginResponse:
+    description: User login response
+    properties:
+      message:
+        example: Login successful
+        type: string
+      success:
+        example: true
+        type: boolean
+      user_id:
+        example: 123456789
+        type: integer
+      username:
+        example: john_doe
+        type: string
+    type: object
   models.ProcessRequest:
     description: Data processing request
     properties:
@@ -47,7 +82,7 @@ info:
   title: Miko Service API
   version: "1.0"
 paths:
-  /api/health:
+  /health:
     get:
       consumes:
       - application/json
@@ -62,7 +97,37 @@ paths:
       summary: Get health status
       tags:
       - health
-  /api/process:
+  /login:
+    post:
+      consumes:
+      - application/json
+      description: Authenticates user with provided credentials
+      parameters:
+      - description: Login credentials
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/models.LoginRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/models.LoginResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+      summary: User login
+      tags:
+      - auth
+  /process:
     post:
       consumes:
       - application/json

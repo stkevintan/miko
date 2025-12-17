@@ -24,7 +24,7 @@ const docTemplate = `{
     "host": "{{.Host}}",
     "basePath": "{{.BasePath}}",
     "paths": {
-        "/api/health": {
+        "/health": {
             "get": {
                 "description": "Returns the current health status of the service",
                 "consumes": [
@@ -47,7 +47,53 @@ const docTemplate = `{
                 }
             }
         },
-        "/api/process": {
+        "/login": {
+            "post": {
+                "description": "Authenticates user with provided credentials",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "auth"
+                ],
+                "summary": "User login",
+                "parameters": [
+                    {
+                        "description": "Login credentials",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/models.LoginRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/models.LoginResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/models.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/models.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/process": {
             "post": {
                 "description": "Processes input data and returns the result",
                 "consumes": [
@@ -116,6 +162,54 @@ const docTemplate = `{
                 "status": {
                     "type": "string",
                     "example": "healthy"
+                }
+            }
+        },
+        "models.LoginRequest": {
+            "description": "User login request",
+            "type": "object",
+            "required": [
+                "password",
+                "uuid"
+            ],
+            "properties": {
+                "password": {
+                    "type": "string",
+                    "example": "password123"
+                },
+                "server": {
+                    "type": "string",
+                    "example": "netease"
+                },
+                "timeout": {
+                    "type": "integer",
+                    "example": 30000
+                },
+                "uuid": {
+                    "type": "string",
+                    "example": "user123"
+                }
+            }
+        },
+        "models.LoginResponse": {
+            "description": "User login response",
+            "type": "object",
+            "properties": {
+                "message": {
+                    "type": "string",
+                    "example": "Login successful"
+                },
+                "success": {
+                    "type": "boolean",
+                    "example": true
+                },
+                "user_id": {
+                    "type": "integer",
+                    "example": 123456789
+                },
+                "username": {
+                    "type": "string",
+                    "example": "john_doe"
                 }
             }
         },

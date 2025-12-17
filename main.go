@@ -27,6 +27,7 @@ import (
 	"syscall"
 	"time"
 
+	l "github.com/chaunsin/netease-cloud-music/pkg/log"
 	_ "github.com/stkevintan/miko/docs" // This line is important for swagger docs
 	"github.com/stkevintan/miko/internal/config"
 	"github.com/stkevintan/miko/internal/handler"
@@ -34,6 +35,12 @@ import (
 )
 
 func main() {
+	l.Default = l.New(&l.Config{
+		Level:  "info",
+		Format: "text",
+		Stdout: true,
+	})
+
 	// Load configuration
 	cfg, err := config.Load()
 	if err != nil {
