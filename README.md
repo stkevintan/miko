@@ -61,6 +61,16 @@ A Go service library built with **Gin HTTP framework**, featuring OpenAPI-docume
    # Health check
    curl http://localhost:8080/api/health
    
+   # User login (requires NetEase account)
+   curl -X POST http://localhost:8080/api/login \
+        -H "Content-Type: application/json" \
+        -d '{"uuid": "your_username", "password": "your_password"}'
+   
+   # Download music (requires login)
+   curl -X POST http://localhost:8080/api/download \
+        -H "Content-Type: application/json" \
+        -d '{"song_id": "2161154646", "level": "lossless"}'
+   
    # Process data
    curl -X POST http://localhost:8080/api/process \
         -H "Content-Type: application/json" \
@@ -118,6 +128,16 @@ All API endpoints are under the `/api/` path as per OpenAPI best practices.
 
 ### Health Check
 - **GET** `/api/health` - Returns service health status
+
+### Authentication  
+- **POST** `/api/login` - User authentication with NetEase Cloud Music
+  - Request body: `{"uuid": "user_id", "password": "password", "timeout": 30000, "server": "cookiecloud_url"}`
+  - Response: `{"username": "user", "user_id": 123456, "success": true}`
+
+### Music Download
+- **POST** `/api/download` - Get download URL and metadata for a song
+  - Request body: `{"song_id": "123456", "level": "lossless", "output": "./downloads", "timeout": 30000}`
+  - Response: `{"download_url": "https://...", "song_name": "title", "artist": "artist", "quality": "lossless"}`
 
 ### Process Data  
 - **POST** `/api/process` - Processes input data

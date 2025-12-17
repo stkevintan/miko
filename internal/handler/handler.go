@@ -53,6 +53,7 @@ func (h *Handler) Routes() *gin.Engine {
 		// Business logic endpoints
 		api.POST("/process", h.handleProcess)
 		api.POST("/login", h.handleLogin)
+		api.GET("/download", h.handleDownload)
 	}
 
 	return r

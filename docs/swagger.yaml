@@ -1,5 +1,65 @@
 basePath: /api
 definitions:
+  models.BatchDownloadResponse:
+    description: Batch music download response
+    properties:
+      failed:
+        example: 2
+        type: integer
+      message:
+        example: Batch download completed
+        type: string
+      songs:
+        items:
+          $ref: '#/definitions/models.DownloadResponse'
+        type: array
+      success:
+        example: 8
+        type: integer
+      total:
+        example: 10
+        type: integer
+    type: object
+  models.DownloadResponse:
+    description: Music download response
+    properties:
+      album:
+        example: Album Name
+        type: string
+      artist:
+        example: Artist Name
+        type: string
+      download_url:
+        example: https://...
+        type: string
+      downloaded_path:
+        example: ./downloads/Song Title.flac
+        type: string
+      duration:
+        example: 240000
+        type: integer
+      file_size:
+        example: 15728640
+        type: integer
+      file_type:
+        example: flac
+        type: string
+      message:
+        example: Download URL generated successfully
+        type: string
+      quality:
+        example: lossless
+        type: string
+      song_id:
+        example: "2161154646"
+        type: string
+      song_name:
+        example: Song Title
+        type: string
+      success:
+        example: true
+        type: boolean
+    type: object
   models.ErrorResponse:
     description: Error response
     properties:
@@ -82,6 +142,65 @@ info:
   title: Miko Service API
   version: "1.0"
 paths:
+  /download:
+    get:
+      consumes:
+      - application/json
+      description: Get download URL and metadata for a song or batch download from
+        playlist/album
+      parameters:
+      - description: Resource to download (song ID, album URL, playlist URL, song
+          URL)
+        example: '"2161154646"'
+        in: query
+        name: resource
+        required: true
+        type: string
+      - description: Audio quality level
+        enum:
+        - standard
+        - higher
+        - exhigh
+        - lossless
+        - hires
+        - "128"
+        - "192"
+        - "320"
+        - HQ
+        - SQ
+        - HR
+        example: '"lossless"'
+        in: query
+        name: level
+        type: string
+      - description: Output directory path
+        example: '"./downloads"'
+        in: query
+        name: output
+        type: string
+      - description: Timeout in milliseconds
+        example: 30000
+        in: query
+        name: timeout
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/models.BatchDownloadResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+      summary: Download music
+      tags:
+      - music
   /health:
     get:
       consumes:

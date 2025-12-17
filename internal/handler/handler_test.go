@@ -8,6 +8,7 @@ import (
 	"strings"
 	"testing"
 
+	l "github.com/chaunsin/netease-cloud-music/pkg/log"
 	"github.com/stkevintan/miko/internal/config"
 	"github.com/stkevintan/miko/internal/models"
 	"github.com/stkevintan/miko/internal/service"
@@ -19,11 +20,17 @@ func contains(s, substr string) bool {
 }
 
 func TestHandler(t *testing.T) {
+	// Initialize logger
+	l.Default = l.New(&l.Config{
+		Level:  "info",
+		Format: "text",
+		Stdout: true,
+	})
+
 	// Setup
-	cfg := &config.Config{
-		Port:        8080,
-		Environment: "test",
-		LogLevel:    "debug",
+	cfg, err := config.Load()
+	if err != nil {
+		t.Fatalf("Failed to load config: %v", err)
 	}
 	svc := service.New(cfg)
 	handler := New(svc)

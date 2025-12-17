@@ -22,6 +22,85 @@
     "host": "localhost:8080",
     "basePath": "/api",
     "paths": {
+        "/download": {
+            "get": {
+                "description": "Get download URL and metadata for a song or batch download from playlist/album",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "music"
+                ],
+                "summary": "Download music",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "example": "\"2161154646\"",
+                        "description": "Resource to download (song ID, album URL, playlist URL, song URL)",
+                        "name": "resource",
+                        "in": "query",
+                        "required": true
+                    },
+                    {
+                        "enum": [
+                            "standard",
+                            "higher",
+                            "exhigh",
+                            "lossless",
+                            "hires",
+                            "128",
+                            "192",
+                            "320",
+                            "HQ",
+                            "SQ",
+                            "HR"
+                        ],
+                        "type": "string",
+                        "example": "\"lossless\"",
+                        "description": "Audio quality level",
+                        "name": "level",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "example": "\"./downloads\"",
+                        "description": "Output directory path",
+                        "name": "output",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "example": 30000,
+                        "description": "Timeout in milliseconds",
+                        "name": "timeout",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/models.BatchDownloadResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/models.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/models.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
         "/health": {
             "get": {
                 "description": "Returns the current health status of the service",
@@ -139,6 +218,88 @@
         }
     },
     "definitions": {
+        "models.BatchDownloadResponse": {
+            "description": "Batch music download response",
+            "type": "object",
+            "properties": {
+                "failed": {
+                    "type": "integer",
+                    "example": 2
+                },
+                "message": {
+                    "type": "string",
+                    "example": "Batch download completed"
+                },
+                "songs": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/models.DownloadResponse"
+                    }
+                },
+                "success": {
+                    "type": "integer",
+                    "example": 8
+                },
+                "total": {
+                    "type": "integer",
+                    "example": 10
+                }
+            }
+        },
+        "models.DownloadResponse": {
+            "description": "Music download response",
+            "type": "object",
+            "properties": {
+                "album": {
+                    "type": "string",
+                    "example": "Album Name"
+                },
+                "artist": {
+                    "type": "string",
+                    "example": "Artist Name"
+                },
+                "download_url": {
+                    "type": "string",
+                    "example": "https://..."
+                },
+                "downloaded_path": {
+                    "type": "string",
+                    "example": "./downloads/Song Title.flac"
+                },
+                "duration": {
+                    "type": "integer",
+                    "example": 240000
+                },
+                "file_size": {
+                    "type": "integer",
+                    "example": 15728640
+                },
+                "file_type": {
+                    "type": "string",
+                    "example": "flac"
+                },
+                "message": {
+                    "type": "string",
+                    "example": "Download URL generated successfully"
+                },
+                "quality": {
+                    "type": "string",
+                    "example": "lossless"
+                },
+                "song_id": {
+                    "type": "string",
+                    "example": "2161154646"
+                },
+                "song_name": {
+                    "type": "string",
+                    "example": "Song Title"
+                },
+                "success": {
+                    "type": "boolean",
+                    "example": true
+                }
+            }
+        },
         "models.ErrorResponse": {
             "description": "Error response",
             "type": "object",

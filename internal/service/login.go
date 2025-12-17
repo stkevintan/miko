@@ -41,7 +41,7 @@ func (s *Service) Login(ctx context.Context, c *LoginArgs) (*LoginResult, error)
 	nctx, cancel := context.WithTimeout(ctx, c.Timeout)
 	defer cancel()
 
-	cli := api.New(s.getNMApiConfig())
+	cli := api.New(s.config.NmApi)
 	defer cli.Close(nctx)
 
 	cc, err := cookiecloud.NewClient(&cookiecloud.Config{
