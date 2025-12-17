@@ -1,0 +1,98 @@
+basePath: /api
+definitions:
+  models.ErrorResponse:
+    description: Error response
+    properties:
+      error:
+        example: Invalid input
+        type: string
+    type: object
+  models.HealthResponse:
+    description: Health check response
+    properties:
+      environment:
+        example: development
+        type: string
+      status:
+        example: healthy
+        type: string
+    type: object
+  models.ProcessRequest:
+    description: Data processing request
+    properties:
+      data:
+        example: hello world
+        type: string
+    required:
+    - data
+    type: object
+  models.ProcessResponse:
+    description: Data processing response
+    properties:
+      result:
+        example: 'processed: hello world'
+        type: string
+    type: object
+host: localhost:8080
+info:
+  contact:
+    email: support@swagger.io
+    name: API Support
+    url: http://www.swagger.io/support
+  description: A Go service library with HTTP API endpoints
+  license:
+    name: MIT
+    url: http://opensource.org/licenses/MIT
+  termsOfService: http://swagger.io/terms/
+  title: Miko Service API
+  version: "1.0"
+paths:
+  /api/health:
+    get:
+      consumes:
+      - application/json
+      description: Returns the current health status of the service
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/models.HealthResponse'
+      summary: Get health status
+      tags:
+      - health
+  /api/process:
+    post:
+      consumes:
+      - application/json
+      description: Processes input data and returns the result
+      parameters:
+      - description: Data to process
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/models.ProcessRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/models.ProcessResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+      summary: Process data
+      tags:
+      - data
+schemes:
+- http
+- https
+swagger: "2.0"
