@@ -18,10 +18,10 @@ import (
 // @Accept       json
 // @Produce      json
 // @Param        uri query []string true "Resource URIs to download (can be song ID, album URL, playlist URL, song URL). Multiple URIs supported for batch downloads." example("2161154646") example("https://music.163.com/song?id=2161154646")
-// @Param        level query string false "Audio quality level" example("lossless") Enums(standard, higher, exhigh, lossless, hires, 128, 192, 320, HQ, SQ, HR) default("lossless")
+// @Param        level query string false "Audio quality level" example("hires") Enums(standard, higher, exhigh, lossless, hires, 128, 192, 320, HQ, SQ, HR) default(lossless)
 // @Param        output query string false "Output directory path for downloaded files" example("./downloads")
 // @Param        timeout query int false "Timeout in milliseconds for the download operation" example(60000)
-// @Param        conflict_policy query string false "How to handle existing files" example("skip") Enums(skip, overwrite, rename, update_tags) default("skip")
+// @Param        conflict_policy query string false "How to handle existing files" example("skip") Enums(skip, overwrite, rename, update_tags) default(skip)
 // @Success      200 {object} models.DownloadSummary "Successful batch download response with individual song results and error details"
 // @Failure      400 {object} models.ErrorResponse "Bad request - missing or invalid parameters"
 // @Failure      500 {object} models.ErrorResponse "Internal server error during download processing"
@@ -30,7 +30,7 @@ func (h *Handler) handleDownload(c *gin.Context) {
 	// Get query parameters
 	uris := c.QueryArray("uri")
 	level := c.DefaultQuery("level", "lossless")
-	output := c.DefaultQuery("output", "")
+	output := c.Query("output")
 	timeoutStr := c.Query("timeout")
 	conflictPolicy := c.DefaultQuery("conflict_policy", "skip")
 	platform := c.DefaultQuery("platform", "netease")

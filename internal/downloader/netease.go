@@ -255,10 +255,6 @@ func NewDownloader(config *DownloaderConfig) (*NMDownloader, error) {
 	cli := api.New(config.Root.NmApi)
 	request := weapi.New(cli)
 
-	if config.Output == "" {
-		return nil, fmt.Errorf("output directory is required")
-	}
-
 	// Validate and parse level
 	dlevel, err := validateQualityLevel(config.Level)
 	if err != nil {
@@ -475,6 +471,7 @@ func (d *NMDownloader) fetchDownloadInfo(ctx context.Context, music *models.Musi
 			return nil, fmt.Errorf("no audio source available")
 		case -105:
 			return nil, fmt.Errorf("insufficient permissions or no membership")
+		// -103
 		default:
 			return nil, fmt.Errorf("resource unavailable or no copyright (code: %v)", data.Code)
 		}

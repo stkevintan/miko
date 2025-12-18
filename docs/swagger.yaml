@@ -3,12 +3,13 @@ definitions:
   models.BatchDownloadResponse:
     description: Batch music download response
     properties:
+      errors:
+        items:
+          type: string
+        type: array
       failed:
         example: 2
         type: integer
-      message:
-        example: Batch download completed
-        type: string
       songs:
         items:
           $ref: '#/definitions/models.DownloadResponse'
@@ -47,9 +48,6 @@ definitions:
       file_type:
         example: flac
         type: string
-      message:
-        example: Download URL generated successfully
-        type: string
       quality:
         example: lossless
         type: string
@@ -62,6 +60,14 @@ definitions:
       success:
         example: true
         type: boolean
+    type: object
+  models.DownloadSummary:
+    properties:
+      details:
+        $ref: '#/definitions/models.BatchDownloadResponse'
+      summary:
+        example: Downloaded 8 out of 10 songs.
+        type: string
     type: object
   models.ErrorResponse:
     description: Error response
@@ -148,17 +154,22 @@ paths:
     get:
       consumes:
       - application/json
-      description: Get download URL and metadata for a song or batch download from
-        playlist/album
+      description: Download single or multiple music tracks by providing song IDs,
+        album URLs, playlist URLs, or song URLs. Supports batch downloads with various
+        quality levels and conflict resolution policies.
       parameters:
-      - description: Resource to download (song ID, album URL, playlist URL, song
-          URL)
+      - collectionFormat: csv
+        description: Resource URIs to download (can be song ID, album URL, playlist
+          URL, song URL). Multiple URIs supported for batch downloads.
         example: '"2161154646"'
         in: query
-        name: resource
+        items:
+          type: string
+        name: uri
         required: true
-        type: string
-      - description: Audio quality level
+        type: array
+      - default: lossless
+        description: Audio quality level
         enum:
         - standard
         - higher
@@ -171,36 +182,48 @@ paths:
         - HQ
         - SQ
         - HR
-        example: '"lossless"'
+        example: '"hires"'
         in: query
         name: level
         type: string
-      - description: Output directory path
+      - description: Output directory path for downloaded files
         example: '"./downloads"'
         in: query
         name: output
         type: string
-      - description: Timeout in milliseconds
-        example: 30000
+      - description: Timeout in milliseconds for the download operation
+        example: 60000
         in: query
         name: timeout
         type: integer
+      - default: skip
+        description: How to handle existing files
+        enum:
+        - skip
+        - overwrite
+        - rename
+        - update_tags
+        example: '"skip"'
+        in: query
+        name: conflict_policy
+        type: string
       produces:
       - application/json
       responses:
         "200":
-          description: OK
+          description: Successful batch download response with individual song results
+            and error details
           schema:
-            $ref: '#/definitions/models.BatchDownloadResponse'
+            $ref: '#/definitions/models.DownloadSummary'
         "400":
-          description: Bad Request
+          description: Bad request - missing or invalid parameters
           schema:
             $ref: '#/definitions/models.ErrorResponse'
         "500":
-          description: Internal Server Error
+          description: Internal server error during download processing
           schema:
             $ref: '#/definitions/models.ErrorResponse'
-      summary: Download music
+      summary: Download music tracks
       tags:
       - music
   /health:

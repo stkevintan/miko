@@ -23,7 +23,7 @@
     "paths": {
         "/download": {
             "get": {
-                "description": "Get download URL and metadata for a song or batch download from playlist/album",
+                "description": "Download single or multiple music tracks by providing song IDs, album URLs, playlist URLs, or song URLs. Supports batch downloads with various quality levels and conflict resolution policies.",
                 "consumes": [
                     "application/json"
                 ],
@@ -33,13 +33,17 @@
                 "tags": [
                     "music"
                 ],
-                "summary": "Download music",
+                "summary": "Download music tracks",
                 "parameters": [
                     {
-                        "type": "string",
+                        "type": "array",
+                        "items": {
+                            "type": "string"
+                        },
+                        "collectionFormat": "csv",
                         "example": "\"2161154646\"",
-                        "description": "Resource to download (song ID, album URL, playlist URL, song URL)",
-                        "name": "resource",
+                        "description": "Resource URIs to download (can be song ID, album URL, playlist URL, song URL). Multiple URIs supported for batch downloads.",
+                        "name": "uri",
                         "in": "query",
                         "required": true
                     },
@@ -58,7 +62,8 @@
                             "HR"
                         ],
                         "type": "string",
-                        "example": "\"lossless\"",
+                        "default": "lossless",
+                        "example": "\"hires\"",
                         "description": "Audio quality level",
                         "name": "level",
                         "in": "query"
@@ -66,33 +71,47 @@
                     {
                         "type": "string",
                         "example": "\"./downloads\"",
-                        "description": "Output directory path",
+                        "description": "Output directory path for downloaded files",
                         "name": "output",
                         "in": "query"
                     },
                     {
                         "type": "integer",
-                        "example": 30000,
-                        "description": "Timeout in milliseconds",
+                        "example": 60000,
+                        "description": "Timeout in milliseconds for the download operation",
                         "name": "timeout",
+                        "in": "query"
+                    },
+                    {
+                        "enum": [
+                            "skip",
+                            "overwrite",
+                            "rename",
+                            "update_tags"
+                        ],
+                        "type": "string",
+                        "default": "skip",
+                        "example": "\"skip\"",
+                        "description": "How to handle existing files",
+                        "name": "conflict_policy",
                         "in": "query"
                     }
                 ],
                 "responses": {
                     "200": {
-                        "description": "OK",
+                        "description": "Successful batch download response with individual song results and error details",
                         "schema": {
-                            "$ref": "#/definitions/models.BatchDownloadResponse"
+                            "$ref": "#/definitions/models.DownloadSummary"
                         }
                     },
                     "400": {
-                        "description": "Bad Request",
+                        "description": "Bad request - missing or invalid parameters",
                         "schema": {
                             "$ref": "#/definitions/models.ErrorResponse"
                         }
                     },
                     "500": {
-                        "description": "Internal Server Error",
+                        "description": "Internal server error during download processing",
                         "schema": {
                             "$ref": "#/definitions/models.ErrorResponse"
                         }
@@ -221,13 +240,15 @@
             "description": "Batch music download response",
             "type": "object",
             "properties": {
+                "errors": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
                 "failed": {
                     "type": "integer",
                     "example": 2
-                },
-                "message": {
-                    "type": "string",
-                    "example": "Batch download completed"
                 },
                 "songs": {
                     "type": "array",
@@ -281,10 +302,6 @@
                     "type": "string",
                     "example": "flac"
                 },
-                "message": {
-                    "type": "string",
-                    "example": "Download URL generated successfully"
-                },
                 "quality": {
                     "type": "string",
                     "example": "lossless"
@@ -300,6 +317,18 @@
                 "success": {
                     "type": "boolean",
                     "example": true
+                }
+            }
+        },
+        "models.DownloadSummary": {
+            "type": "object",
+            "properties": {
+                "details": {
+                    "$ref": "#/definitions/models.BatchDownloadResponse"
+                },
+                "summary": {
+                    "type": "string",
+                    "example": "Downloaded 8 out of 10 songs."
                 }
             }
         },
