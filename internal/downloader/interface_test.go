@@ -2,7 +2,6 @@ package downloader
 
 import (
 	"context"
-	"strings"
 	"testing"
 
 	"github.com/stkevintan/miko/internal/config"
@@ -64,22 +63,31 @@ func TestDownloaderInterface(t *testing.T) {
 		// This test mainly checks that the interface is correctly implemented
 		// We can't easily test the actual download without proper setup
 
+		// Load config for proper initialization
+		rootConfig, err := config.Load()
+		if err != nil {
+			t.Skipf("Skipping test due to config load error: %v", err)
+			return
+		}
+
 		config := &DownloaderConfig{
 			Level:          "standard",
 			Output:         "./test_output",
 			ConflictPolicy: "skip",
+			Root:           rootConfig,
 		}
 
-		// Test factory creation (this will fail due to missing config, but validates structure)
+		// Test factory creation
 		factory := &NetEaseDownloaderFactory{}
-		_, err := factory.CreateDownloader(context.Background(), config)
-		if err == nil {
-			t.Error("Expected error due to missing config")
+		downloader, err := factory.CreateDownloader(context.Background(), config)
+		if err != nil {
+			t.Errorf("Unexpected error creating downloader: %v", err)
+			return
 		}
 
-		// Verify error message
-		if err != nil && !strings.Contains(err.Error(), "config") {
-			t.Logf("Got expected error: %v", err)
+		// Verify downloader is not nil
+		if downloader == nil {
+			t.Error("Expected non-nil downloader")
 		}
 	})
 

@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	l "github.com/chaunsin/netease-cloud-music/pkg/log"
@@ -12,7 +13,12 @@ import (
 	"github.com/stkevintan/miko/internal/service"
 )
 
+// Helper function for string containment check
+
 func TestDownloadHandler(t *testing.T) {
+	contains := func(s, substr string) bool {
+		return strings.Contains(s, substr)
+	}
 	// Initialize logger
 	l.Default = l.New(&l.Config{
 		Level:  "info",
@@ -31,7 +37,7 @@ func TestDownloadHandler(t *testing.T) {
 
 	// Test download endpoint with valid request
 	t.Run("GET /api/download with valid song ID", func(t *testing.T) {
-		req := httptest.NewRequest("GET", "/api/download?resource=123456&level=lossless&output=./test_downloads&timeout=30000", nil)
+		req := httptest.NewRequest("GET", "/api/download?uri=123456&level=lossless&timeout=30000", nil)
 		w := httptest.NewRecorder()
 
 		mux.ServeHTTP(w, req)
@@ -50,8 +56,11 @@ func TestDownloadHandler(t *testing.T) {
 		// Check if response has expected structure
 		if w.Code == http.StatusOK {
 			// Successful response should have download info
-			if _, hasSuccess := response["success"]; !hasSuccess {
-				t.Error("Expected 'success' field in response")
+			if _, hasSummary := response["summary"]; !hasSummary {
+				t.Error("Expected 'summary' field in response")
+			}
+			if _, hasDetails := response["details"]; !hasDetails {
+				t.Error("Expected 'details' field in response")
 			}
 		} else {
 			// Error response should have error field
@@ -62,8 +71,8 @@ func TestDownloadHandler(t *testing.T) {
 	})
 
 	// Test download endpoint with missing song ID
-	t.Run("GET /api/download with missing resource", func(t *testing.T) {
-		req := httptest.NewRequest("GET", "/api/download?level=lossless&output=./test_downloads&timeout=30000", nil)
+	t.Run("GET /api/download with missing uri", func(t *testing.T) {
+		req := httptest.NewRequest("GET", "/api/download?level=lossless&timeout=30000", nil)
 		w := httptest.NewRecorder()
 
 		mux.ServeHTTP(w, req)
@@ -77,14 +86,14 @@ func TestDownloadHandler(t *testing.T) {
 			t.Errorf("Failed to decode response: %v", err)
 		}
 
-		if !contains(response.Error, "resource") && !contains(response.Error, "required") {
-			t.Errorf("Expected error about required resource field, got '%s'", response.Error)
+		if !contains(response.Error, "uri") && !contains(response.Error, "required") {
+			t.Errorf("Expected error about required uri field, got '%s'", response.Error)
 		}
 	})
 
 	// Test download endpoint with minimal valid request
 	t.Run("GET /api/download with minimal parameters", func(t *testing.T) {
-		req := httptest.NewRequest("GET", "/api/download?resource=123456", nil)
+		req := httptest.NewRequest("GET", "/api/download?uri=123456", nil)
 		w := httptest.NewRecorder()
 
 		mux.ServeHTTP(w, req)
@@ -102,7 +111,7 @@ func TestDownloadHandler(t *testing.T) {
 
 	// Test download endpoint with URL
 	t.Run("GET /api/download with song URL", func(t *testing.T) {
-		req := httptest.NewRequest("GET", "/api/download?resource=https://music.163.com/song?id=123456", nil)
+		req := httptest.NewRequest("GET", "/api/download?uri=https://music.163.com/song?id=123456", nil)
 		w := httptest.NewRecorder()
 
 		mux.ServeHTTP(w, req)

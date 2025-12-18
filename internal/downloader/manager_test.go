@@ -2,6 +2,7 @@ package downloader
 
 import (
 	"context"
+	"strings"
 	"testing"
 
 	"github.com/stkevintan/miko/internal/config"
@@ -116,10 +117,13 @@ func TestDownloaderManager(t *testing.T) {
 				name:     "invalid config",
 				platform: "netease",
 				config: &DownloaderConfig{
-					Root: cfg,
+					Level:          "invalid_level",
+					Output:         "./test",
+					ConflictPolicy: "skip",
+					Root:           cfg,
 				},
 				wantError: true,
-				errorMsg:  "URI",
+				errorMsg:  "invalid quality level",
 			},
 		}
 
@@ -130,7 +134,7 @@ func TestDownloaderManager(t *testing.T) {
 				if tt.wantError {
 					if err == nil {
 						t.Errorf("Expected error for %s", tt.name)
-					} else if tt.errorMsg != "" && !containsIgnoreCase(err.Error(), tt.errorMsg) {
+					} else if tt.errorMsg != "" && !containsIgnoreCaseManager(err.Error(), tt.errorMsg) {
 						t.Errorf("Expected error containing %q, got: %v", tt.errorMsg, err)
 					}
 					return
@@ -184,4 +188,15 @@ func TestDownloaderManager(t *testing.T) {
 			t.Error("Custom platform not found after registration")
 		}
 	})
+}
+
+// Helper function to check if string contains substring (case insensitive)
+func containsIgnoreCaseManager(s, substr string) bool {
+	s, substr = strings.ToLower(s), strings.ToLower(substr)
+	for i := 0; i <= len(s)-len(substr); i++ {
+		if s[i:i+len(substr)] == substr {
+			return true
+		}
+	}
+	return false
 }
