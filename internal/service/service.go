@@ -2,17 +2,20 @@ package service
 
 import (
 	"github.com/stkevintan/miko/internal/config"
+	"github.com/stkevintan/miko/internal/downloader"
 )
 
 // Service contains the business logic for our application
 type Service struct {
-	config *config.Config
+	config            *config.Config
+	downloaderManager *downloader.DownloaderManager
 }
 
 // New creates a new service instance
 func New(cfg *config.Config) *Service {
 	return &Service{
-		config: cfg,
+		config:            cfg,
+		downloaderManager: downloader.NewDownloaderManager(),
 	}
 }
 

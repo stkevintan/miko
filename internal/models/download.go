@@ -24,15 +24,19 @@ type DownloadResponse struct {
 	FileSize       int64  `json:"file_size" example:"15728640" description:"File size in bytes"`
 	Duration       int64  `json:"duration" example:"240000" description:"Duration in milliseconds"`
 	Success        bool   `json:"success" example:"true" description:"Download success status"`
-	Message        string `json:"message,omitempty" example:"Download URL generated successfully" description:"Additional message"`
 }
 
 // BatchDownloadResponse represents the batch download response
 // @Description Batch music download response
 type BatchDownloadResponse struct {
-	Total   int64              `json:"total" example:"10" description:"Total number of songs"`
-	Success int64              `json:"success" example:"8" description:"Number of successful downloads"`
-	Failed  int64              `json:"failed" example:"2" description:"Number of failed downloads"`
-	Songs   []DownloadResponse `json:"songs" description:"Individual song download results"`
-	Message string             `json:"message" example:"Batch download completed" description:"Overall status message"`
+	Total   int64               `json:"total" example:"10" description:"Total number of songs"`
+	Success int64               `json:"success" example:"8" description:"Number of successful downloads"`
+	Failed  int64               `json:"failed" example:"2" description:"Number of failed downloads"`
+	Songs   []*DownloadResponse `json:"songs" description:"Individual song download results"`
+	Errors  []string            `json:"errors,omitempty" description:"Error messages for failed downloads"`
+}
+
+type DownloadSummary struct {
+	Summary string                 `json:"summary" example:"Downloaded 8 out of 10 songs." description:"Summary of the download operation"`
+	Details *BatchDownloadResponse `json:"details" description:"Detailed batch download response"`
 }

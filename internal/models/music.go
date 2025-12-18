@@ -43,3 +43,11 @@ func (m Music) String() string {
 func (m *Music) NameString() string {
 	return utils.Filename(m.Name, "_")
 }
+
+func (m *Music) SongId() string {
+	return fmt.Sprintf("%d", m.Id)
+}
+
+func (m *Music) Filename(extType string) string {
+	return fmt.Sprintf("%s - %s.%s", m.ArtistString(), m.NameString(), strings.ToLower(extType))
+}
