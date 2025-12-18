@@ -1,0 +1,77 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+
+    - name: Set up Go
+      uses: actions/setup-go@v4
+      with:
+        go-version: '1.21'
+
+    - name: Install swag
+      run: go install github.com/swaggo/swag/cmd/swag@latest
+
+    - name: Make build script executable
+      run: chmod +x scripts/build.sh
+
+    - name: Build release binaries
+      run: |
+        platforms=(
+          "linux/amd64"
+          "linux/arm64" 
+          "darwin/amd64"
+          "darwin/arm64"
+          "windows/amd64"
+        )
+        
+        for platform in "${platforms[@]}"; do
+          echo "Building for $platform"
+          ./scripts/build.sh --release "$platform"
+        done
+
+    - name: Create checksums
+      run: |
+        cd bin
+        sha256sum * > checksums.txt
+        cd ..
+
+    - name: Generate release notes
+      run: |
+        echo "# Release ${GITHUB_REF#refs/tags/}" > release_notes.md
+        echo "" >> release_notes.md
+        echo "## Changes" >> release_notes.md
+        echo "" >> release_notes.md
+        
+        # Get commits since last tag
+        if git describe --tags --abbrev=0 HEAD~1 >/dev/null 2>&1; then
+          last_tag=$(git describe --tags --abbrev=0 HEAD~1)
+          git log --pretty=format:"- %s" $last_tag..HEAD >> release_notes.md
+        else
+          echo "- Initial release" >> release_notes.md
+        fi
+
+    - name: Create release
+      uses: softprops/action-gh-release@v1
+      with:
+        files: |
+          bin/*
+        body_path: release_notes.md
+        draft: false
+        prerelease: ${{ contains(github.ref, 'alpha') || contains(github.ref, 'beta') || contains(github.ref, 'rc') }}
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

@@ -1,0 +1,132 @@
+name: Build and Publish Docker Images
+
+on:
+  push:
+    branches: [ main, develop ]
+    tags: [ 'v*' ]
+  pull_request:
+    branches: [ main ]
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+
+    strategy:
+      matrix:
+        platform:
+          - linux/amd64
+          - linux/arm64
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+
+    - name: Set up Go
+      uses: actions/setup-go@v4
+      with:
+        go-version: '1.21'
+
+    - name: Install swag
+      run: go install github.com/swaggo/swag/cmd/swag@latest
+
+    - name: Make build script executable
+      run: chmod +x scripts/build.sh
+
+    - name: Extract platform info
+      id: platform
+      run: |
+        echo "os=$(echo ${{ matrix.platform }} | cut -d'/' -f1)" >> $GITHUB_OUTPUT
+        echo "arch=$(echo ${{ matrix.platform }} | cut -d'/' -f2)" >> $GITHUB_OUTPUT
+        echo "platform_tag=$(echo ${{ matrix.platform }} | tr '/' '-')" >> $GITHUB_OUTPUT
+
+    - name: Build application
+      run: |
+        if [[ "${{ github.ref_type }}" == "tag" ]]; then
+          ./scripts/build.sh --release ${{ matrix.platform }}
+        else
+          ./scripts/build.sh --dev ${{ matrix.platform }}
+        fi
+
+    - name: Set up Docker Buildx
+      uses: docker/setup-buildx-action@v3
+
+    - name: Log in to Container Registry
+      uses: docker/login-action@v3
+      with:
+        registry: ${{ env.REGISTRY }}
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
+
+    - name: Extract metadata
+      id: meta
+      uses: docker/metadata-action@v5
+      with:
+        images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+        tags: |
+          type=ref,event=branch
+          type=ref,event=pr
+          type=semver,pattern={{version}}
+          type=semver,pattern={{major}}.{{minor}}
+          type=semver,pattern={{major}}
+          type=sha,prefix={{branch}}-
+        flavor: |
+          suffix=-${{ steps.platform.outputs.platform_tag }}
+
+    - name: Build and push Docker image
+      uses: docker/build-push-action@v5
+      with:
+        context: .
+        file: ./docker/Dockerfile
+        platforms: ${{ matrix.platform }}
+        push: true
+        tags: ${{ steps.meta.outputs.tags }}
+        labels: ${{ steps.meta.outputs.labels }}
+        build-args: |
+          TARGETOS=${{ steps.platform.outputs.os }}
+          TARGETARCH=${{ steps.platform.outputs.arch }}
+        cache-from: type=gha
+        cache-to: type=gha,mode=max
+
+  manifest:
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    if: github.event_name != 'pull_request'
+
+    steps:
+    - name: Log in to Container Registry
+      uses: docker/login-action@v3
+      with:
+        registry: ${{ env.REGISTRY }}
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
+
+    - name: Extract metadata for manifest
+      id: meta
+      uses: docker/metadata-action@v5
+      with:
+        images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+        tags: |
+          type=ref,event=branch
+          type=semver,pattern={{version}}
+          type=semver,pattern={{major}}.{{minor}}
+          type=semver,pattern={{major}}
+          type=sha,prefix={{branch}}-
+
+    - name: Create and push manifest
+      run: |
+        for tag in $(echo "${{ steps.meta.outputs.tags }}" | tr ',' ' '); do
+          docker manifest create $tag \
+            $tag-linux-amd64 \
+            $tag-linux-arm64
+          docker manifest push $tag
+        done

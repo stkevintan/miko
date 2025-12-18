@@ -1,0 +1,43 @@
+# Git
+.git
+.gitignore
+
+# Documentation
+*.md
+docs/
+
+# Development files
+.vscode/
+.idea/
+
+# Build artifacts (except what we need)
+!bin/
+
+# Test files
+*_test.go
+test/
+
+# CI/CD
+.github/
+
+# Local development
+.env
+.env.*
+
+# IDE
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Temporary files
+tmp/
+temp/
+*.tmp
+*.log
+
+# Dependencies cache
+vendor/

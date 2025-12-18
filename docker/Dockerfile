@@ -1,31 +1,42 @@
-FROM golang:1.21-alpine AS builder
+# Multi-stage build leveraging pre-built binaries from build.sh
+ARG TARGETOS=linux
+ARG TARGETARCH=amd64
+
+FROM scratch AS binary-selector
+# Copy all built binaries
+COPY bin/ /bin/
+
+# Final stage - minimal runtime image
+FROM alpine:latest
+
+# Install ca-certificates for HTTPS requests
+RUN apk --no-cache add ca-certificates tzdata
+
+# Create non-root user for security
+RUN adduser -D -s /bin/sh miko
 
 WORKDIR /app
 
-# Copy go mod and sum files
-COPY go.mod go.sum ./
+# Copy the appropriate binary based on target architecture
+ARG TARGETOS
+ARG TARGETARCH
+COPY --from=binary-selector /bin/miko-${TARGETOS}-${TARGETARCH}* ./miko
 
-# Download dependencies
-RUN go mod download
+# Set binary as executable and change ownership
+RUN chmod +x ./miko && chown miko:miko ./miko
 
-# Copy source code
-COPY . .
+# Switch to non-root user
+USER miko
 
-# Build the application
-RUN CGO_ENABLED=0 GOOS=linux go build -a -installsuffix cgo -o main .
+# Set default port (can be overridden with docker run -e PORT=xxxx)
+ENV PORT=8082
 
-# Final stage
-FROM alpine:latest
+# Expose port dynamically
+EXPOSE $PORT
 
-RUN apk --no-cache add ca-certificates
-
-WORKDIR /root/
-
-# Copy the binary from builder
-COPY --from=builder /app/main .
-
-# Expose port
-EXPOSE 8080
+# Health check using environment variable
+HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
+    CMD wget --no-verbose --tries=1 --spider http://localhost:$PORT/health || exit 1
 
 # Command to run
-CMD ["./main"]
+CMD ["./miko"]
