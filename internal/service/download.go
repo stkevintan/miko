@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/chaunsin/netease-cloud-music/api/types"
 	"github.com/stkevintan/miko/internal/downloader"
 	"github.com/stkevintan/miko/internal/models"
 )
@@ -22,11 +21,6 @@ type DownloadOptions struct {
 
 // Download handles downloading from various resource types (ID, URL, etc.)
 func (s *Service) Download(ctx context.Context, c *DownloadOptions) (*models.BatchDownloadResponse, error) {
-	// Set default values
-	if c.Level == "" {
-		c.Level = string(types.LevelLossless)
-	}
-
 	var (
 		nctx   context.Context
 		cancel context.CancelFunc
