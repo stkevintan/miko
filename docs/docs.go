@@ -256,6 +256,10 @@ const docTemplate = `{
                     "type": "string",
                     "example": "Album Name"
                 },
+                "album_pic_url": {
+                    "type": "string",
+                    "example": "https://..."
+                },
                 "artist": {
                     "type": "string",
                     "example": "Artist Name"
@@ -403,7 +407,7 @@ const docTemplate = `{
 // SwaggerInfo holds exported Swagger Info so clients can modify it
 var SwaggerInfo = &swag.Spec{
 	Version:          "1.0",
-	Host:             "localhost:8080",
+	Host:             "",
 	BasePath:         "/api",
 	Schemes:          []string{"http", "https"},
 	Title:            "Miko Service API",

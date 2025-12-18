@@ -26,6 +26,9 @@ definitions:
       album:
         example: Album Name
         type: string
+      album_pic_url:
+        example: https://...
+        type: string
       artist:
         example: Artist Name
         type: string
@@ -128,7 +131,6 @@ definitions:
         example: 'processed: hello world'
         type: string
     type: object
-host: localhost:8080
 info:
   contact:
     email: support@swagger.io

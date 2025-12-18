@@ -19,7 +19,6 @@
         },
         "version": "1.0"
     },
-    "host": "localhost:8080",
     "basePath": "/api",
     "paths": {
         "/download": {
@@ -253,6 +252,10 @@
                 "album": {
                     "type": "string",
                     "example": "Album Name"
+                },
+                "album_pic_url": {
+                    "type": "string",
+                    "example": "https://..."
                 },
                 "artist": {
                     "type": "string",

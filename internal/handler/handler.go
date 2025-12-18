@@ -42,7 +42,11 @@ func (h *Handler) Routes() *gin.Engine {
 	})
 
 	// Swagger UI endpoint
-	r.GET("/swagger/*any", ginSwagger.WrapHandler(swaggerFiles.Handler))
+	r.GET("/docs/*any", ginSwagger.WrapHandler(swaggerFiles.Handler))
+	// Redirect /docs to /docs/index.html for convenience
+	r.GET("/docs", func(c *gin.Context) {
+		c.Redirect(301, "/docs/index.html")
+	})
 
 	// API group
 	api := r.Group("/api")

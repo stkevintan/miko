@@ -21,7 +21,7 @@ type Config struct {
 func Load() (*Config, error) {
 	home, _ := os.UserHomeDir()
 	cfg := &Config{
-		Port:        8080,
+		Port:        8082,
 		Environment: "development",
 		LogLevel:    "info",
 		NmApi: &api.Config{

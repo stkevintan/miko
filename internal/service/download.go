@@ -99,18 +99,6 @@ func (s *Service) Download(ctx context.Context, c *DownloadArgs) (*DownloadResul
 
 	request := weapi.New(cli)
 
-	// Check if login is required
-	if request.NeedLogin(nctx) {
-		return nil, fmt.Errorf("login required for download")
-	}
-
-	defer func() {
-		refresh, err := request.TokenRefresh(ctx, &weapi.TokenRefreshReq{})
-		if err != nil || refresh.Code != 200 {
-			log.Warn("TokenRefresh resp:%+v err: %s", refresh, err)
-		}
-	}()
-
 	songId := fmt.Sprintf("%d", c.Music.Id)
 	// Get song details first
 	songDetail, err := s.getSongDetail(nctx, request, songId)
@@ -139,6 +127,77 @@ func (s *Service) Download(ctx context.Context, c *DownloadArgs) (*DownloadResul
 		}
 	}
 
+	result := &DownloadResult{
+		SongID:         fmt.Sprintf("%d", c.Music.Id),
+		SongName:       songDetail.Name,
+		Artist:         s.formatArtists(songDetail.Ar),
+		Album:          songDetail.Al.Name,
+		AlPicUrl:       songDetail.Al.PicUrl,
+		DownloadURL:    downloadData.Url,
+		DownloadedPath: dest,
+		Quality:        types.LevelString[actualLevel],
+		FileType:       downloadData.Type,
+		FileSize:       downloadData.Size,
+		Duration:       songDetail.Dt,
+	}
+
+	return result, nil
+}
+
+// downloadWithClient is a helper function that uses a shared API client to avoid cookie file conflicts
+func (s *Service) downloadWithClient(ctx context.Context, c *DownloadArgs, cli *api.Client) (*DownloadResult, error) {
+	if c.Music == nil {
+		return nil, fmt.Errorf("music is required")
+	}
+
+	// Set default values
+	if c.Level == "" {
+		c.Level = string(types.LevelLossless) // default to lossless
+	}
+	if c.Timeout == 0 {
+		c.Timeout = 30 * time.Second
+	}
+
+	// Validate quality level
+	level, err := s.validateQualityLevel(c.Level)
+	if err != nil {
+		return nil, fmt.Errorf("invalid quality level: %w", err)
+	}
+
+	nctx, cancel := context.WithTimeout(ctx, c.Timeout)
+	defer cancel()
+
+	request := weapi.New(cli)
+
+	songId := fmt.Sprintf("%d", c.Music.Id)
+	// Get song details first
+	songDetail, err := s.getSongDetail(nctx, request, songId)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get song details: %w", err)
+	}
+
+	// Get available qualities for the song
+	quality, actualLevel, err := s.getBestQuality(nctx, request, songId, level)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get song quality: %w", err)
+	}
+
+	// Get download URL
+	downloadData, err := s.getDownloadURL(nctx, request, songId, quality.Br)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get download URL: %w", err)
+	}
+
+	var dest string
+	if c.Output != "" {
+		// Download to local file
+		dest, err = s.downloadToLocal(nctx, cli, downloadData, c.Output, c.Music, quality, actualLevel)
+		if err != nil {
+			return nil, fmt.Errorf("failed to download to local: %w", err)
+		}
+	}
+
+	// Return download result
 	result := &DownloadResult{
 		SongID:         fmt.Sprintf("%d", c.Music.Id),
 		SongName:       songDetail.Name,
@@ -221,7 +280,7 @@ func (s *Service) getBestQuality(ctx context.Context, request *weapi.Api, songID
 
 	quality, level, ok := qualityResp.Data.Qualities.FindBetter(requestedLevel)
 	if !ok {
-		return nil, "", fmt.Errorf("requested quality level not available")
+		log.Warn("requested quality level not available for songID %s", songID)
 	}
 
 	return quality, level, nil
@@ -316,6 +375,10 @@ func (s *Service) DownloadFromResource(ctx context.Context, c *DownloadResourceA
 
 // downloadSongsBatch downloads multiple songs concurrently following the reference pattern
 func (s *Service) downloadSongsBatch(ctx context.Context, songs []models.Music, level string, output string, timeout time.Duration) (*BatchDownloadResult, error) {
+	// Create a shared API client for all downloads to avoid cookie file conflicts
+	cli := api.New(s.config.NmApi)
+	defer cli.Close(ctx)
+
 	var (
 		total   = int64(len(songs))
 		failed  atomic.Int64
@@ -341,7 +404,7 @@ func (s *Service) downloadSongsBatch(ctx context.Context, songs []models.Music, 
 				Output:  output,
 			}
 
-			result, err := s.Download(ctx, args)
+			result, err := s.downloadWithClient(ctx, args, cli)
 			if err != nil {
 				failed.Add(1)
 				mutex.Lock()
@@ -552,6 +615,12 @@ func (s *Service) downloadToLocal(ctx context.Context, cli *api.Client, drd *wea
 		dest     = filepath.Join(output, fmt.Sprintf("%s - %s.%s", music.ArtistString(), music.NameString(), strings.ToLower(drd.Type)))
 		tempName = fmt.Sprintf("download-*-%s.tmp", music.NameString())
 	)
+
+	// if dest exists, skip download
+	if utils.FileExists(dest) {
+		log.Info("file %s already exists, skip download", dest)
+		return dest, nil
+	}
 
 	// 创建临时文件
 	file, err := os.CreateTemp(output, tempName)
