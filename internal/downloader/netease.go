@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/md5"
 	"encoding/hex"
+	"encoding/json"
 	"fmt"
 	"io"
 	"net/http/httputil"
@@ -465,19 +466,73 @@ func (d *NMDownloader) fetchDownloadInfo(ctx context.Context, music *models.Musi
 	}
 
 	data := downResp.Data
+
 	if data.Code != 200 || data.Url == "" {
 		switch data.Code {
 		case -110:
 			return nil, fmt.Errorf("no audio source available")
 		case -105:
 			return nil, fmt.Errorf("insufficient permissions or no membership")
-		// -103
 		default:
-			return nil, fmt.Errorf("resource unavailable or no copyright (code: %v)", data.Code)
+			data2, _ := d.getDownloadAlternativeData(ctx, music)
+			if data2 == nil || data2.Url == "" {
+				return nil, fmt.Errorf("resource unavailable or no copyright (code: %v)", data.Code)
+			}
+			data.Url = data2.Url
+			data.Md5 = data2.Md5
+			data.Level = data2.Level
 		}
 	}
 
 	return &data, nil
+}
+
+type SongPlayerInfoReq struct {
+	Ids        string      `json:"ids"` // song id (separated by comma)
+	Level      types.Level `json:"level"`
+	EncodeType string      `json:"encodeType,omitempty"`
+}
+
+type SongPlayerInfoRes struct {
+	Code int                  `json:"code"`
+	Data []SongPlayerInfoData `json:"data"`
+}
+
+type SongPlayerInfoData struct {
+	Id    int64  `json:"id"`
+	Url   string `json:"url"`
+	Md5   string `json:"md5"`
+	Level string `json:"level"`
+}
+
+/**
+
+csrf_token: "791a8931ec96e749752e0e0cca3f138e"
+encodeType: "aac"
+ids: "[2619158763]"
+level: "exhigh"
+*/
+
+func (d *NMDownloader) getDownloadAlternativeData(ctx context.Context, music *models.Music) (*SongPlayerInfoData, error) {
+	var (
+		url   = "https://music.163.com/weapi/song/enhance/player/url/v1"
+		reply SongPlayerInfoRes
+		opts  = api.NewOptions()
+	)
+	Ids := []int64{music.Id}
+	// json
+	IdsBytes, _ := json.Marshal(Ids)
+	resp, err := d.cli.Request(ctx, url, &SongPlayerInfoReq{
+		Ids:        string(IdsBytes),
+		Level:      d.Level,
+		EncodeType: "aac",
+	}, &reply, opts)
+
+	if err != nil {
+		return nil, fmt.Errorf("request: %w", err)
+	}
+	_ = resp
+	return &reply.Data[0], nil
 }
 
 func (d *NMDownloader) downloadToLocal(ctx context.Context, music *models.Music, info *weapi.SongDownloadUrlRespData, quality *types.Quality, level types.Level) (string, error) {
