@@ -3,8 +3,8 @@ package types
 import (
 	"context"
 
-	"github.com/stkevintan/miko/internal/config"
-	"github.com/stkevintan/miko/internal/models"
+	"github.com/stkevintan/miko/config"
+	"github.com/stkevintan/miko/pkg/models"
 )
 
 type DownloaderConfig struct {

@@ -4,8 +4,8 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/stkevintan/miko/internal/downloader/netease"
-	"github.com/stkevintan/miko/internal/types"
+	"github.com/stkevintan/miko/pkg/netease"
+	"github.com/stkevintan/miko/pkg/types"
 )
 
 // NetEaseDownloaderFactory implements DownloaderFactory for NetEase Cloud Music

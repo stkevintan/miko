@@ -4,9 +4,9 @@ import (
 	"context"
 	"testing"
 
-	"github.com/stkevintan/miko/internal/config"
+	"github.com/stkevintan/miko/config"
 	"github.com/stkevintan/miko/internal/downloader"
-	"github.com/stkevintan/miko/internal/types"
+	"github.com/stkevintan/miko/pkg/types"
 )
 
 func TestDownloaderInterface(t *testing.T) {

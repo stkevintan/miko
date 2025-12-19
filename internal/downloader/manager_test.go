@@ -1,24 +1,21 @@
-package downloader
+package downloader_test
 
 import (
 	"context"
 	"strings"
 	"testing"
 
-	"github.com/stkevintan/miko/internal/config"
-	"github.com/stkevintan/miko/internal/types"
+	"github.com/stkevintan/miko/config"
+	"github.com/stkevintan/miko/internal/downloader"
+	"github.com/stkevintan/miko/pkg/types"
 )
 
 func TestDownloaderManager(t *testing.T) {
 	t.Run("NewDownloaderManager", func(t *testing.T) {
-		manager := NewDownloaderManager()
+		manager := downloader.NewDownloaderManager()
 
 		if manager == nil {
 			t.Fatal("NewDownloaderManager returned nil")
-		}
-
-		if manager.factories == nil {
-			t.Error("factories map not initialized")
 		}
 
 		// Test default factories are registered
@@ -47,10 +44,10 @@ func TestDownloaderManager(t *testing.T) {
 	})
 
 	t.Run("RegisterFactory", func(t *testing.T) {
-		manager := NewDownloaderManager()
+		manager := downloader.NewDownloaderManager()
 
 		// Create a mock factory
-		mockFactory := &NetEaseDownloaderFactory{}
+		mockFactory := &downloader.NetEaseDownloaderFactory{}
 
 		// Register new platform
 		manager.RegisterFactory("test", mockFactory)
@@ -70,7 +67,7 @@ func TestDownloaderManager(t *testing.T) {
 	})
 
 	t.Run("CreateDownloader", func(t *testing.T) {
-		manager := NewDownloaderManager()
+		manager := downloader.NewDownloaderManager()
 
 		// Try to load config for testing
 		cfg, err := config.Load()
@@ -154,7 +151,7 @@ func TestDownloaderManager(t *testing.T) {
 	})
 
 	t.Run("GetSupportedPlatforms", func(t *testing.T) {
-		manager := NewDownloaderManager()
+		manager := downloader.NewDownloaderManager()
 
 		platforms := manager.GetSupportedPlatforms()
 		if len(platforms) == 0 {
@@ -171,7 +168,7 @@ func TestDownloaderManager(t *testing.T) {
 		}
 
 		// Test that all registered platforms are returned
-		manager.RegisterFactory("custom", &NetEaseDownloaderFactory{})
+		manager.RegisterFactory("custom", &downloader.NetEaseDownloaderFactory{})
 		newPlatforms := manager.GetSupportedPlatforms()
 
 		if len(newPlatforms) != len(platforms)+1 {

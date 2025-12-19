@@ -7,18 +7,10 @@ import (
 	"testing"
 	"time"
 
-	l "github.com/chaunsin/netease-cloud-music/pkg/log"
-	"github.com/stkevintan/miko/internal/config"
+	"github.com/stkevintan/miko/config"
 )
 
 func TestDownloadService(t *testing.T) {
-	// Initialize logger
-	l.Default = l.New(&l.Config{
-		Level:  "info",
-		Format: "text",
-		Stdout: true,
-	})
-
 	cfg, err := config.Load()
 	if err != nil {
 		t.Skipf("Skipping DownloadService tests due to config load error: %v", err)

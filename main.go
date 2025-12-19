@@ -20,26 +20,25 @@ package main
 import (
 	"context"
 	"fmt"
-	"log"
 	"net/http"
 	"os"
 	"os/signal"
 	"syscall"
 	"time"
 
-	l "github.com/chaunsin/netease-cloud-music/pkg/log"
+	"github.com/stkevintan/miko/config"
 	_ "github.com/stkevintan/miko/docs" // This line is important for swagger docs
-	"github.com/stkevintan/miko/internal/config"
 	"github.com/stkevintan/miko/internal/handler"
 	"github.com/stkevintan/miko/internal/service"
+	"github.com/stkevintan/miko/pkg/log"
 )
 
 func main() {
-	l.Default = l.New(&l.Config{
-		Level:  "info",
-		Format: "text",
-		Stdout: true,
-	})
+	// l.Default = l.New(&l.Config{
+	// 	Level:  "info",
+	// 	Format: "text",
+	// 	Stdout: true,
+	// })
 
 	// Load configuration
 	cfg, err := config.Load()

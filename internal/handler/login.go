@@ -5,8 +5,8 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
-	"github.com/stkevintan/miko/internal/models"
 	"github.com/stkevintan/miko/internal/service"
+	"github.com/stkevintan/miko/pkg/models"
 )
 
 // handleLogin handles user login

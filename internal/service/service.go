@@ -1,7 +1,7 @@
 package service
 
 import (
-	"github.com/stkevintan/miko/internal/config"
+	"github.com/stkevintan/miko/config"
 	"github.com/stkevintan/miko/internal/downloader"
 )
 

@@ -8,9 +8,9 @@ import (
 	"strings"
 
 	"github.com/chaunsin/netease-cloud-music/api/weapi"
-	"github.com/chaunsin/netease-cloud-music/pkg/log"
 	"github.com/chaunsin/netease-cloud-music/pkg/utils"
-	"github.com/stkevintan/miko/internal/models"
+	"github.com/stkevintan/miko/pkg/log"
+	"github.com/stkevintan/miko/pkg/models"
 )
 
 var (

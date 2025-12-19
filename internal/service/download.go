@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/stkevintan/miko/internal/models"
-	"github.com/stkevintan/miko/internal/types"
+	"github.com/stkevintan/miko/pkg/models"
+	"github.com/stkevintan/miko/pkg/types"
 )
 
 // DownloadOptions represents download arguments for any resource type

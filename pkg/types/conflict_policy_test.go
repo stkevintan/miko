@@ -3,7 +3,7 @@ package types_test
 import (
 	"testing"
 
-	"github.com/stkevintan/miko/internal/types"
+	"github.com/stkevintan/miko/pkg/types"
 )
 
 func TestConflictPolicy(t *testing.T) {

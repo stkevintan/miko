@@ -8,7 +8,7 @@ import (
 	"github.com/chaunsin/netease-cloud-music/api"
 	nmTypes "github.com/chaunsin/netease-cloud-music/api/types"
 	"github.com/chaunsin/netease-cloud-music/api/weapi"
-	"github.com/stkevintan/miko/internal/models"
+	"github.com/stkevintan/miko/pkg/models"
 )
 
 // getSongDetail retrieves detailed information for a song

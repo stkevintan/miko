@@ -7,8 +7,9 @@ import (
 	"github.com/chaunsin/netease-cloud-music/api"
 	nmTypes "github.com/chaunsin/netease-cloud-music/api/types"
 	"github.com/chaunsin/netease-cloud-music/api/weapi"
-	"github.com/chaunsin/netease-cloud-music/pkg/log"
-	"github.com/stkevintan/miko/internal/types"
+	nmlog "github.com/chaunsin/netease-cloud-music/pkg/log"
+	"github.com/stkevintan/miko/pkg/log"
+	"github.com/stkevintan/miko/pkg/types"
 )
 
 // NMDownloader implements the NetEase Cloud Music downloader
@@ -40,7 +41,10 @@ func NewDownloader(config *types.DownloaderConfig) (*NMDownloader, error) {
 		return nil, fmt.Errorf("invalid conflict policy: %w", err)
 	}
 
-	cli := api.New(config.Root.NmApi)
+	cli, err := api.NewClient(config.Root.NmApi, nmlog.Default)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create API client: %w", err)
+	}
 	request := weapi.New(cli)
 
 	// Validate and parse level

@@ -3,7 +3,7 @@ package main
 import (
 	"testing"
 
-	"github.com/stkevintan/miko/internal/config"
+	"github.com/stkevintan/miko/config"
 	"github.com/stkevintan/miko/internal/service"
 )
 

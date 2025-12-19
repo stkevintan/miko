@@ -3,7 +3,7 @@ package service
 import (
 	"testing"
 
-	"github.com/stkevintan/miko/internal/config"
+	"github.com/stkevintan/miko/config"
 )
 
 func TestServiceIntegration(t *testing.T) {

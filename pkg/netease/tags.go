@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/chaunsin/netease-cloud-music/pkg/log"
-	"github.com/stkevintan/miko/internal/models"
+	"github.com/stkevintan/miko/pkg/log"
+	"github.com/stkevintan/miko/pkg/models"
 	"go.senan.xyz/taglib"
 )
 

@@ -1,4 +1,4 @@
-package handler
+package handler_test
 
 import (
 	"encoding/json"
@@ -7,10 +7,10 @@ import (
 	"strings"
 	"testing"
 
-	l "github.com/chaunsin/netease-cloud-music/pkg/log"
-	"github.com/stkevintan/miko/internal/config"
-	"github.com/stkevintan/miko/internal/models"
+	"github.com/stkevintan/miko/config"
+	"github.com/stkevintan/miko/internal/handler"
 	"github.com/stkevintan/miko/internal/service"
+	"github.com/stkevintan/miko/pkg/models"
 )
 
 // Helper function for string containment check
@@ -19,21 +19,14 @@ func TestDownloadHandler(t *testing.T) {
 	contains := func(s, substr string) bool {
 		return strings.Contains(s, substr)
 	}
-	// Initialize logger
-	l.Default = l.New(&l.Config{
-		Level:  "info",
-		Format: "text",
-		Stdout: true,
-	})
-
 	// Setup
 	cfg, err := config.Load()
 	if err != nil {
 		t.Fatalf("Failed to load config: %v", err)
 	}
 	svc := service.New(cfg)
-	handler := New(svc)
-	mux := handler.Routes()
+	h := handler.New(svc)
+	mux := h.Routes()
 
 	// Test download endpoint with valid request
 	t.Run("GET /api/download with valid song ID", func(t *testing.T) {

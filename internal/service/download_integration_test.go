@@ -6,17 +6,10 @@ import (
 	"testing"
 	"time"
 
-	l "github.com/chaunsin/netease-cloud-music/pkg/log"
-	"github.com/stkevintan/miko/internal/config"
+	"github.com/stkevintan/miko/config"
 )
 
 func TestDownloadServiceIntegration(t *testing.T) {
-	// Initialize logger to prevent nil pointer panics
-	l.Default = l.New(&l.Config{
-		Level:  "info",
-		Format: "text",
-		Stdout: true,
-	})
 
 	// Load config for testing
 	cfg, err := config.Load()
