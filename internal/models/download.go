@@ -12,19 +12,19 @@ type DownloadRequest struct {
 // DownloadResponse represents the download response
 // @Description Music download response
 type DownloadResponse struct {
-	SongID         string `json:"song_id" example:"2161154646" description:"Song ID"`
-	SongName       string `json:"song_name" example:"Song Title" description:"Song name"`
-	Artist         string `json:"artist" example:"Artist Name" description:"Artist name"`
-	Album          string `json:"album" example:"Album Name" description:"Album name"`
-	AlPicUrl       string `json:"album_pic_url" example:"https://..." description:"Album picture URL"`
-	DownloadURL    string `json:"download_url" example:"https://..." description:"Direct download URL"`
-	DownloadedPath string `json:"downloaded_path" example:"./downloads/Song Title.flac" description:"Local path where the song is downloaded"`
-	Quality        string `json:"quality" example:"lossless" description:"Actual quality level"`
-	FileType       string `json:"file_type" example:"flac" description:"Audio file type"`
-	FileSize       int64  `json:"file_size" example:"15728640" description:"File size in bytes"`
-	Duration       int64  `json:"duration" example:"240000" description:"Duration in milliseconds"`
-	Success        bool   `json:"success" example:"true" description:"Download success status"`
-	Lyrics         string `json:"lyrics,omitempty" example:"[00:10.00] Lyrics line..." description:"Lyrics of the song"`
+	SongID         string   `json:"song_id" example:"2161154646" description:"Song ID"`
+	SongName       string   `json:"song_name" example:"Song Title" description:"Song name"`
+	Artist         []string `json:"artist" description:"Artist name"`
+	Album          string   `json:"album" example:"Album Name" description:"Album name"`
+	AlPicUrl       string   `json:"album_pic_url" example:"https://..." description:"Album picture URL"`
+	DownloadURL    string   `json:"download_url" example:"https://..." description:"Direct download URL"`
+	DownloadedPath string   `json:"downloaded_path" example:"./downloads/Song Title.flac" description:"Local path where the song is downloaded"`
+	Quality        string   `json:"quality" example:"lossless" description:"Actual quality level"`
+	FileType       string   `json:"file_type" example:"flac" description:"Audio file type"`
+	FileSize       int64    `json:"file_size" example:"15728640" description:"File size in bytes"`
+	Duration       int64    `json:"duration" example:"240000" description:"Duration in milliseconds"`
+	Success        bool     `json:"success" example:"true" description:"Download success status"`
+	Lyrics         string   `json:"lyrics,omitempty" example:"[00:10.00] Lyrics line..." description:"Lyrics of the song"`
 }
 
 // BatchDownloadResponse represents the batch download response

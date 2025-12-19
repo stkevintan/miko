@@ -51,16 +51,3 @@ func ValidateQualityLevel(level string) (nmTypes.Level, error) {
 		}
 	}
 }
-
-// formatArtists formats a list of artists into a comma-separated string
-func formatArtists(artists []types.Artist) string {
-	if len(artists) == 0 {
-		return "Unknown Artist"
-	}
-
-	var names []string
-	for _, artist := range artists {
-		names = append(names, artist.Name)
-	}
-	return strings.Join(names, ", ")
-}

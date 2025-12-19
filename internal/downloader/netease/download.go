@@ -129,12 +129,16 @@ func (d *NMDownloader) downloadSingle(ctx context.Context, music *models.Music) 
 			}
 		}
 	}
+	var artists []string
+	for _, artist := range songDetail.Ar {
+		artists = append(artists, artist.Name)
+	}
 
 	// Return download result
 	result := &models.DownloadResponse{
 		SongID:         fmt.Sprintf("%d", music.Id),
 		SongName:       music.Name,
-		Artist:         formatArtists(songDetail.Ar),
+		Artist:         artists,
 		Album:          songDetail.Al.Name,
 		AlPicUrl:       songDetail.Al.PicUrl,
 		DownloadURL:    downloadInfo.Url,
