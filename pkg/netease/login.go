@@ -1,4 +1,4 @@
-package service
+package netease
 
 import (
 	"context"
@@ -6,28 +6,13 @@ import (
 	"net/http"
 	"net/url"
 	"strings"
-	"time"
 
-	"github.com/chaunsin/netease-cloud-music/api"
 	"github.com/chaunsin/netease-cloud-music/api/weapi"
 	"github.com/chaunsin/netease-cloud-music/pkg/cookiecloud"
+	"github.com/stkevintan/miko/pkg/types"
 )
 
-// LoginArgs represents internal login arguments for the service
-type LoginArgs struct {
-	Timeout  time.Duration // 超时时间
-	Server   string
-	UUID     string
-	Password string
-}
-
-// LoginResult represents internal login result from the service
-type LoginResult struct {
-	Username string
-	UserID   int64
-}
-
-func (s *Service) Login(ctx context.Context, c *LoginArgs) (*LoginResult, error) {
+func (s *NMProvider) Login(ctx context.Context, c *types.LoginArgs) (*types.LoginResult, error) {
 	if c.Server == "" {
 		return nil, fmt.Errorf("server is required")
 	}
@@ -40,9 +25,6 @@ func (s *Service) Login(ctx context.Context, c *LoginArgs) (*LoginResult, error)
 
 	nctx, cancel := context.WithTimeout(ctx, c.Timeout)
 	defer cancel()
-
-	cli := api.New(s.config.NmApi)
-	defer cli.Close(nctx)
 
 	cc, err := cookiecloud.NewClient(&cookiecloud.Config{
 		ApiUrl:  c.Server,
@@ -90,7 +72,7 @@ func (s *Service) Login(ctx context.Context, c *LoginArgs) (*LoginResult, error)
 			})
 		}
 		if len(httpCookies) > 0 {
-			cli.SetCookies(u, httpCookies)
+			s.cli.SetCookies(u, httpCookies)
 		}
 	}
 
@@ -99,12 +81,11 @@ func (s *Service) Login(ctx context.Context, c *LoginArgs) (*LoginResult, error)
 	}
 
 	// 查询登录信息是否成功
-	request := weapi.New(cli)
-	user, err := request.GetUserInfo(ctx, &weapi.GetUserInfoReq{})
+	user, err := s.request.GetUserInfo(ctx, &weapi.GetUserInfoReq{})
 	if err != nil {
 		return nil, fmt.Errorf("GetUserInfo: %s", err)
 	}
-	return &LoginResult{
+	return &types.LoginResult{
 		Username: user.Profile.Nickname,
 		UserID:   user.Profile.UserId,
 	}, nil

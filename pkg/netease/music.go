@@ -43,7 +43,7 @@ func parseURI(source string) (string, int64, error) {
 }
 
 // GetMusic returns the music information array
-func (d *NMDownloader) GetMusic(ctx context.Context, uris []string) ([]*types.Music, error) {
+func (d *NMProvider) GetMusic(ctx context.Context, uris []string) ([]*types.Music, error) {
 	var (
 		source = make(map[string][]int64)
 		set    = make(map[int64]struct{})

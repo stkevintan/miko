@@ -29,38 +29,41 @@ import (
 	"github.com/stkevintan/miko/config"
 	_ "github.com/stkevintan/miko/docs" // This line is important for swagger docs
 	"github.com/stkevintan/miko/internal/handler"
-	"github.com/stkevintan/miko/internal/service"
 	"github.com/stkevintan/miko/pkg/log"
+	"github.com/stkevintan/miko/pkg/netease"
+	"github.com/stkevintan/miko/pkg/registry"
 )
 
 func main() {
-	// l.Default = l.New(&l.Config{
-	// 	Level:  "info",
-	// 	Format: "text",
-	// 	Stdout: true,
-	// })
-
 	// Load configuration
 	cfg, err := config.Load()
 	if err != nil {
 		log.Fatalf("Failed to load config: %v", err)
 	}
 
-	// Initialize service
-	svc := service.New(cfg)
+	// Initialize global logger from config.
+	log.Default = log.New(cfg.Log)
+
+	pr, err := registry.NewProviderRegistry(cfg.Registry)
+	if err != nil {
+		panic(fmt.Sprintf("Failed to create provider registry: %v", err))
+	}
+
+	// add netease provider
+	pr.RegisterFactory("netease", netease.NewNetEaseProviderFactory(cfg.NmApi))
+	// add other providers here...
 
 	// Initialize HTTP handler
-	h := handler.New(svc)
-
+	h := handler.New(pr)
 	// Create HTTP server
 	server := &http.Server{
-		Addr:    fmt.Sprintf(":%d", cfg.Port),
+		Addr:    fmt.Sprintf(":%d", cfg.Server.Port),
 		Handler: h.Routes(),
 	}
 
 	// Start server in a goroutine
 	go func() {
-		log.Printf("Server starting on port %d", cfg.Port)
+		log.Printf("Server starting on port %d", cfg.Server.Port)
 		if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 			log.Fatalf("Failed to start server: %v", err)
 		}

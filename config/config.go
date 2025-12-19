@@ -1,55 +1,113 @@
 package config
 
 import (
+	"bytes"
+	_ "embed"
+	"errors"
+	"fmt"
 	"os"
 	"path"
-	"strconv"
+	"strings"
 
 	"github.com/chaunsin/netease-cloud-music/api"
-	"github.com/chaunsin/netease-cloud-music/pkg/cookie"
+	"github.com/spf13/viper"
+	"github.com/stkevintan/miko/pkg/log"
+	"github.com/stkevintan/miko/pkg/registry"
+)
+
+var (
+	//go:embed config.toml
+	defaultConfigToml []byte
 )
 
 // Config holds all configuration for our service
 type Config struct {
-	Port        int         `json:"port"`
-	Environment string      `json:"environment"`
-	LogLevel    string      `json:"log_level"`
-	NmApi       *api.Config `json:"nmapi"`
+	Version  string           `json:"version" mapstructure:"version"`
+	Server   *ServerConfig    `json:"server" mapstructure:"server"`
+	Log      *log.Config      `json:"log" mapstructure:"log"`
+	NmApi    *api.Config      `json:"nmapi" mapstructure:"nmapi"`
+	Registry *registry.Config `json:"registry" mapstructure:"registry"`
 }
 
-// Load loads configuration from environment variables with sensible defaults
+func (c *Config) Validate() error {
+	if c.Server == nil {
+		return errors.New("server config is required")
+	}
+	if c.Log == nil {
+		return errors.New("log config is required")
+	}
+	if c.NmApi == nil {
+		return errors.New("nmapi config is required")
+	}
+	if c.Registry == nil {
+		return errors.New("registry config is required")
+	}
+	return nil
+}
+
+type ServerConfig struct {
+	Port int `json:"port" mapstructure:"port"`
+}
+
+// Load loads configuration from config files + environment variables with sensible defaults.
+//
+// Supported sources (highest precedence last):
+// - defaults
+// - config file (optional): ./config.{yaml,yml,json,toml}, ./config/config.{...}, $HOME/.miko/config.{...}
+// - environment variables: MIKO_* (e.g. MIKO_PORT, MIKO_NMAPI_COOKIE_FILEPATH)
+// - legacy environment variables: PORT, ENVIRONMENT, LOG_LEVEL (kept for backward compatibility)
 func Load() (*Config, error) {
-	home, _ := os.UserHomeDir()
-	cfg := &Config{
-		Port:        8082,
-		Environment: "development",
-		LogLevel:    "info",
-		NmApi: &api.Config{
-			Debug:   false,
-			Timeout: 0,
-			Retry:   0,
-			Cookie: cookie.Config{
-				Options:  nil,
-				Filepath: path.Join(home, ".miko", "cookie.json"),
-				Interval: 0,
-			},
-		},
+	v := viper.New()
+	v.SetTypeByDefaultValue(true)
+	v.AllowEmptyEnv(true)
+	// Load embedded defaults first, then merge user config on top.
+	// This makes missing keys automatically fall back to defaults.
+	v.SetConfigType("toml")
+	if err := v.ReadConfig(bytes.NewReader(defaultConfigToml)); err != nil {
+		return nil, fmt.Errorf("read embedded default config: %w", err)
 	}
 
-	// Override with environment variables if present
-	if port := os.Getenv("PORT"); port != "" {
-		if p, err := strconv.Atoi(port); err == nil {
-			cfg.Port = p
+	// Optional config file
+	if configFile := os.Getenv("MIKO_CONFIG"); configFile != "" {
+		v.SetConfigFile(configFile)
+	} else {
+		v.SetConfigName("config")
+		v.AddConfigPath(".")
+		v.AddConfigPath("./config")
+		home, err := os.UserHomeDir()
+		if err != nil {
+			panic(fmt.Sprintf("os.UserHomeDir: %s", err))
+		}
+		if home != "" {
+			v.AddConfigPath(path.Join(home, ".miko"))
 		}
 	}
 
-	if env := os.Getenv("ENVIRONMENT"); env != "" {
-		cfg.Environment = env
+	// Environment variables: MIKO_PORT, MIKO_LOG_LEVEL, MIKO_NMAPI_COOKIE_FILEPATH, etc.
+	v.SetEnvPrefix("MIKO")
+	v.SetEnvKeyReplacer(strings.NewReplacer(".", "_"))
+	v.AutomaticEnv()
+
+	// Merge optional config file (if present) over defaults.
+	if err := v.MergeInConfig(); err != nil {
+		// Ignore “not found”; error out on parse/permission/etc.
+		var notFound viper.ConfigFileNotFoundError
+		if !errors.As(err, &notFound) {
+			return nil, err
+		}
 	}
 
-	if logLevel := os.Getenv("LOG_LEVEL"); logLevel != "" {
-		cfg.LogLevel = logLevel
+	var cfg Config
+	// Unmarshal into our pre-initialized struct so pointer fields stay non-nil.
+	if err := v.Unmarshal(&cfg); err != nil {
+		return nil, fmt.Errorf("v.Unmarshal: %w", err)
 	}
 
-	return cfg, nil
+	if err := cfg.Validate(); err != nil {
+		return nil, fmt.Errorf("cfg.Validate: %w", err)
+	}
+
+	log.Debug("Configuration loaded successfully, %+v", &cfg)
+
+	return &cfg, nil
 }

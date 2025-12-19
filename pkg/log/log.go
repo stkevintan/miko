@@ -18,11 +18,11 @@ import (
 // Stdout: when true, logs go to stdout (else stderr).
 // File: optional file path (append); if set and Stdout is true, logs go to both.
 type Config struct {
-	Level     string
-	Format    string
-	Stdout    bool
-	File      string
-	AddSource bool
+	Level     string `json:"level" mapstructure:"level"`
+	Format    string `json:"format" mapstructure:"format"`
+	Stdout    bool   `json:"stdout" mapstructure:"stdout"`
+	File      string `json:"file" mapstructure:"file"`
+	AddSource bool   `json:"addSource" mapstructure:"addSource"`
 }
 
 // Logger is a thin wrapper around slog.Logger that keeps a printf-ish API
@@ -60,7 +60,8 @@ func New(cfg *Config) *Logger {
 
 	w := base
 	if strings.TrimSpace(cfg.File) != "" {
-		f, err := os.OpenFile(cfg.File, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0o644)
+		path := os.ExpandEnv(strings.TrimSpace(cfg.File))
+		f, err := os.OpenFile(path, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0o644)
 		if err == nil {
 			if cfg.Stdout {
 				w = io.MultiWriter(base, f)

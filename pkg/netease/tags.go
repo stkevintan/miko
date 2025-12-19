@@ -11,7 +11,7 @@ import (
 )
 
 // setMusicTags sets ID3 tags for the downloaded music file
-func (d *NMDownloader) setMusicTags(ctx context.Context, music *types.Music, filePath string) error {
+func (d *NMProvider) setMusicTags(ctx context.Context, music *types.Music, filePath string) error {
 	artistNames := make([]string, 0, len(music.Artist))
 	for _, ar := range music.Artist {
 		artistNames = append(artistNames, ar.Name)
@@ -44,7 +44,7 @@ func (d *NMDownloader) setMusicTags(ctx context.Context, music *types.Music, fil
 }
 
 // downloadCover downloads album cover art
-func (d *NMDownloader) downloadCover(ctx context.Context, url string) ([]byte, error) {
+func (d *NMProvider) downloadCover(ctx context.Context, url string) ([]byte, error) {
 	if url == "" {
 		return nil, fmt.Errorf("image url is empty")
 	}

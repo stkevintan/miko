@@ -21,7 +21,7 @@ import (
 )
 
 // Download downloads multiple songs concurrently
-func (d *NMDownloader) Download(ctx context.Context, musics []*types.Music) (*types.MusicDownloadResults, error) {
+func (d *NMProvider) Download(ctx context.Context, musics []*types.Music, config *types.DownloadConfig) (*types.MusicDownloadResults, error) {
 	var (
 		sema    = semaphore.NewWeighted(5) // parallel download count
 		results = types.NewMusicDownloadResults(len(musics))
@@ -36,8 +36,17 @@ func (d *NMDownloader) Download(ctx context.Context, musics []*types.Music) (*ty
 		}
 		go func() {
 			defer sema.Release(1)
-
-			result, err := d.downloadSingle(ctx, music)
+			unit, err := d.newDownloadUnit(music, config)
+			if err != nil {
+				mutex.Lock()
+				results.Add(&types.DownloadResult{
+					Err: fmt.Errorf("create download unit for %s: %w", music.String(), err),
+				})
+				mutex.Unlock()
+				log.Error("create download unit for %s err: %v", music.String(), err)
+				return
+			}
+			result, err := unit.Download(ctx)
 			if err != nil {
 				mutex.Lock()
 				results.Add(&types.DownloadResult{
@@ -62,59 +71,85 @@ func (d *NMDownloader) Download(ctx context.Context, musics []*types.Music) (*ty
 	return results, nil
 }
 
-// downloadSingle downloads a single music item
-func (d *NMDownloader) downloadSingle(ctx context.Context, music *types.Music) (*types.DownloadedMusic, error) {
-	if music == nil {
+// data and logic of downloading a single song
+type DownloadUnit struct {
+	Music          *types.Music
+	Level          nmTypes.Level
+	Output         string
+	ConflictPolicy types.ConflictPolicy
+	provider       *NMProvider
+}
+
+func (d *NMProvider) newDownloadUnit(music *types.Music, config *types.DownloadConfig) (*DownloadUnit, error) {
+	// Validate and parse level
+	level, err := ValidateQualityLevel(config.Level)
+	if err != nil {
+		return nil, fmt.Errorf("invalid quality level: %w", err)
+	}
+	// Validate and parse conflict policy
+	policy, err := types.ParseConflictPolicy(config.ConflictPolicy)
+	if err != nil {
+		return nil, fmt.Errorf("invalid conflict policy: %w", err)
+	}
+	return &DownloadUnit{
+		Music:          music,
+		Level:          level,
+		Output:         config.Output,
+		ConflictPolicy: policy,
+		provider:       d,
+	}, nil
+}
+
+func (d *DownloadUnit) Download(ctx context.Context) (*types.DownloadedMusic, error) {
+	if d.Music == nil {
 		return nil, fmt.Errorf("music is required")
 	}
-	musicId := music.SongId()
 
 	// Get available qualities for the song
-	quality, actualLevel, err := d.getBestQuality(ctx, musicId)
+	quality, actualLevel, err := d.provider.getBestQuality(ctx, d.Music.SongId(), d.Level)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get song quality: %w", err)
 	}
 
 	// Get download URL
-	downloadInfo, err := d.fetchDownloadInfo(ctx, music.Id, quality.Br)
+	downloadInfo, err := d.provider.fetchDownloadInfo(ctx, d.Music.Id, quality.Br, actualLevel)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get download URL: %w", err)
 	}
 	if downloadInfo.Type == "" {
 		// check if the ext type is on the song name
-		ext := path.Ext(music.Name)
+		ext := path.Ext(d.Music.Name)
 		if ext != "" {
 			downloadInfo.Type = ext[1:] // remove the dot
-			music.Name = music.Name[:len(music.Name)-len(ext)]
+			d.Music.Name = d.Music.Name[:len(d.Music.Name)-len(ext)]
 		} else {
 			// TODO: probe the file type
 			downloadInfo.Type = "mp3" // default to mp3
 		}
 	}
-	lyric, err := d.getLyrics(ctx, music.Id)
+	lyric, err := d.provider.getLyrics(ctx, d.Music.Id)
 	if err != nil {
 		log.Warn("download lyric err: %v", err)
 	}
-	music.Lyrics = lyric
-
+	d.Music.Lyrics = lyric
 	var dest string
 	if d.Output != "" {
 		// Download to local file
 		var proceed bool
-		dest, proceed, err = d.downloadToLocal(ctx, music, downloadInfo, quality, actualLevel)
+		dest, proceed, err = d.downloadToLocal(ctx, downloadInfo)
 		if err != nil {
 			return nil, fmt.Errorf("failed to download to local: %w", err)
 		}
 		if proceed {
 			// set music tags
-			err = d.setMusicTags(ctx, music, dest)
+			err = d.provider.setMusicTags(ctx, d.Music, dest)
 			if err != nil {
 				log.Warn("setMusicTags %s err: %v", dest, err)
 			}
 		}
 	}
 	result := &types.DownloadedMusic{
-		Music: *music,
+		Music: *d.Music,
 		DownloadInfo: types.DownloadInfo{
 			URL:      downloadInfo.Url,
 			FilePath: dest,
@@ -129,11 +164,11 @@ func (d *NMDownloader) downloadSingle(ctx context.Context, music *types.Music) (
 
 // downloadToLocal downloads the song to a local file
 // returns the file path, whether the file need proceed to tag, and an error if any
-func (d *NMDownloader) downloadToLocal(ctx context.Context, music *types.Music, info *SongDownloadInfo, quality *nmTypes.Quality, level nmTypes.Level) (string, bool, error) {
+func (d *DownloadUnit) downloadToLocal(ctx context.Context, info *SongDownloadInfo) (string, bool, error) {
 	var (
 		// drd = downResp.Data[0]
-		dest     = filepath.Join(d.Output, music.Filename(info.Type, 0))
-		tempName = fmt.Sprintf("download-*-%s.tmp", music.NameString())
+		dest     = filepath.Join(d.Output, d.Music.Filename(info.Type, 0))
+		tempName = fmt.Sprintf("download-*-%s.tmp", d.Music.NameString())
 	)
 
 	conflicted := utils.FileExists(dest)
@@ -156,7 +191,7 @@ func (d *NMDownloader) downloadToLocal(ctx context.Context, music *types.Music, 
 	defer file.Close()
 
 	// 下载
-	resp, err := d.cli.Download(ctx, info.Url, nil, nil, file, nil)
+	resp, err := d.provider.cli.Download(ctx, info.Url, nil, nil, file, nil)
 	if err != nil {
 		_ = os.Remove(file.Name())
 		return "", false, fmt.Errorf("download: %w", err)
@@ -169,8 +204,8 @@ func (d *NMDownloader) downloadToLocal(ctx context.Context, music *types.Music, 
 	}
 
 	size, _ := strconv.ParseFloat(resp.Header.Get("Content-Length"), 64)
-	log.Debug("id=%v downloadUrl=%v wantLevel=%v-%v realLevel=%v-%v encodeType=%v type=%v size=%0.2fM,%vKB free=%v tempFile=%s outDir=%s",
-		info.Id, info.Url, level, quality.Br, info.Level, info.Br, info.EncodeType, info.Type, size/float64(utils.MB), int64(size), nmTypes.Free(info.Fee), file.Name(), dest)
+	log.Debug("id=%v downloadUrl=%v realLevel=%v-%v encodeType=%v type=%v size=%0.2fM,%vKB free=%v tempFile=%s outDir=%s",
+		info.Id, info.Url, info.Level, info.Br, info.EncodeType, info.Type, size/float64(utils.MB), int64(size), nmTypes.Free(info.Fee), file.Name(), dest)
 
 	// 校验md5文件完整性
 	if _, err := file.Seek(0, io.SeekStart); err != nil {
@@ -194,7 +229,7 @@ func (d *NMDownloader) downloadToLocal(ctx context.Context, music *types.Music, 
 			break
 		}
 		if d.ConflictPolicy == types.ConflictPolicyRename {
-			dest = filepath.Join(d.Output, music.Filename(info.Type, i))
+			dest = filepath.Join(d.Output, d.Music.Filename(info.Type, i))
 		}
 	}
 

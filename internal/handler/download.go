@@ -1,14 +1,17 @@
 package handler
 
 import (
+	"context"
 	"fmt"
 	"net/http"
+	"path/filepath"
 	"strconv"
 	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/stkevintan/miko/internal/models"
-	"github.com/stkevintan/miko/internal/service"
+	"github.com/stkevintan/miko/pkg/registry"
+	"github.com/stkevintan/miko/pkg/types"
 )
 
 // handleDownload handles music download requests
@@ -22,6 +25,7 @@ import (
 // @Param        output query string false "Output directory path for downloaded files" example("./downloads")
 // @Param        timeout query int false "Timeout in milliseconds for the download operation, 0 means no timeout" example(60000) default(60000)
 // @Param        conflict_policy query string false "How to handle existing files" example("skip") Enums(skip, overwrite, rename, update_tags) default(skip)
+// @Param        platform query string false "Music platform to use for downloading" example("netease")
 // @Success      200 {object} models.DownloadSummary "Successful batch download response with individual song results and error details"
 // @Failure      400 {object} models.ErrorResponse "Bad request - missing or invalid parameters"
 // @Failure      500 {object} models.ErrorResponse "Internal server error during download processing"
@@ -33,7 +37,7 @@ func (h *Handler) handleDownload(c *gin.Context) {
 	output := c.Query("output")
 	timeoutStr := c.Query("timeout")
 	conflictPolicy := c.DefaultQuery("conflict_policy", "skip")
-	platform := c.DefaultQuery("platform", "netease")
+	platform := c.DefaultQuery("platform", h.registry.Config.DefaultPlatform)
 
 	// Validate required parameters
 	if len(uris) == 0 {
@@ -53,14 +57,18 @@ func (h *Handler) handleDownload(c *gin.Context) {
 	// Convert timeout from milliseconds to duration
 	timeout := time.Duration(timeoutMs) * time.Millisecond
 
-	result, err := h.service.Download(c.Request.Context(), &service.DownloadOptions{
-		URIs:           uris,
-		Level:          level,
-		Output:         output,
-		Timeout:        timeout,
-		ConflictPolicy: conflictPolicy,
-		Platform:       platform,
-	})
+	req := &DownloadRequest{
+		URIs:     uris,
+		Timeout:  timeout,
+		Platform: platform,
+		DownloadConfig: types.DownloadConfig{
+			Level:          level,
+			Output:         output,
+			ConflictPolicy: conflictPolicy,
+		},
+	}
+
+	result, err := req.Download(c.Request.Context(), h.registry)
 
 	if err != nil {
 		errorResp := models.ErrorResponse{Error: err.Error()}
@@ -89,4 +97,49 @@ func (h *Handler) handleDownload(c *gin.Context) {
 		Summary: message,
 		Details: result.Results(),
 	})
+}
+
+// DownloadRequest represents download arguments for any resource type
+type DownloadRequest struct {
+	types.DownloadConfig
+	Platform string   // music platform
+	URIs     []string // can be song ID, URL, etc.
+	Timeout  time.Duration
+}
+
+func (r *DownloadRequest) Download(ctx context.Context, registry *registry.ProviderRegistry) (*types.MusicDownloadResults, error) {
+	var (
+		nctx   context.Context
+		cancel context.CancelFunc
+	)
+
+	if r.Output != "" && !filepath.IsAbs(r.Output) {
+		abs, err := filepath.Abs(r.Output)
+		if err != nil {
+			return nil, fmt.Errorf("resolve output path: %w", err)
+		}
+		r.Output = abs
+	}
+
+	if r.Timeout == 0 {
+		nctx, cancel = context.WithCancel(ctx)
+	} else {
+		nctx, cancel = context.WithTimeout(ctx, r.Timeout)
+	}
+
+	defer cancel()
+	provider, err := registry.CreateProvider(
+		r.Platform,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("create batch downloader: %w", err)
+	}
+	defer provider.Close(nctx)
+
+	musics, err := provider.GetMusic(nctx, r.URIs)
+	if err != nil {
+		return nil, fmt.Errorf("GetMusic: %w", err)
+	}
+
+	return provider.Download(nctx, musics, &r.DownloadConfig)
 }

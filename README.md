@@ -82,6 +82,42 @@ A Go service library built with **Gin HTTP framework**, featuring OpenAPI-docume
 
 ## Configuration
 
+Miko loads configuration in this order (later sources override earlier ones):
+
+- Built-in defaults
+- Optional config file
+- Environment variables (`MIKO_*`)
+- Legacy environment variables (`PORT`, `ENVIRONMENT`, `LOG_LEVEL`)
+
+### Config file
+
+By default, Miko looks for a `config` file in the following locations (first match wins):
+
+- `./config.yaml` (also supports `yml`, `json`, `toml`)
+- `./config/config.yaml`
+- `$HOME/.miko/config.yaml`
+
+You can also point directly to a config file path via:
+
+- `MIKO_CONFIG=/path/to/config.yaml`
+
+### Environment variables
+
+All config keys can be set via environment variables using the `MIKO_` prefix.
+Nested keys use `_` separators.
+
+Examples:
+
+- `MIKO_PORT=8082`
+- `MIKO_ENVIRONMENT=development`
+- `MIKO_LOG_LEVEL=info`
+- `MIKO_NMAPI_DEBUG=false`
+- `MIKO_NMAPI_COOKIE_FILEPATH=$HOME/.miko/cookie.json`
+
+Legacy env vars are still supported for backward compatibility:
+
+- `PORT`, `ENVIRONMENT`, `LOG_LEVEL`
+
 The service can be configured using environment variables:
 
 - `PORT`: Server port (default: 8080)
