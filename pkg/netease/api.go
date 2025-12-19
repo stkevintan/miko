@@ -11,21 +11,21 @@ import (
 )
 
 // getSongDetail retrieves detailed information for a song
-func (d *NMDownloader) getSongDetail(ctx context.Context, id string) (*weapi.SongDetailRespSongs, error) {
-	resp, err := d.request.SongDetail(ctx, &weapi.SongDetailReq{
-		C: []weapi.SongDetailReqList{{Id: id, V: 0}},
-	})
-	if err != nil {
-		return nil, err
-	}
-	if resp.Code != 200 {
-		return nil, fmt.Errorf("SongDetail API error: %+v", resp)
-	}
-	if len(resp.Songs) == 0 {
-		return nil, fmt.Errorf("song not found")
-	}
-	return &resp.Songs[0], nil
-}
+// func (d *NMDownloader) getSongDetail(ctx context.Context, id string) (*weapi.SongDetailRespSongs, error) {
+// 	resp, err := d.request.SongDetail(ctx, &weapi.SongDetailReq{
+// 		C: []weapi.SongDetailReqList{{Id: id, V: 0}},
+// 	})
+// 	if err != nil {
+// 		return nil, err
+// 	}
+// 	if resp.Code != 200 {
+// 		return nil, fmt.Errorf("SongDetail API error: %+v", resp)
+// 	}
+// 	if len(resp.Songs) == 0 {
+// 		return nil, fmt.Errorf("song not found")
+// 	}
+// 	return &resp.Songs[0], nil
+// }
 
 // getBestQuality gets the best available quality for a song
 func (d *NMDownloader) getBestQuality(ctx context.Context, id string) (*nmTypes.Quality, nmTypes.Level, error) {

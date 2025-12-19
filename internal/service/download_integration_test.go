@@ -115,7 +115,7 @@ func TestDownloadServiceIntegration(t *testing.T) {
 					}
 					if failed > 0 {
 						foundErr := false
-						for _, r := range result.Results {
+						for _, r := range result.Results() {
 							if r != nil && r.Err != nil {
 								foundErr = true
 								break

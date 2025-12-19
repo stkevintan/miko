@@ -23,14 +23,9 @@ import (
 // Download downloads multiple songs concurrently
 func (d *NMDownloader) Download(ctx context.Context, musics []*types.Music) (*types.MusicDownloadResults, error) {
 	var (
-		total = int64(len(musics))
-		// success = &atomic.Int64{}
-		// failed  = &atomic.Int64{}
 		sema    = semaphore.NewWeighted(5) // parallel download count
-		results = &types.MusicDownloadResults{
-			Results: make([]*types.DownloadResult, 0, total),
-		}
-		mutex sync.Mutex
+		results = types.NewMusicDownloadResults(len(musics))
+		mutex   sync.Mutex
 	)
 
 	// Process songs concurrently

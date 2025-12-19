@@ -44,20 +44,25 @@ type DownloadResult struct {
 }
 
 type MusicDownloadResults struct {
-	Results []*DownloadResult
+	results []*DownloadResult
 }
 
+func NewMusicDownloadResults(size int) *MusicDownloadResults {
+	return &MusicDownloadResults{
+		results: make([]*DownloadResult, size),
+	}
+}
 func (d *MusicDownloadResults) Add(result *DownloadResult) {
-	d.Results = append(d.Results, result)
+	d.results = append(d.results, result)
 }
 
 func (d *MusicDownloadResults) Total() int64 {
-	return int64(len(d.Results))
+	return int64(len(d.results))
 }
 
 func (d *MusicDownloadResults) SuccessCount() int64 {
 	var count int64
-	for _, r := range d.Results {
+	for _, r := range d.results {
 		if r.Err == nil {
 			count++
 		}
@@ -67,6 +72,10 @@ func (d *MusicDownloadResults) SuccessCount() int64 {
 
 func (d *MusicDownloadResults) FailedCount() int64 {
 	return d.Total() - d.SuccessCount()
+}
+
+func (d *MusicDownloadResults) Results() []*DownloadResult {
+	return d.results
 }
 
 // DownloadResult represents the result of a download operation

@@ -87,6 +87,6 @@ func (h *Handler) handleDownload(c *gin.Context) {
 
 	c.JSON(http.StatusOK, &models.DownloadSummary{
 		Summary: message,
-		Details: result.Results,
+		Details: result.Results(),
 	})
 }
