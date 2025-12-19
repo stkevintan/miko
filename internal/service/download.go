@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/stkevintan/miko/internal/downloader"
 	"github.com/stkevintan/miko/internal/models"
+	"github.com/stkevintan/miko/internal/types"
 )
 
 // DownloadOptions represents download arguments for any resource type
@@ -41,7 +41,7 @@ func (s *Service) Download(ctx context.Context, c *DownloadOptions) (*models.Bat
 	dl, err := s.downloaderManager.CreateDownloader(
 		nctx,
 		c.Platform,
-		&downloader.DownloaderConfig{
+		&types.DownloaderConfig{
 			Level:          c.Level,
 			Output:         c.Output,
 			ConflictPolicy: c.ConflictPolicy,

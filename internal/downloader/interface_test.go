@@ -1,16 +1,18 @@
-package downloader
+package downloader_test
 
 import (
 	"context"
 	"testing"
 
 	"github.com/stkevintan/miko/internal/config"
+	"github.com/stkevintan/miko/internal/downloader"
+	"github.com/stkevintan/miko/internal/types"
 )
 
 func TestDownloaderInterface(t *testing.T) {
 	// Test the downloader manager
 	t.Run("DownloaderManager", func(t *testing.T) {
-		manager := NewDownloaderManager()
+		manager := downloader.NewDownloaderManager()
 
 		// Test supported platforms
 		platforms := manager.GetSupportedPlatforms()
@@ -33,7 +35,7 @@ func TestDownloaderInterface(t *testing.T) {
 		}
 
 		// Test creating downloader for unsupported platform
-		_, err := manager.CreateDownloader(context.Background(), "unsupported", &DownloaderConfig{})
+		_, err := manager.CreateDownloader(context.Background(), "unsupported", &types.DownloaderConfig{})
 		if err == nil {
 			t.Error("Expected error for unsupported platform")
 		}
@@ -41,7 +43,7 @@ func TestDownloaderInterface(t *testing.T) {
 
 	// Test factory implementation
 	t.Run("NetEaseDownloaderFactory", func(t *testing.T) {
-		factory := &NetEaseDownloaderFactory{}
+		factory := &downloader.NetEaseDownloaderFactory{}
 
 		// Test supported platforms
 		platforms := factory.SupportedPlatforms()
@@ -70,7 +72,7 @@ func TestDownloaderInterface(t *testing.T) {
 			return
 		}
 
-		config := &DownloaderConfig{
+		config := &types.DownloaderConfig{
 			Level:          "standard",
 			Output:         "./test_output",
 			ConflictPolicy: "skip",
@@ -78,7 +80,7 @@ func TestDownloaderInterface(t *testing.T) {
 		}
 
 		// Test factory creation
-		factory := &NetEaseDownloaderFactory{}
+		factory := &downloader.NetEaseDownloaderFactory{}
 		downloader, err := factory.CreateDownloader(context.Background(), config)
 		if err != nil {
 			t.Errorf("Unexpected error creating downloader: %v", err)
@@ -102,13 +104,13 @@ func TestDownloaderInterface(t *testing.T) {
 		// This test validates the config structure without network calls
 		testConfigs := []struct {
 			name        string
-			config      DownloaderConfig
+			config      types.DownloaderConfig
 			shouldError bool
 			errorMsg    string
 		}{
 			{
 				name: "valid config",
-				config: DownloaderConfig{
+				config: types.DownloaderConfig{
 					Level:          "standard",
 					Output:         "./test",
 					ConflictPolicy: "skip",
@@ -117,7 +119,7 @@ func TestDownloaderInterface(t *testing.T) {
 			},
 			{
 				name: "invalid conflict policy",
-				config: DownloaderConfig{
+				config: types.DownloaderConfig{
 					Level:          "standard",
 					Output:         "./test",
 					ConflictPolicy: "invalid",
@@ -133,7 +135,7 @@ func TestDownloaderInterface(t *testing.T) {
 				t.Logf("Testing config: %+v", tc.config)
 
 				// Validate conflict policy separately
-				_, err := ParseConflictPolicy(tc.config.ConflictPolicy)
+				_, err := types.ParseConflictPolicy(tc.config.ConflictPolicy)
 
 				if tc.shouldError && err == nil {
 					t.Errorf("Expected error for config %v", tc.config)

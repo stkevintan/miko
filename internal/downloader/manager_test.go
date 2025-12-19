@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/stkevintan/miko/internal/config"
+	"github.com/stkevintan/miko/internal/types"
 )
 
 func TestDownloaderManager(t *testing.T) {
@@ -80,14 +81,14 @@ func TestDownloaderManager(t *testing.T) {
 		tests := []struct {
 			name      string
 			platform  string
-			config    *DownloaderConfig
+			config    *types.DownloaderConfig
 			wantError bool
 			errorMsg  string
 		}{
 			{
 				name:     "valid netease platform",
 				platform: "netease",
-				config: &DownloaderConfig{
+				config: &types.DownloaderConfig{
 					Level:          "standard",
 					Output:         "./test",
 					ConflictPolicy: "skip",
@@ -98,7 +99,7 @@ func TestDownloaderManager(t *testing.T) {
 			{
 				name:     "valid 163 platform",
 				platform: "163",
-				config: &DownloaderConfig{
+				config: &types.DownloaderConfig{
 					Level:          "standard",
 					Output:         "./test",
 					ConflictPolicy: "skip",
@@ -109,14 +110,14 @@ func TestDownloaderManager(t *testing.T) {
 			{
 				name:      "unsupported platform",
 				platform:  "spotify",
-				config:    &DownloaderConfig{},
+				config:    &types.DownloaderConfig{},
 				wantError: true,
 				errorMsg:  "unsupported platform",
 			},
 			{
 				name:     "invalid config",
 				platform: "netease",
-				config: &DownloaderConfig{
+				config: &types.DownloaderConfig{
 					Level:          "invalid_level",
 					Output:         "./test",
 					ConflictPolicy: "skip",
