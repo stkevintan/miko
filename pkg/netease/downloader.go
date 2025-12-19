@@ -12,6 +12,15 @@ import (
 	"github.com/stkevintan/miko/pkg/types"
 )
 
+// Initialize default logger for netease package
+func init() {
+	nmlog.Default = nmlog.New(&nmlog.Config{
+		Level:  "info",
+		Format: "json",
+		Stdout: true,
+	})
+}
+
 // NMDownloader implements the NetEase Cloud Music downloader
 type NMDownloader struct {
 	cli            *api.Client

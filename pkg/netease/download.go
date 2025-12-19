@@ -12,26 +12,25 @@ import (
 	"path/filepath"
 	"strconv"
 	"sync"
-	"sync/atomic"
 
 	nmTypes "github.com/chaunsin/netease-cloud-music/api/types"
 	"github.com/chaunsin/netease-cloud-music/pkg/utils"
 	"github.com/stkevintan/miko/pkg/log"
-	"github.com/stkevintan/miko/pkg/models"
 	"github.com/stkevintan/miko/pkg/types"
 	"golang.org/x/sync/semaphore"
 )
 
 // Download downloads multiple songs concurrently
-func (d *NMDownloader) Download(ctx context.Context, musics []*models.Music) (*models.BatchDownloadResponse, error) {
+func (d *NMDownloader) Download(ctx context.Context, musics []*types.Music) (*types.MusicDownloadResults, error) {
 	var (
-		total   = int64(len(musics))
-		success = &atomic.Int64{}
-		failed  = &atomic.Int64{}
+		total = int64(len(musics))
+		// success = &atomic.Int64{}
+		// failed  = &atomic.Int64{}
 		sema    = semaphore.NewWeighted(5) // parallel download count
-		results = make([]*models.DownloadResponse, 0, total)
-		errors  = make([]string, 0)
-		mutex   sync.Mutex
+		results = &types.MusicDownloadResults{
+			Results: make([]*types.DownloadResult, 0, total),
+		}
+		mutex sync.Mutex
 	)
 
 	// Process songs concurrently
@@ -45,16 +44,18 @@ func (d *NMDownloader) Download(ctx context.Context, musics []*models.Music) (*m
 
 			result, err := d.downloadSingle(ctx, music)
 			if err != nil {
-				failed.Add(1)
 				mutex.Lock()
-				errors = append(errors, fmt.Sprintf("download %s err: %v", music.String(), err))
+				results.Add(&types.DownloadResult{
+					Err: fmt.Errorf("download %s: %w", music.String(), err),
+				})
 				mutex.Unlock()
 				log.Error("download %s err: %v", music.String(), err)
 				return
 			}
-			success.Add(1)
 			mutex.Lock()
-			results = append(results, result)
+			results.Add(&types.DownloadResult{
+				Data: result,
+			})
 			mutex.Unlock()
 		}()
 	}
@@ -63,28 +64,15 @@ func (d *NMDownloader) Download(ctx context.Context, musics []*models.Music) (*m
 	if err := sema.Acquire(ctx, 5); err != nil {
 		return nil, fmt.Errorf("wait: %w", err)
 	}
-
-	return &models.BatchDownloadResponse{
-		Total:   total,
-		Success: success.Load(),
-		Failed:  failed.Load(),
-		Songs:   results,
-		Errors:  errors,
-	}, nil
+	return results, nil
 }
 
 // downloadSingle downloads a single music item
-func (d *NMDownloader) downloadSingle(ctx context.Context, music *models.Music) (*models.DownloadResponse, error) {
+func (d *NMDownloader) downloadSingle(ctx context.Context, music *types.Music) (*types.DownloadedMusic, error) {
 	if music == nil {
 		return nil, fmt.Errorf("music is required")
 	}
 	musicId := music.SongId()
-
-	// Get song details first
-	songDetail, err := d.getSongDetail(ctx, musicId)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get song details: %w", err)
-	}
 
 	// Get available qualities for the song
 	quality, actualLevel, err := d.getBestQuality(ctx, musicId)
@@ -93,7 +81,7 @@ func (d *NMDownloader) downloadSingle(ctx context.Context, music *models.Music) 
 	}
 
 	// Get download URL
-	downloadInfo, err := d.fetchDownloadInfo(ctx, music, quality.Br)
+	downloadInfo, err := d.fetchDownloadInfo(ctx, music.Id, quality.Br)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get download URL: %w", err)
 	}
@@ -117,7 +105,8 @@ func (d *NMDownloader) downloadSingle(ctx context.Context, music *models.Music) 
 	var dest string
 	if d.Output != "" {
 		// Download to local file
-		dest, proceed, err := d.downloadToLocal(ctx, music, downloadInfo, quality, actualLevel)
+		var proceed bool
+		dest, proceed, err = d.downloadToLocal(ctx, music, downloadInfo, quality, actualLevel)
 		if err != nil {
 			return nil, fmt.Errorf("failed to download to local: %w", err)
 		}
@@ -129,25 +118,15 @@ func (d *NMDownloader) downloadSingle(ctx context.Context, music *models.Music) 
 			}
 		}
 	}
-	var artists []string
-	for _, artist := range songDetail.Ar {
-		artists = append(artists, artist.Name)
-	}
-
-	// Return download result
-	result := &models.DownloadResponse{
-		SongID:         fmt.Sprintf("%d", music.Id),
-		SongName:       music.Name,
-		Artist:         artists,
-		Album:          songDetail.Al.Name,
-		AlPicUrl:       songDetail.Al.PicUrl,
-		DownloadURL:    downloadInfo.Url,
-		DownloadedPath: dest,
-		Quality:        nmTypes.LevelString[actualLevel],
-		FileType:       downloadInfo.Type,
-		FileSize:       downloadInfo.Size,
-		Duration:       songDetail.Dt,
-		Lyrics:         music.Lyrics,
+	result := &types.DownloadedMusic{
+		Music: *music,
+		DownloadInfo: types.DownloadInfo{
+			URL:      downloadInfo.Url,
+			FilePath: dest,
+			Type:     downloadInfo.Type,
+			Size:     downloadInfo.Size,
+			Quality:  nmTypes.LevelString[actualLevel],
+		},
 	}
 
 	return result, nil
@@ -155,7 +134,7 @@ func (d *NMDownloader) downloadSingle(ctx context.Context, music *models.Music) 
 
 // downloadToLocal downloads the song to a local file
 // returns the file path, whether the file need proceed to tag, and an error if any
-func (d *NMDownloader) downloadToLocal(ctx context.Context, music *models.Music, info *SongDownloadInfo, quality *nmTypes.Quality, level nmTypes.Level) (string, bool, error) {
+func (d *NMDownloader) downloadToLocal(ctx context.Context, music *types.Music, info *SongDownloadInfo, quality *nmTypes.Quality, level nmTypes.Level) (string, bool, error) {
 	var (
 		// drd = downResp.Data[0]
 		dest     = filepath.Join(d.Output, music.Filename(info.Type, 0))

@@ -3,9 +3,9 @@ package service
 import (
 	"context"
 	"fmt"
+	"path/filepath"
 	"time"
 
-	"github.com/stkevintan/miko/pkg/models"
 	"github.com/stkevintan/miko/pkg/types"
 )
 
@@ -20,11 +20,19 @@ type DownloadOptions struct {
 }
 
 // Download handles downloading from various resource types (ID, URL, etc.)
-func (s *Service) Download(ctx context.Context, c *DownloadOptions) (*models.BatchDownloadResponse, error) {
+func (s *Service) Download(ctx context.Context, c *DownloadOptions) (*types.MusicDownloadResults, error) {
 	var (
 		nctx   context.Context
 		cancel context.CancelFunc
 	)
+
+	if c.Output != "" && !filepath.IsAbs(c.Output) {
+		abs, err := filepath.Abs(c.Output)
+		if err != nil {
+			return nil, fmt.Errorf("resolve output path: %w", err)
+		}
+		c.Output = abs
+	}
 
 	if c.Timeout == 0 {
 		nctx, cancel = context.WithCancel(ctx)

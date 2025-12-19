@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -50,7 +51,7 @@ func TestDownloadService(t *testing.T) {
 
 		// If somehow successful, check result structure
 		if result != nil {
-			if result.Total == 0 {
+			if result.Total() == 0 {
 				t.Error("Expected at least one song to be processed")
 			}
 		}
@@ -127,9 +128,33 @@ func TestDownloadService(t *testing.T) {
 
 		// If result is returned, it should reflect multiple items
 		if result != nil {
-			if result.Total != 3 {
-				t.Logf("Expected total of 3, got %d (may vary due to auth issues)", result.Total)
+			if result.Total() != 3 {
+				t.Logf("Expected total of 3, got %d (may vary due to auth issues)", result.Total())
 			}
+		}
+	})
+
+	t.Run("Output path is normalized to absolute", func(t *testing.T) {
+		rel := "./test_downloads"
+		expectedAbs, err := filepath.Abs(rel)
+		if err != nil {
+			t.Fatalf("filepath.Abs failed: %v", err)
+		}
+
+		options := &DownloadOptions{
+			Platform: "this-platform-does-not-exist",
+			URIs:     []string{"123456"},
+			Level:    "standard",
+			Output:   rel,
+			Timeout:  1 * time.Second,
+		}
+
+		_, _ = service.Download(context.Background(), options)
+		if options.Output != expectedAbs {
+			t.Fatalf("expected Output to be normalized to %q, got %q", expectedAbs, options.Output)
+		}
+		if !filepath.IsAbs(options.Output) {
+			t.Fatalf("expected Output to be absolute, got %q", options.Output)
 		}
 	})
 }

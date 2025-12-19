@@ -4,8 +4,8 @@ import (
 	"net/http"
 
 	"github.com/gin-gonic/gin"
+	"github.com/stkevintan/miko/internal/models"
 	"github.com/stkevintan/miko/internal/service"
-	"github.com/stkevintan/miko/pkg/models"
 	swaggerFiles "github.com/swaggo/files"
 	ginSwagger "github.com/swaggo/gin-swagger"
 )

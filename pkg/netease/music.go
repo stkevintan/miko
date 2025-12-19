@@ -10,7 +10,7 @@ import (
 	"github.com/chaunsin/netease-cloud-music/api/weapi"
 	"github.com/chaunsin/netease-cloud-music/pkg/utils"
 	"github.com/stkevintan/miko/pkg/log"
-	"github.com/stkevintan/miko/pkg/models"
+	"github.com/stkevintan/miko/pkg/types"
 )
 
 var (
@@ -43,11 +43,11 @@ func parseURI(source string) (string, int64, error) {
 }
 
 // GetMusic returns the music information array
-func (d *NMDownloader) GetMusic(ctx context.Context, uris []string) ([]*models.Music, error) {
+func (d *NMDownloader) GetMusic(ctx context.Context, uris []string) ([]*types.Music, error) {
 	var (
 		source = make(map[string][]int64)
 		set    = make(map[int64]struct{})
-		musics []*models.Music
+		musics []*types.Music
 	)
 
 	for _, uri := range uris {
@@ -94,11 +94,23 @@ func (d *NMDownloader) GetMusic(ctx context.Context, uris []string) ([]*models.M
 						continue
 					}
 					for _, v := range resp.Songs {
-						musics = append(musics, &models.Music{
+						artist := make([]types.Artist, 0, len(v.Ar))
+						for _, a := range v.Ar {
+							artist = append(artist, types.Artist{
+								Id:   a.Id,
+								Name: a.Name,
+							})
+						}
+						album := types.Album{
+							Id:     v.Al.Id,
+							Name:   v.Al.Name,
+							PicUrl: v.Al.PicUrl,
+						}
+						musics = append(musics, &types.Music{
 							Id:          v.Id,
 							Name:        v.Name,
-							Artist:      v.Ar,
-							Album:       v.Al,
+							Artist:      artist,
+							Album:       album,
 							Time:        v.Dt,
 							TrackNumber: v.Cd,
 						})
@@ -123,11 +135,23 @@ func (d *NMDownloader) GetMusic(ctx context.Context, uris []string) ([]*models.M
 						continue
 					}
 					set[v.Id] = struct{}{}
-					musics = append(musics, &models.Music{
+					artist := make([]types.Artist, 0, len(v.Ar))
+					for _, a := range v.Ar {
+						artist = append(artist, types.Artist{
+							Id:   a.Id,
+							Name: a.Name,
+						})
+					}
+					album := types.Album{
+						Id:     v.Al.Id,
+						Name:   v.Al.Name,
+						PicUrl: v.Al.PicUrl,
+					}
+					musics = append(musics, &types.Music{
 						Id:          v.Id,
 						Name:        v.Name,
-						Artist:      v.Ar,
-						Album:       v.Al,
+						Artist:      artist,
+						Album:       album,
 						Time:        v.Dt,
 						TrackNumber: v.Cd,
 					})
@@ -174,11 +198,23 @@ func (d *NMDownloader) GetMusic(ctx context.Context, uris []string) ([]*models.M
 						continue
 					}
 					for _, v := range resp.Songs {
-						musics = append(musics, &models.Music{
+						artist := make([]types.Artist, 0, len(v.Ar))
+						for _, a := range v.Ar {
+							artist = append(artist, types.Artist{
+								Id:   a.Id,
+								Name: a.Name,
+							})
+						}
+						album := types.Album{
+							Id:     v.Al.Id,
+							Name:   v.Al.Name,
+							PicUrl: v.Al.PicUrl,
+						}
+						musics = append(musics, &types.Music{
 							Id:          v.Id,
 							Name:        v.Name,
-							Artist:      v.Ar,
-							Album:       v.Al,
+							Artist:      artist,
+							Album:       album,
 							Time:        v.Dt,
 							TrackNumber: v.Cd,
 						})

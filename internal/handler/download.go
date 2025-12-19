@@ -7,8 +7,8 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
+	"github.com/stkevintan/miko/internal/models"
 	"github.com/stkevintan/miko/internal/service"
-	"github.com/stkevintan/miko/pkg/models"
 )
 
 // handleDownload handles music download requests
@@ -75,18 +75,18 @@ func (h *Handler) handleDownload(c *gin.Context) {
 	}
 	// Create message based on results
 	var message string
-	if result.Total == 1 {
-		if result.Success == 1 {
+	if result.Total() == 1 {
+		if result.SuccessCount() == 1 {
 			message = "Download URL generated successfully"
 		} else {
 			message = "Download failed"
 		}
 	} else {
-		message = fmt.Sprintf("Batch download completed: %d total, %d success, %d failed", result.Total, result.Success, result.Failed)
+		message = fmt.Sprintf("Batch download completed: %d total, %d success, %d failed", result.Total(), result.SuccessCount(), result.FailedCount())
 	}
 
 	c.JSON(http.StatusOK, &models.DownloadSummary{
 		Summary: message,
-		Details: result,
+		Details: result.Results,
 	})
 }

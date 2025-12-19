@@ -9,8 +9,8 @@ import (
 
 	"github.com/stkevintan/miko/config"
 	"github.com/stkevintan/miko/internal/handler"
+	"github.com/stkevintan/miko/internal/models"
 	"github.com/stkevintan/miko/internal/service"
-	"github.com/stkevintan/miko/pkg/models"
 )
 
 // Helper function for string containment check

@@ -8,7 +8,6 @@ import (
 	"github.com/chaunsin/netease-cloud-music/api"
 	nmTypes "github.com/chaunsin/netease-cloud-music/api/types"
 	"github.com/chaunsin/netease-cloud-music/api/weapi"
-	"github.com/stkevintan/miko/pkg/models"
 )
 
 // getSongDetail retrieves detailed information for a song
@@ -59,9 +58,9 @@ func (d *NMDownloader) getLyrics(ctx context.Context, id int64) (string, error) 
 }
 
 // fetchDownloadInfo retrieves download information for a song
-func (d *NMDownloader) fetchDownloadInfo(ctx context.Context, music *models.Music, bitrate int64) (*SongDownloadInfo, error) {
+func (d *NMDownloader) fetchDownloadInfo(ctx context.Context, musicId int64, bitrate int64) (*SongDownloadInfo, error) {
 	downResp, err := d.request.SongDownloadUrl(ctx, &weapi.SongDownloadUrlReq{
-		Id: music.SongId(),
+		Id: fmt.Sprintf("%d", musicId),
 		Br: fmt.Sprintf("%d", bitrate),
 	})
 	if err != nil {
@@ -80,7 +79,7 @@ func (d *NMDownloader) fetchDownloadInfo(ctx context.Context, music *models.Musi
 		case -105:
 			return nil, fmt.Errorf("insufficient permissions or no membership")
 		case -103:
-			alInfo, err := d.getDownloadAlternativeData(ctx, music)
+			alInfo, err := d.getDownloadAlternativeData(ctx, musicId)
 			if err != nil {
 				return nil, fmt.Errorf("getDownloadAlternativeData: %w", err)
 			}
@@ -107,13 +106,13 @@ func (d *NMDownloader) fetchDownloadInfo(ctx context.Context, music *models.Musi
 }
 
 // getDownloadAlternativeData fetches alternative download data when primary source fails
-func (d *NMDownloader) getDownloadAlternativeData(ctx context.Context, music *models.Music) (*SongDownloadInfo, error) {
+func (d *NMDownloader) getDownloadAlternativeData(ctx context.Context, musicId int64) (*SongDownloadInfo, error) {
 	var (
 		url   = "https://music.163.com/weapi/song/enhance/player/url/v1"
 		reply SongPlayerInfoRes
 		opts  = api.NewOptions()
 	)
-	Ids := []int64{music.Id}
+	Ids := []int64{musicId}
 	// json
 	IdsBytes, _ := json.Marshal(Ids)
 	resp, err := d.cli.Request(ctx, url, &SongPlayerInfoReq{

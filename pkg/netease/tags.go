@@ -6,12 +6,12 @@ import (
 	"strings"
 
 	"github.com/stkevintan/miko/pkg/log"
-	"github.com/stkevintan/miko/pkg/models"
+	"github.com/stkevintan/miko/pkg/types"
 	"go.senan.xyz/taglib"
 )
 
 // setMusicTags sets ID3 tags for the downloaded music file
-func (d *NMDownloader) setMusicTags(ctx context.Context, music *models.Music, filePath string) error {
+func (d *NMDownloader) setMusicTags(ctx context.Context, music *types.Music, filePath string) error {
 	artistNames := make([]string, 0, len(music.Artist))
 	for _, ar := range music.Artist {
 		artistNames = append(artistNames, ar.Name)
