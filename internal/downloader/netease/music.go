@@ -2,15 +2,45 @@ package netease
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
+	"regexp"
+	"strconv"
+	"strings"
 
-	"github.com/chaunsin/netease-cloud-music/api"
 	"github.com/chaunsin/netease-cloud-music/api/weapi"
 	"github.com/chaunsin/netease-cloud-music/pkg/log"
 	"github.com/chaunsin/netease-cloud-music/pkg/utils"
 	"github.com/stkevintan/miko/internal/models"
 )
+
+var (
+	urlPattern = "/(song|artist|album|playlist)\\?id=(\\d+)"
+	reg        = regexp.MustCompile(urlPattern)
+)
+
+// parseURI parses a NetEase music URI and returns the type and ID
+func parseURI(source string) (string, int64, error) {
+	// 歌曲id
+	id, err := strconv.ParseInt(source, 10, 64)
+	if err == nil {
+		return "song", id, nil
+	}
+
+	if !strings.Contains(source, "music.163.com") {
+		return "", 0, fmt.Errorf("could not parse the url: %s", source)
+	}
+
+	matched, ok := reg.FindStringSubmatch(source), reg.MatchString(source)
+	if !ok || len(matched) < 3 {
+		return "", 0, fmt.Errorf("could not parse the url: %s", source)
+	}
+
+	id, err = strconv.ParseInt(matched[2], 10, 64)
+	if err != nil {
+		return "", 0, err
+	}
+	return matched[1], id, nil
+}
 
 // GetMusic returns the music information array
 func (d *NMDownloader) GetMusic(ctx context.Context, uris []string) ([]*models.Music, error) {
@@ -21,7 +51,7 @@ func (d *NMDownloader) GetMusic(ctx context.Context, uris []string) ([]*models.M
 	)
 
 	for _, uri := range uris {
-		kind, id, err := ParseURI(uri)
+		kind, id, err := parseURI(uri)
 		if err != nil {
 			return nil, fmt.Errorf("parse uri: %w", err)
 		}
@@ -165,75 +195,4 @@ func (d *NMDownloader) GetMusic(ctx context.Context, uris []string) ([]*models.M
 	}
 
 	return musics, nil
-}
-
-// fetchDownloadInfo retrieves download information for a song
-func (d *NMDownloader) fetchDownloadInfo(ctx context.Context, music *models.Music, bitrate int64) (*SongDownloadInfo, error) {
-	downResp, err := d.request.SongDownloadUrl(ctx, &weapi.SongDownloadUrlReq{
-		Id: music.SongId(),
-		Br: fmt.Sprintf("%d", bitrate),
-	})
-	if err != nil {
-		return nil, fmt.Errorf("SongDownloadUrl: %w", err)
-	}
-	if downResp.Code != 200 {
-		return nil, fmt.Errorf("SongDownloadUrl API error: %+v", downResp)
-	}
-
-	data := downResp.Data
-
-	if data.Code != 200 || data.Url == "" {
-		switch data.Code {
-		case -110:
-			return nil, fmt.Errorf("no audio source available")
-		case -105:
-			return nil, fmt.Errorf("insufficient permissions or no membership")
-		case -103:
-			alInfo, err := d.getDownloadAlternativeData(ctx, music)
-			if err != nil {
-				return nil, fmt.Errorf("getDownloadAlternativeData: %w", err)
-			}
-			if alInfo.Url == "" {
-				return nil, fmt.Errorf("no audio source available in alternative data")
-			}
-			return alInfo, nil
-		default:
-			return nil, fmt.Errorf("resource unavailable or no copyright (code: %v)", data.Code)
-		}
-	}
-
-	return &SongDownloadInfo{
-		Id:         data.Id,
-		Url:        data.Url,
-		Md5:        data.Md5,
-		Level:      data.Level,
-		Type:       data.Type,
-		Size:       data.Size,
-		Br:         data.Br,
-		EncodeType: data.EncodeType,
-		Fee:        data.Fee,
-	}, nil
-}
-
-// getDownloadAlternativeData fetches alternative download data when primary source fails
-func (d *NMDownloader) getDownloadAlternativeData(ctx context.Context, music *models.Music) (*SongDownloadInfo, error) {
-	var (
-		url   = "https://music.163.com/weapi/song/enhance/player/url/v1"
-		reply SongPlayerInfoRes
-		opts  = api.NewOptions()
-	)
-	Ids := []int64{music.Id}
-	// json
-	IdsBytes, _ := json.Marshal(Ids)
-	resp, err := d.cli.Request(ctx, url, &SongPlayerInfoReq{
-		Ids:        string(IdsBytes),
-		Level:      d.Level,
-		EncodeType: "aac",
-	}, &reply, opts)
-
-	if err != nil {
-		return nil, fmt.Errorf("request: %w", err)
-	}
-	_ = resp
-	return &reply.Data[0], nil
 }

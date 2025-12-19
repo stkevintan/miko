@@ -2,42 +2,12 @@ package netease
 
 import (
 	"fmt"
-	"regexp"
 	"strconv"
 	"strings"
 
 	"github.com/chaunsin/netease-cloud-music/api/types"
 	nmTypes "github.com/chaunsin/netease-cloud-music/api/types"
 )
-
-var (
-	urlPattern = "/(song|artist|album|playlist)\\?id=(\\d+)"
-	reg        = regexp.MustCompile(urlPattern)
-)
-
-// ParseURI parses a NetEase music URI and returns the type and ID
-func ParseURI(source string) (string, int64, error) {
-	// 歌曲id
-	id, err := strconv.ParseInt(source, 10, 64)
-	if err == nil {
-		return "song", id, nil
-	}
-
-	if !strings.Contains(source, "music.163.com") {
-		return "", 0, fmt.Errorf("could not parse the url: %s", source)
-	}
-
-	matched, ok := reg.FindStringSubmatch(source), reg.MatchString(source)
-	if !ok || len(matched) < 3 {
-		return "", 0, fmt.Errorf("could not parse the url: %s", source)
-	}
-
-	id, err = strconv.ParseInt(matched[2], 10, 64)
-	if err != nil {
-		return "", 0, err
-	}
-	return matched[1], id, nil
-}
 
 // ValidateQualityLevel validates and converts quality level string to types.Level
 func ValidateQualityLevel(level string) (nmTypes.Level, error) {

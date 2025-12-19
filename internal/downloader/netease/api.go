@@ -2,17 +2,19 @@ package netease
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 
+	"github.com/chaunsin/netease-cloud-music/api"
 	nmTypes "github.com/chaunsin/netease-cloud-music/api/types"
 	"github.com/chaunsin/netease-cloud-music/api/weapi"
 	"github.com/stkevintan/miko/internal/models"
 )
 
 // getSongDetail retrieves detailed information for a song
-func (d *NMDownloader) getSongDetail(ctx context.Context, music *models.Music) (*weapi.SongDetailRespSongs, error) {
+func (d *NMDownloader) getSongDetail(ctx context.Context, id string) (*weapi.SongDetailRespSongs, error) {
 	resp, err := d.request.SongDetail(ctx, &weapi.SongDetailReq{
-		C: []weapi.SongDetailReqList{{Id: music.SongId(), V: 0}},
+		C: []weapi.SongDetailReqList{{Id: id, V: 0}},
 	})
 	if err != nil {
 		return nil, err
@@ -27,8 +29,8 @@ func (d *NMDownloader) getSongDetail(ctx context.Context, music *models.Music) (
 }
 
 // getBestQuality gets the best available quality for a song
-func (d *NMDownloader) getBestQuality(ctx context.Context, music *models.Music) (*nmTypes.Quality, nmTypes.Level, error) {
-	qualityResp, err := d.request.SongMusicQuality(ctx, &weapi.SongMusicQualityReq{SongId: music.SongId()})
+func (d *NMDownloader) getBestQuality(ctx context.Context, id string) (*nmTypes.Quality, nmTypes.Level, error) {
+	qualityResp, err := d.request.SongMusicQuality(ctx, &weapi.SongMusicQualityReq{SongId: id})
 	if err != nil {
 		return nil, "", fmt.Errorf("SongMusicQuality: %w", err)
 	}
@@ -44,8 +46,8 @@ func (d *NMDownloader) getBestQuality(ctx context.Context, music *models.Music) 
 	return quality, level, nil
 }
 
-// downloadLyrics downloads lyrics for a song
-func (d *NMDownloader) downloadLyrics(ctx context.Context, id int64) (string, error) {
+// getLyrics downloads lyrics for a song
+func (d *NMDownloader) getLyrics(ctx context.Context, id int64) (string, error) {
 	lyricResp, err := d.request.Lyric(ctx, &weapi.LyricReq{Id: id})
 	if err != nil {
 		return "", fmt.Errorf("download lyric: %w", err)
@@ -54,4 +56,75 @@ func (d *NMDownloader) downloadLyrics(ctx context.Context, id int64) (string, er
 		return "", fmt.Errorf("download lyric API error: %+v", lyricResp)
 	}
 	return lyricResp.Lrc.Lyric, nil
+}
+
+// fetchDownloadInfo retrieves download information for a song
+func (d *NMDownloader) fetchDownloadInfo(ctx context.Context, music *models.Music, bitrate int64) (*SongDownloadInfo, error) {
+	downResp, err := d.request.SongDownloadUrl(ctx, &weapi.SongDownloadUrlReq{
+		Id: music.SongId(),
+		Br: fmt.Sprintf("%d", bitrate),
+	})
+	if err != nil {
+		return nil, fmt.Errorf("SongDownloadUrl: %w", err)
+	}
+	if downResp.Code != 200 {
+		return nil, fmt.Errorf("SongDownloadUrl API error: %+v", downResp)
+	}
+
+	data := downResp.Data
+
+	if data.Code != 200 || data.Url == "" {
+		switch data.Code {
+		case -110:
+			return nil, fmt.Errorf("no audio source available")
+		case -105:
+			return nil, fmt.Errorf("insufficient permissions or no membership")
+		case -103:
+			alInfo, err := d.getDownloadAlternativeData(ctx, music)
+			if err != nil {
+				return nil, fmt.Errorf("getDownloadAlternativeData: %w", err)
+			}
+			if alInfo.Url == "" {
+				return nil, fmt.Errorf("no audio source available in alternative data")
+			}
+			return alInfo, nil
+		default:
+			return nil, fmt.Errorf("resource unavailable or no copyright (code: %v)", data.Code)
+		}
+	}
+
+	return &SongDownloadInfo{
+		Id:         data.Id,
+		Url:        data.Url,
+		Md5:        data.Md5,
+		Level:      data.Level,
+		Type:       data.Type,
+		Size:       data.Size,
+		Br:         data.Br,
+		EncodeType: data.EncodeType,
+		Fee:        data.Fee,
+	}, nil
+}
+
+// getDownloadAlternativeData fetches alternative download data when primary source fails
+func (d *NMDownloader) getDownloadAlternativeData(ctx context.Context, music *models.Music) (*SongDownloadInfo, error) {
+	var (
+		url   = "https://music.163.com/weapi/song/enhance/player/url/v1"
+		reply SongPlayerInfoRes
+		opts  = api.NewOptions()
+	)
+	Ids := []int64{music.Id}
+	// json
+	IdsBytes, _ := json.Marshal(Ids)
+	resp, err := d.cli.Request(ctx, url, &SongPlayerInfoReq{
+		Ids:        string(IdsBytes),
+		Level:      d.Level,
+		EncodeType: "flac",
+	}, &reply, opts)
+
+	if err != nil {
+		return nil, fmt.Errorf("request: %w", err)
+	}
+	_ = resp
+	return &reply.Data[0], nil
 }

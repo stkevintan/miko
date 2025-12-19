@@ -78,15 +78,16 @@ func (d *NMDownloader) downloadSingle(ctx context.Context, music *models.Music) 
 	if music == nil {
 		return nil, fmt.Errorf("music is required")
 	}
+	musicId := music.SongId()
 
 	// Get song details first
-	songDetail, err := d.getSongDetail(ctx, music)
+	songDetail, err := d.getSongDetail(ctx, musicId)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get song details: %w", err)
 	}
 
 	// Get available qualities for the song
-	quality, actualLevel, err := d.getBestQuality(ctx, music)
+	quality, actualLevel, err := d.getBestQuality(ctx, musicId)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get song quality: %w", err)
 	}
@@ -107,7 +108,7 @@ func (d *NMDownloader) downloadSingle(ctx context.Context, music *models.Music) 
 			downloadInfo.Type = "mp3" // default to mp3
 		}
 	}
-	lyric, err := d.downloadLyrics(ctx, music.Id)
+	lyric, err := d.getLyrics(ctx, music.Id)
 	if err != nil {
 		log.Warn("download lyric err: %v", err)
 	}

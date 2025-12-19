@@ -8,7 +8,6 @@ import (
 	nmTypes "github.com/chaunsin/netease-cloud-music/api/types"
 	"github.com/chaunsin/netease-cloud-music/api/weapi"
 	"github.com/chaunsin/netease-cloud-music/pkg/log"
-	"github.com/stkevintan/miko/internal/models"
 	"github.com/stkevintan/miko/internal/types"
 )
 
@@ -62,25 +61,6 @@ func NewDownloader(config *types.DownloaderConfig) (*NMDownloader, error) {
 // Name returns the name of this downloader
 func (d *NMDownloader) Name() string {
 	return "netease"
-}
-
-// ParseURI parses a NetEase Cloud Music URI and returns music information
-func (d *NMDownloader) ParseURI(uri string) (*models.Music, error) {
-	musicType, id, err := ParseURI(uri)
-	if err != nil {
-		return nil, err
-	}
-
-	music := &models.Music{
-		Id: id,
-	}
-
-	// Currently only support songs
-	if musicType != "song" {
-		return nil, fmt.Errorf("only song URIs are supported, got: %s", musicType)
-	}
-
-	return music, nil
 }
 
 // ValidateConfig validates the downloader configuration
