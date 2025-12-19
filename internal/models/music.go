@@ -10,11 +10,13 @@ import (
 
 // Music represents a music track
 type Music struct {
-	Id     int64
-	Name   string
-	Artist []types.Artist
-	Album  types.Album
-	Time   int64
+	Id          int64
+	Name        string
+	Artist      []types.Artist
+	Album       types.Album
+	Time        int64
+	Lyrics      string
+	TrackNumber string
 }
 
 func (m Music) ArtistString() string {
@@ -48,6 +50,9 @@ func (m *Music) SongId() string {
 	return fmt.Sprintf("%d", m.Id)
 }
 
-func (m *Music) Filename(extType string) string {
-	return fmt.Sprintf("%s - %s.%s", m.ArtistString(), m.NameString(), strings.ToLower(extType))
+func (m *Music) Filename(extType string, index int) string {
+	if index <= 0 {
+		return fmt.Sprintf("%s - %s.%s", m.ArtistString(), m.NameString(), strings.ToLower(extType))
+	}
+	return fmt.Sprintf("%s - %s (%d).%s", m.ArtistString(), m.NameString(), index, strings.ToLower(extType))
 }

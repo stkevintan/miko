@@ -20,7 +20,7 @@ import (
 // @Param        uri query []string true "Resource URIs to download (can be song ID, album URL, playlist URL, song URL). Multiple URIs supported for batch downloads." example("2161154646") example("https://music.163.com/song?id=2161154646")
 // @Param        level query string false "Audio quality level" example("hires") Enums(standard, higher, exhigh, lossless, hires, 128, 192, 320, HQ, SQ, HR) default(lossless)
 // @Param        output query string false "Output directory path for downloaded files" example("./downloads")
-// @Param        timeout query int false "Timeout in milliseconds for the download operation" example(60000)
+// @Param        timeout query int false "Timeout in milliseconds for the download operation, 0 means no timeout" example(60000) default(60000)
 // @Param        conflict_policy query string false "How to handle existing files" example("skip") Enums(skip, overwrite, rename, update_tags) default(skip)
 // @Success      200 {object} models.DownloadSummary "Successful batch download response with individual song results and error details"
 // @Failure      400 {object} models.ErrorResponse "Bad request - missing or invalid parameters"
@@ -45,7 +45,7 @@ func (h *Handler) handleDownload(c *gin.Context) {
 	// Parse timeout
 	timeoutMs := 60000 // default
 	if timeoutStr != "" {
-		if parsed, err := strconv.Atoi(timeoutStr); err == nil && parsed > 0 {
+		if parsed, err := strconv.Atoi(timeoutStr); err == nil && parsed >= 0 {
 			timeoutMs = parsed
 		}
 	}

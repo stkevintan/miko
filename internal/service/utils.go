@@ -1,13 +1,8 @@
 package service
 
 import (
-	"fmt"
 	"net/http"
-	"os"
-	"path/filepath"
 	"strings"
-
-	"github.com/chaunsin/netease-cloud-music/pkg/utils"
 )
 
 // IsPrint returns whether s is ASCII and printable according to
@@ -46,29 +41,4 @@ func sameSite(val string) http.SameSite {
 	default:
 		return http.SameSiteDefaultMode
 	}
-}
-
-func writeFile(out string, data []byte) error {
-	if out == "" {
-		return fmt.Errorf("output path is empty")
-	}
-
-	// 写入文件
-	var file string
-	if !filepath.IsAbs(out) {
-		wd, err := os.Getwd()
-		if err != nil {
-			return err
-		}
-		file = filepath.Join(wd, out)
-		if !utils.DirExists(file) {
-			if err := os.MkdirAll(filepath.Dir(file), os.ModePerm); err != nil {
-				return fmt.Errorf("MkdirAll: %w", err)
-			}
-		}
-	}
-	if err := os.WriteFile(file, data, os.ModePerm); err != nil {
-		return fmt.Errorf("WriteFile: %w", err)
-	}
-	return nil
 }

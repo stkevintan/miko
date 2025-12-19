@@ -24,6 +24,7 @@ type DownloadResponse struct {
 	FileSize       int64  `json:"file_size" example:"15728640" description:"File size in bytes"`
 	Duration       int64  `json:"duration" example:"240000" description:"Duration in milliseconds"`
 	Success        bool   `json:"success" example:"true" description:"Download success status"`
+	Lyrics         string `json:"lyrics,omitempty" example:"[00:10.00] Lyrics line..." description:"Lyrics of the song"`
 }
 
 // BatchDownloadResponse represents the batch download response

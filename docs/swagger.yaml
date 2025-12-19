@@ -48,6 +48,9 @@ definitions:
       file_type:
         example: flac
         type: string
+      lyrics:
+        example: '[00:10.00] Lyrics line...'
+        type: string
       quality:
         example: lossless
         type: string
@@ -191,7 +194,9 @@ paths:
         in: query
         name: output
         type: string
-      - description: Timeout in milliseconds for the download operation
+      - default: 60000
+        description: Timeout in milliseconds for the download operation, 0 means no
+          timeout
         example: 60000
         in: query
         name: timeout

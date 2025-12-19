@@ -80,8 +80,9 @@ const docTemplate = `{
                     },
                     {
                         "type": "integer",
+                        "default": 60000,
                         "example": 60000,
-                        "description": "Timeout in milliseconds for the download operation",
+                        "description": "Timeout in milliseconds for the download operation, 0 means no timeout",
                         "name": "timeout",
                         "in": "query"
                     },
@@ -304,6 +305,10 @@ const docTemplate = `{
                 "file_type": {
                     "type": "string",
                     "example": "flac"
+                },
+                "lyrics": {
+                    "type": "string",
+                    "example": "[00:10.00] Lyrics line..."
                 },
                 "quality": {
                     "type": "string",

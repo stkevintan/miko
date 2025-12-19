@@ -9,6 +9,7 @@ import (
 	"io"
 	"net/http/httputil"
 	"os"
+	"path"
 	"path/filepath"
 	"regexp"
 	"strconv"
@@ -118,11 +119,12 @@ func (d *NMDownloader) GetMusic(ctx context.Context, uris []string) ([]*models.M
 					}
 					for _, v := range resp.Songs {
 						musics = append(musics, &models.Music{
-							Id:     v.Id,
-							Name:   v.Name,
-							Artist: v.Ar,
-							Album:  v.Al,
-							Time:   v.Dt,
+							Id:          v.Id,
+							Name:        v.Name,
+							Artist:      v.Ar,
+							Album:       v.Al,
+							Time:        v.Dt,
+							TrackNumber: v.Cd,
 						})
 					}
 				}
@@ -146,11 +148,12 @@ func (d *NMDownloader) GetMusic(ctx context.Context, uris []string) ([]*models.M
 					}
 					set[v.Id] = struct{}{}
 					musics = append(musics, &models.Music{
-						Id:     v.Id,
-						Name:   v.Name,
-						Artist: v.Ar,
-						Album:  v.Al,
-						Time:   v.Dt,
+						Id:          v.Id,
+						Name:        v.Name,
+						Artist:      v.Ar,
+						Album:       v.Al,
+						Time:        v.Dt,
+						TrackNumber: v.Cd,
 					})
 				}
 			}
@@ -196,11 +199,12 @@ func (d *NMDownloader) GetMusic(ctx context.Context, uris []string) ([]*models.M
 					}
 					for _, v := range resp.Songs {
 						musics = append(musics, &models.Music{
-							Id:     v.Id,
-							Name:   v.Name,
-							Artist: v.Ar,
-							Album:  v.Al,
-							Time:   v.Dt,
+							Id:          v.Id,
+							Name:        v.Name,
+							Artist:      v.Ar,
+							Album:       v.Al,
+							Time:        v.Dt,
+							TrackNumber: v.Cd,
 						})
 					}
 				}
@@ -350,13 +354,36 @@ func (d *NMDownloader) downloadSingle(ctx context.Context, music *models.Music) 
 	if err != nil {
 		return nil, fmt.Errorf("failed to get download URL: %w", err)
 	}
+	if downloadInfo.Type == "" {
+		// check if the ext type is on the song name
+		ext := path.Ext(music.Name)
+		if ext != "" {
+			downloadInfo.Type = ext[1:] // remove the dot
+			music.Name = music.Name[:len(music.Name)-len(ext)]
+		} else {
+			// TODO: probe the file type
+			downloadInfo.Type = "mp3" // default to mp3
+		}
+	}
+	lyric, err := d.downloadLyrics(ctx, music.Id)
+	if err != nil {
+		log.Warn("download lyric err: %v", err)
+	}
+	music.Lyrics = lyric
 
 	var dest string
 	if d.Output != "" {
 		// Download to local file
-		dest, err = d.downloadToLocal(ctx, music, downloadInfo, quality, actualLevel)
+		dest, proceed, err := d.downloadToLocal(ctx, music, downloadInfo, quality, actualLevel)
 		if err != nil {
 			return nil, fmt.Errorf("failed to download to local: %w", err)
+		}
+		if proceed {
+			// set music tags
+			err = d.setMusicTags(ctx, music, dest)
+			if err != nil {
+				log.Warn("setMusicTags %s err: %v", dest, err)
+			}
 		}
 	}
 
@@ -373,6 +400,7 @@ func (d *NMDownloader) downloadSingle(ctx context.Context, music *models.Music) 
 		FileType:       downloadInfo.Type,
 		FileSize:       downloadInfo.Size,
 		Duration:       songDetail.Dt,
+		Lyrics:         music.Lyrics,
 	}
 
 	return result, nil
@@ -453,7 +481,7 @@ func (d *NMDownloader) getBestQuality(ctx context.Context, music *models.Music) 
 	return quality, level, nil
 }
 
-func (d *NMDownloader) fetchDownloadInfo(ctx context.Context, music *models.Music, bitrate int64) (*weapi.SongDownloadUrlRespData, error) {
+func (d *NMDownloader) fetchDownloadInfo(ctx context.Context, music *models.Music, bitrate int64) (*SongDownloadInfo, error) {
 	downResp, err := d.request.SongDownloadUrl(ctx, &weapi.SongDownloadUrlReq{
 		Id: music.SongId(),
 		Br: fmt.Sprintf("%d", bitrate),
@@ -473,18 +501,31 @@ func (d *NMDownloader) fetchDownloadInfo(ctx context.Context, music *models.Musi
 			return nil, fmt.Errorf("no audio source available")
 		case -105:
 			return nil, fmt.Errorf("insufficient permissions or no membership")
-		default:
-			data2, _ := d.getDownloadAlternativeData(ctx, music)
-			if data2 == nil || data2.Url == "" {
-				return nil, fmt.Errorf("resource unavailable or no copyright (code: %v)", data.Code)
+		case -103:
+			alInfo, err := d.getDownloadAlternativeData(ctx, music)
+			if err != nil {
+				return nil, fmt.Errorf("getDownloadAlternativeData: %w", err)
 			}
-			data.Url = data2.Url
-			data.Md5 = data2.Md5
-			data.Level = data2.Level
+			if alInfo.Url == "" {
+				return nil, fmt.Errorf("no audio source available in alternative data")
+			}
+			return alInfo, nil
+		default:
+			return nil, fmt.Errorf("resource unavailable or no copyright (code: %v)", data.Code)
 		}
 	}
 
-	return &data, nil
+	return &SongDownloadInfo{
+		Id:         data.Id,
+		Url:        data.Url,
+		Md5:        data.Md5,
+		Level:      data.Level,
+		Type:       data.Type,
+		Size:       data.Size,
+		Br:         data.Br,
+		EncodeType: data.EncodeType,
+		Fee:        data.Fee,
+	}, nil
 }
 
 type SongPlayerInfoReq struct {
@@ -494,15 +535,20 @@ type SongPlayerInfoReq struct {
 }
 
 type SongPlayerInfoRes struct {
-	Code int                  `json:"code"`
-	Data []SongPlayerInfoData `json:"data"`
+	Code int                `json:"code"`
+	Data []SongDownloadInfo `json:"data"`
 }
 
-type SongPlayerInfoData struct {
-	Id    int64  `json:"id"`
-	Url   string `json:"url"`
-	Md5   string `json:"md5"`
-	Level string `json:"level"`
+type SongDownloadInfo struct {
+	Id         int64  `json:"id"`
+	Url        string `json:"url"`
+	Md5        string `json:"md5"`
+	Level      string `json:"level"`
+	Type       string `json:"type"`
+	Size       int64  `json:"size"`
+	Br         int64  `json:"br"`
+	EncodeType string `json:"encodeType"`
+	Fee        int64  `json:"fee"`
 }
 
 /**
@@ -513,7 +559,7 @@ ids: "[2619158763]"
 level: "exhigh"
 */
 
-func (d *NMDownloader) getDownloadAlternativeData(ctx context.Context, music *models.Music) (*SongPlayerInfoData, error) {
+func (d *NMDownloader) getDownloadAlternativeData(ctx context.Context, music *models.Music) (*SongDownloadInfo, error) {
 	var (
 		url   = "https://music.163.com/weapi/song/enhance/player/url/v1"
 		reply SongPlayerInfoRes
@@ -535,10 +581,12 @@ func (d *NMDownloader) getDownloadAlternativeData(ctx context.Context, music *mo
 	return &reply.Data[0], nil
 }
 
-func (d *NMDownloader) downloadToLocal(ctx context.Context, music *models.Music, info *weapi.SongDownloadUrlRespData, quality *types.Quality, level types.Level) (string, error) {
+// downloadToLocal downloads the song to a local file
+// returns the file path, whether the file need proceed to tag, and an error if any
+func (d *NMDownloader) downloadToLocal(ctx context.Context, music *models.Music, info *SongDownloadInfo, quality *types.Quality, level types.Level) (string, bool, error) {
 	var (
 		// drd = downResp.Data[0]
-		dest     = filepath.Join(d.Output, music.Filename(info.Type))
+		dest     = filepath.Join(d.Output, music.Filename(info.Type, 0))
 		tempName = fmt.Sprintf("download-*-%s.tmp", music.NameString())
 	)
 
@@ -547,19 +595,17 @@ func (d *NMDownloader) downloadToLocal(ctx context.Context, music *models.Music,
 	// if dest exists, skip download
 	if conflicted && d.ConflictPolicy == ConflictPolicySkip {
 		log.Info("file %s already exists, skip download", dest)
-		return dest, nil
+		return dest, false, nil
 	}
+
 	if conflicted && d.ConflictPolicy == ConflictPolicyUpdateTags {
-		log.Info("file %s already exists, skip download and update tags", dest)
-		if err := d.setMusicTag(ctx, music, dest); err != nil {
-			log.Warn("setMusicTag %s err: %v", dest, err)
-		}
-		return dest, nil
+		log.Info("file %s already exists, update tags only", dest)
+		return dest, true, nil
 	}
 	// 创建临时文件
 	file, err := os.CreateTemp(d.Output, tempName)
 	if err != nil {
-		return "", fmt.Errorf("CreateTemp: %w", err)
+		return "", false, fmt.Errorf("CreateTemp: %w", err)
 	}
 	defer file.Close()
 
@@ -567,7 +613,7 @@ func (d *NMDownloader) downloadToLocal(ctx context.Context, music *models.Music,
 	resp, err := d.cli.Download(ctx, info.Url, nil, nil, file, nil)
 	if err != nil {
 		_ = os.Remove(file.Name())
-		return "", fmt.Errorf("download: %w", err)
+		return "", false, fmt.Errorf("download: %w", err)
 	}
 	dump, err := httputil.DumpResponse(resp, false)
 	if err != nil {
@@ -583,22 +629,17 @@ func (d *NMDownloader) downloadToLocal(ctx context.Context, music *models.Music,
 	// 校验md5文件完整性
 	if _, err := file.Seek(0, io.SeekStart); err != nil {
 		_ = os.Remove(file.Name())
-		return "", fmt.Errorf("seek: %w", err)
+		return "", false, fmt.Errorf("seek: %w", err)
 	}
 	var m = md5.New()
 	if _, err := io.Copy(m, file); err != nil {
 		_ = os.Remove(file.Name())
-		return "", err
+		return "", false, err
 	}
 	if m := hex.EncodeToString(m.Sum(nil)); m != info.Md5 {
 		_ = os.Remove(file.Name())
-		return "", fmt.Errorf("file %v md5 not match, want=%s, got=%s", file.Name(), info.Md5, m)
+		return "", false, fmt.Errorf("file %v md5 not match, want=%s, got=%s", file.Name(), info.Md5, m)
 	}
-
-	// // 设置歌曲tag值
-	// if err := s.setMusicTag(file.Name(), d.Music); err != nil {
-	// 	log.Warn("setMusicTag %s err: %v", file.Name(), err)
-	// }
 
 	// 避免文件重名
 	for i := 1; utils.FileExists(dest); i++ {
@@ -607,7 +648,7 @@ func (d *NMDownloader) downloadToLocal(ctx context.Context, music *models.Music,
 			break
 		}
 		if d.ConflictPolicy == ConflictPolicyRename {
-			dest = filepath.Join(d.Output, fmt.Sprintf("%s - %s(%d).%s", music.ArtistString(), music.NameString(), i, strings.ToLower(info.Type)))
+			dest = filepath.Join(d.Output, music.Filename(info.Type, i))
 		}
 	}
 
@@ -618,30 +659,40 @@ func (d *NMDownloader) downloadToLocal(ctx context.Context, music *models.Music,
 	}
 	if err := os.Rename(file.Name(), dest); err != nil {
 		_ = os.Remove(file.Name())
-		return "", fmt.Errorf("rename: %w", err)
+		return "", false, fmt.Errorf("rename: %w", err)
 	}
 	if err := os.Chmod(dest, 0644); err != nil {
-		return "", fmt.Errorf("chmod: %w", err)
+		return "", false, fmt.Errorf("chmod: %w", err)
 	}
 
-	err = d.setMusicTag(ctx, music, dest)
-	if err != nil {
-		log.Warn("setMusicTag %s err: %v", dest, err)
-	}
-	return dest, nil
+	return dest, true, nil
 }
 
-func (d *NMDownloader) setMusicTag(ctx context.Context, music *models.Music, filePath string) error {
+func (d *NMDownloader) downloadLyrics(ctx context.Context, id int64) (string, error) {
+	lyricResp, err := d.request.Lyric(ctx, &weapi.LyricReq{Id: id})
+	if err != nil {
+		return "", fmt.Errorf("download lyric: %w", err)
+	}
+	if lyricResp.Code != 200 {
+		return "", fmt.Errorf("download lyric API error: %+v", lyricResp)
+	}
+	return lyricResp.Lrc.Lyric, nil
+}
+
+func (d *NMDownloader) setMusicTags(ctx context.Context, music *models.Music, filePath string) error {
 	artistNames := make([]string, 0, len(music.Artist))
 	for _, ar := range music.Artist {
 		artistNames = append(artistNames, ar.Name)
 	}
+
 	err := taglib.WriteTags(filePath, map[string][]string{
 		// Multi-valued tags allowed
-		taglib.Artist: artistNames,
-		taglib.Album:  {music.Album.Name},
-		taglib.Title:  {music.Name},
-		taglib.Length: {fmt.Sprintf("%d", music.Time/1000)}, // convert milliseconds to seconds
+		taglib.Artist:      artistNames,
+		taglib.Album:       {music.Album.Name},
+		taglib.Title:       {music.Name},
+		taglib.Length:      {fmt.Sprintf("%d", music.Time/1000)}, // convert milliseconds to seconds
+		taglib.Lyrics:      {music.Lyrics},
+		taglib.TrackNumber: {music.TrackNumber},
 	}, 0)
 	if err != nil {
 		return fmt.Errorf("WriteTags: %w", err)
