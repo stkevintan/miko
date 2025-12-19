@@ -35,12 +35,11 @@ type NMDownloader struct {
 	ConflictPolicy ConflictPolicy
 }
 
-// Ensure NMDownloader implements the Downloader interface
-var _ Downloader = (*NMDownloader)(nil)
-
 var (
-	urlPattern = "/(song|artist|album|playlist)\\?id=(\\d+)"
-	reg        = regexp.MustCompile(urlPattern)
+	// Ensure NMDownloader implements the Downloader interface
+	_          Downloader = (*NMDownloader)(nil)
+	urlPattern            = "/(song|artist|album|playlist)\\?id=(\\d+)"
+	reg                   = regexp.MustCompile(urlPattern)
 )
 
 func parseURI(source string) (string, int64, error) {
@@ -390,7 +389,7 @@ func (d *NMDownloader) downloadSingle(ctx context.Context, music *models.Music) 
 	// Return download result
 	result := &models.DownloadResponse{
 		SongID:         fmt.Sprintf("%d", music.Id),
-		SongName:       songDetail.Name,
+		SongName:       music.Name,
 		Artist:         formatArtists(songDetail.Ar),
 		Album:          songDetail.Al.Name,
 		AlPicUrl:       songDetail.Al.PicUrl,
