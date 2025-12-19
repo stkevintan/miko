@@ -4,7 +4,7 @@ version = "1.0.0"
 port = 8082
 
 [registry]
-default="netease"
+default = "netease"
 
 
 [log]
