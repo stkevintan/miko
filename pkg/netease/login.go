@@ -8,7 +8,8 @@ import (
 	"github.com/stkevintan/miko/pkg/types"
 )
 
-func (s *NMProvider) Login(ctx context.Context) (*types.LoginResult, error) {
+func (s *NMProvider) Login(ctx context.Context, uuid string, password string) (*types.LoginResult, error) {
+	s.jar.UpdateCredential(uuid, password)
 	user, err := s.request.GetUserInfo(ctx, &weapi.GetUserInfoReq{})
 	if err != nil {
 		return nil, fmt.Errorf("GetUserInfo: %s", err)

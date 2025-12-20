@@ -3,11 +3,16 @@ package registry
 import (
 	"context"
 
+	"github.com/stkevintan/miko/pkg/cookiecloud"
 	"github.com/stkevintan/miko/pkg/types"
 )
 
 // Provider interface defines the contract for different music providers
 type Provider interface {
+	GetCookieJar() cookiecloud.CookieJar
+
+	Login(ctx context.Context, uuid string, password string) (*types.LoginResult, error)
+
 	// DownloadBatch downloads multiple songs and returns the batch result
 	Download(ctx context.Context, music []*types.Music, config *types.DownloadConfig) (*types.MusicDownloadResults, error)
 
@@ -15,8 +20,6 @@ type Provider interface {
 	GetMusic(ctx context.Context, uris []string) ([]*types.Music, error)
 
 	Close(ctx context.Context) error
-
-	Login(ctx context.Context) (*types.LoginResult, error)
 }
 
 // ProviderFactory creates music provider for different music platforms

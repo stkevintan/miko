@@ -21,6 +21,9 @@ func NewMusicDownloadResults(size int) *MusicDownloadResults {
 	}
 }
 func (d *MusicDownloadResults) Add(result *DownloadResult) {
+	if result == nil {
+		return
+	}
 	d.results = append(d.results, result)
 }
 

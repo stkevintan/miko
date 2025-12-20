@@ -15,11 +15,10 @@ format = "json"
 stdout = true
 
 [cookiecloud]
-apiUrl = "http://192.168.50.2:3000/cookiecloud"
-uuid = "uSfuMSt1RM6PdC8VX7J4Zy"
-password = "vJEB7WLWDvCZ6auUVJxf5c"
-syncInterval = "10m"
+url = "http://192.168.50.2:3000/cookiecloud"
+# uuid = "uSfuMSt1RM6PdC8VX7J4Zz"
+# password = "vJEB7WLWDvCZ6auUVJxf5c"
 debug = false
 timeout = 0
 retry = 0
-
+sync_interval = "5m"

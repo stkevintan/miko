@@ -29,6 +29,7 @@ import (
 	"github.com/stkevintan/miko/config"
 	_ "github.com/stkevintan/miko/docs" // This line is important for swagger docs
 	"github.com/stkevintan/miko/internal/handler"
+	"github.com/stkevintan/miko/pkg/cookiecloud"
 	"github.com/stkevintan/miko/pkg/log"
 	"github.com/stkevintan/miko/pkg/netease"
 	"github.com/stkevintan/miko/pkg/registry"
@@ -49,8 +50,13 @@ func main() {
 		panic(fmt.Sprintf("Failed to create provider registry: %v", err))
 	}
 
+	jar, err := cookiecloud.NewCookieCloudJar(cfg.CookieCloud)
+	if err != nil {
+		log.Fatalf("Failed to create CookieCloud jar: %v", err)
+	}
+
 	// add netease provider
-	pr.RegisterFactory("netease", netease.NewNetEaseProviderFactory(cfg.CookieCloud))
+	pr.RegisterFactory("netease", netease.NewNetEaseProviderFactory(jar))
 	// add other providers here...
 
 	// Initialize HTTP handler

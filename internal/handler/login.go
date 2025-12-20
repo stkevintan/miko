@@ -13,12 +13,21 @@ import (
 // @Tags         auth
 // @Accept       json
 // @Produce      json
+// @Param        platform query string false "Music platform" example("netease")
+// @Param        body body models.LoginRequest true "Login request"
 // @Success      200 {object} models.LoginResponse
 // @Failure      400 {object} models.ErrorResponse
 // @Failure      500 {object} models.ErrorResponse
-// @Router       /login [post]
+// @Router       /api/login [post]
 func (h *Handler) handleLogin(c *gin.Context) {
 	platform := c.DefaultQuery("platform", h.registry.Config.Platform)
+
+	var req models.LoginRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		errorResp := models.ErrorResponse{Error: err.Error()}
+		c.JSON(http.StatusBadRequest, errorResp)
+		return
+	}
 
 	provider, err := h.registry.CreateProvider(platform)
 	if err != nil {
@@ -26,7 +35,9 @@ func (h *Handler) handleLogin(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, errorResp)
 		return
 	}
-	result, err := provider.Login(c.Request.Context())
+	defer provider.Close(c.Request.Context())
+
+	result, err := provider.Login(c.Request.Context(), req.UUID, req.Password)
 
 	if err != nil {
 		errorResp := models.ErrorResponse{Error: err.Error()}

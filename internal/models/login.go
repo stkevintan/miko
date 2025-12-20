@@ -6,6 +6,12 @@ type ErrorResponse struct {
 	Error string `json:"error" example:"Invalid input"`
 }
 
+// @Description User login request
+type LoginRequest struct {
+	UUID     string `json:"uuid" binding:"required" example:"your-cookiecloud-uuid" description:"CookieCloud UUID"`
+	Password string `json:"password" binding:"required" example:"your-cookiecloud-password" description:"CookieCloud password"`
+}
+
 // @Description User login response
 type LoginResponse struct {
 	Username string `json:"username" example:"john_doe" description:"Username"`
