@@ -1,73 +1,27 @@
 basePath: /api
 definitions:
-  models.BatchDownloadResponse:
-    description: Batch music download response
+  github_com_stkevintan_miko_pkg_types.Album:
     properties:
-      errors:
-        items:
-          type: string
-        type: array
-      failed:
-        example: 2
+      id:
         type: integer
-      songs:
-        items:
-          $ref: '#/definitions/models.DownloadResponse'
-        type: array
-      success:
-        example: 8
-        type: integer
-      total:
-        example: 10
-        type: integer
+      name:
+        type: string
+      picUrl:
+        type: string
     type: object
-  models.DownloadResponse:
-    description: Music download response
+  github_com_stkevintan_miko_pkg_types.Artist:
     properties:
-      album:
-        example: Album Name
-        type: string
-      album_pic_url:
-        example: https://...
-        type: string
-      artist:
-        example: Artist Name
-        type: string
-      download_url:
-        example: https://...
-        type: string
-      downloaded_path:
-        example: ./downloads/Song Title.flac
-        type: string
-      duration:
-        example: 240000
+      id:
         type: integer
-      file_size:
-        example: 15728640
-        type: integer
-      file_type:
-        example: flac
+      name:
         type: string
-      lyrics:
-        example: '[00:10.00] Lyrics line...'
-        type: string
-      quality:
-        example: lossless
-        type: string
-      song_id:
-        example: "2161154646"
-        type: string
-      song_name:
-        example: Song Title
-        type: string
-      success:
-        example: true
-        type: boolean
     type: object
   models.DownloadSummary:
     properties:
       details:
-        $ref: '#/definitions/models.BatchDownloadResponse'
+        items:
+          $ref: '#/definitions/types.DownloadResult'
+        type: array
       summary:
         example: Downloaded 8 out of 10 songs.
         type: string
@@ -78,35 +32,6 @@ definitions:
       error:
         example: Invalid input
         type: string
-    type: object
-  models.HealthResponse:
-    description: Health check response
-    properties:
-      environment:
-        example: development
-        type: string
-      status:
-        example: healthy
-        type: string
-    type: object
-  models.LoginRequest:
-    description: User login request
-    properties:
-      password:
-        example: password123
-        type: string
-      server:
-        example: netease
-        type: string
-      timeout:
-        example: 30000
-        type: integer
-      uuid:
-        example: user123
-        type: string
-    required:
-    - password
-    - uuid
     type: object
   models.LoginResponse:
     description: User login response
@@ -124,20 +49,39 @@ definitions:
         example: john_doe
         type: string
     type: object
-  models.ProcessRequest:
-    description: Data processing request
+  types.DownloadResult:
     properties:
       data:
-        example: hello world
-        type: string
-    required:
-    - data
+        $ref: '#/definitions/types.DownloadedMusic'
+      error: {}
     type: object
-  models.ProcessResponse:
-    description: Data processing response
+  types.DownloadedMusic:
     properties:
-      result:
-        example: 'processed: hello world'
+      album:
+        $ref: '#/definitions/github_com_stkevintan_miko_pkg_types.Album'
+      artist:
+        items:
+          $ref: '#/definitions/github_com_stkevintan_miko_pkg_types.Artist'
+        type: array
+      filePath:
+        type: string
+      id:
+        type: integer
+      lyrics:
+        type: string
+      name:
+        type: string
+      quality:
+        type: string
+      size:
+        type: integer
+      time:
+        type: integer
+      trackNumber:
+        type: string
+      type:
+        type: string
+      url:
         type: string
     type: object
 info:
@@ -212,6 +156,11 @@ paths:
         in: query
         name: conflict_policy
         type: string
+      - description: Music platform to use for downloading
+        example: '"netease"'
+        in: query
+        name: platform
+        type: string
       produces:
       - application/json
       responses:
@@ -231,33 +180,11 @@ paths:
       summary: Download music tracks
       tags:
       - music
-  /health:
-    get:
-      consumes:
-      - application/json
-      description: Returns the current health status of the service
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: OK
-          schema:
-            $ref: '#/definitions/models.HealthResponse'
-      summary: Get health status
-      tags:
-      - health
   /login:
     post:
       consumes:
       - application/json
       description: Authenticates user with provided credentials
-      parameters:
-      - description: Login credentials
-        in: body
-        name: request
-        required: true
-        schema:
-          $ref: '#/definitions/models.LoginRequest'
       produces:
       - application/json
       responses:
@@ -276,36 +203,6 @@ paths:
       summary: User login
       tags:
       - auth
-  /process:
-    post:
-      consumes:
-      - application/json
-      description: Processes input data and returns the result
-      parameters:
-      - description: Data to process
-        in: body
-        name: request
-        required: true
-        schema:
-          $ref: '#/definitions/models.ProcessRequest'
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: OK
-          schema:
-            $ref: '#/definitions/models.ProcessResponse'
-        "400":
-          description: Bad Request
-          schema:
-            $ref: '#/definitions/models.ErrorResponse'
-        "500":
-          description: Internal Server Error
-          schema:
-            $ref: '#/definitions/models.ErrorResponse'
-      summary: Process data
-      tags:
-      - data
 schemes:
 - http
 - https

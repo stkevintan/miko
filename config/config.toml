@@ -4,7 +4,8 @@ version = "1.0.0"
 port = 8082
 
 [registry]
-default = "netease"
+# Default platform to use when none is specified
+platform = "netease"
 
 
 [log]
@@ -13,11 +14,12 @@ file = "${HOME}/.miko/log.log"
 format = "json"
 stdout = true
 
-[nmapi]
+[cookiecloud]
+apiUrl = "http://192.168.50.2:3000/cookiecloud"
+uuid = "uSfuMSt1RM6PdC8VX7J4Zy"
+password = "vJEB7WLWDvCZ6auUVJxf5c"
+syncInterval = "10m"
 debug = false
 timeout = 0
 retry = 0
 
-[nmapi.cookie]
-filepath = "${HOME}/.miko/cookies.json"
-interval = 0

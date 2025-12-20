@@ -36,7 +36,7 @@ func (d *NMProvider) Download(ctx context.Context, musics []*types.Music, config
 		}
 		go func() {
 			defer sema.Release(1)
-			unit, err := d.newDownloadUnit(music, config)
+			dl, err := d.newDownloader(music, config)
 			if err != nil {
 				mutex.Lock()
 				results.Add(&types.DownloadResult{
@@ -46,7 +46,7 @@ func (d *NMProvider) Download(ctx context.Context, musics []*types.Music, config
 				log.Error("create download unit for %s err: %v", music.String(), err)
 				return
 			}
-			result, err := unit.Download(ctx)
+			result, err := dl.Download(ctx)
 			if err != nil {
 				mutex.Lock()
 				results.Add(&types.DownloadResult{
@@ -72,7 +72,7 @@ func (d *NMProvider) Download(ctx context.Context, musics []*types.Music, config
 }
 
 // data and logic of downloading a single song
-type DownloadUnit struct {
+type Downloader struct {
 	Music          *types.Music
 	Level          nmTypes.Level
 	Output         string
@@ -80,7 +80,7 @@ type DownloadUnit struct {
 	provider       *NMProvider
 }
 
-func (d *NMProvider) newDownloadUnit(music *types.Music, config *types.DownloadConfig) (*DownloadUnit, error) {
+func (d *NMProvider) newDownloader(music *types.Music, config *types.DownloadConfig) (*Downloader, error) {
 	// Validate and parse level
 	level, err := ValidateQualityLevel(config.Level)
 	if err != nil {
@@ -91,7 +91,7 @@ func (d *NMProvider) newDownloadUnit(music *types.Music, config *types.DownloadC
 	if err != nil {
 		return nil, fmt.Errorf("invalid conflict policy: %w", err)
 	}
-	return &DownloadUnit{
+	return &Downloader{
 		Music:          music,
 		Level:          level,
 		Output:         config.Output,
@@ -100,7 +100,7 @@ func (d *NMProvider) newDownloadUnit(music *types.Music, config *types.DownloadC
 	}, nil
 }
 
-func (d *DownloadUnit) Download(ctx context.Context) (*types.DownloadedMusic, error) {
+func (d *Downloader) Download(ctx context.Context) (*types.DownloadedMusic, error) {
 	if d.Music == nil {
 		return nil, fmt.Errorf("music is required")
 	}
@@ -164,7 +164,7 @@ func (d *DownloadUnit) Download(ctx context.Context) (*types.DownloadedMusic, er
 
 // downloadToLocal downloads the song to a local file
 // returns the file path, whether the file need proceed to tag, and an error if any
-func (d *DownloadUnit) downloadToLocal(ctx context.Context, info *SongDownloadInfo) (string, bool, error) {
+func (d *Downloader) downloadToLocal(ctx context.Context, info *SongDownloadInfo) (string, bool, error) {
 	var (
 		// drd = downResp.Data[0]
 		dest     = filepath.Join(d.Output, d.Music.Filename(info.Type, 0))

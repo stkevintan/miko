@@ -16,13 +16,10 @@ type Provider interface {
 
 	Close(ctx context.Context) error
 
-	Login(ctx context.Context, args *types.LoginArgs) (*types.LoginResult, error)
+	Login(ctx context.Context) (*types.LoginResult, error)
 }
 
-// ProviderFactory creates downloaders for different music platforms
+// ProviderFactory creates music provider for different music platforms
 type ProviderFactory interface {
 	CreateProvider() (Provider, error)
-
-	// SupportedPlatforms returns the list of supported platforms
-	SupportedPlatforms() []string
 }

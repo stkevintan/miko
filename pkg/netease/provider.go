@@ -7,6 +7,7 @@ import (
 	"github.com/chaunsin/netease-cloud-music/api"
 	"github.com/chaunsin/netease-cloud-music/api/weapi"
 	nmlog "github.com/chaunsin/netease-cloud-music/pkg/log"
+	"github.com/stkevintan/miko/pkg/cookiecloud"
 	"github.com/stkevintan/miko/pkg/log"
 	"github.com/stkevintan/miko/pkg/registry"
 )
@@ -23,10 +24,10 @@ func init() {
 
 // NetEaseProviderFactory implements DownloaderFactory for NetEase Cloud Music
 type NetEaseProviderFactory struct {
-	cfg *api.Config
+	cfg *cookiecloud.Config
 }
 
-func NewNetEaseProviderFactory(cfg *api.Config) *NetEaseProviderFactory {
+func NewNetEaseProviderFactory(cfg *cookiecloud.Config) *NetEaseProviderFactory {
 	return &NetEaseProviderFactory{
 		cfg: cfg,
 	}
@@ -37,12 +38,6 @@ func (f *NetEaseProviderFactory) CreateProvider() (registry.Provider, error) {
 	return NewProvider(f.cfg)
 }
 
-// SupportedPlatforms returns NetEase as the supported platform
-func (f *NetEaseProviderFactory) SupportedPlatforms() []string {
-	return []string{"netease", "163"}
-}
-
-// NMDownloader implements the NetEase Cloud Music downloader
 type NMProvider struct {
 	cli     *api.Client
 	request *weapi.Api
@@ -51,8 +46,8 @@ type NMProvider struct {
 var _ registry.Provider = (*NMProvider)(nil)
 
 // NewProvider creates a new NMProvider for multiple songs (returns concrete type)
-func NewProvider(nmApi *api.Config) (*NMProvider, error) {
-	cli, err := api.NewClient(nmApi, nmlog.Default)
+func NewProvider(cfg *cookiecloud.Config) (*NMProvider, error) {
+	cli, err := NewClient(cfg)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create API client: %w", err)
 	}

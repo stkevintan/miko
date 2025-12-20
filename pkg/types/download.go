@@ -17,7 +17,7 @@ type MusicDownloadResults struct {
 
 func NewMusicDownloadResults(size int) *MusicDownloadResults {
 	return &MusicDownloadResults{
-		results: make([]*DownloadResult, size),
+		results: make([]*DownloadResult, 0, size),
 	}
 }
 func (d *MusicDownloadResults) Add(result *DownloadResult) {

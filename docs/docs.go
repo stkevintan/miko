@@ -99,6 +99,13 @@ const docTemplate = `{
                         "description": "How to handle existing files",
                         "name": "conflict_policy",
                         "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "example": "\"netease\"",
+                        "description": "Music platform to use for downloading",
+                        "name": "platform",
+                        "in": "query"
                     }
                 ],
                 "responses": {
@@ -123,29 +130,6 @@ const docTemplate = `{
                 }
             }
         },
-        "/health": {
-            "get": {
-                "description": "Returns the current health status of the service",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "health"
-                ],
-                "summary": "Get health status",
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "$ref": "#/definitions/models.HealthResponse"
-                        }
-                    }
-                }
-            }
-        },
         "/login": {
             "post": {
                 "description": "Authenticates user with provided credentials",
@@ -159,17 +143,6 @@ const docTemplate = `{
                     "auth"
                 ],
                 "summary": "User login",
-                "parameters": [
-                    {
-                        "description": "Login credentials",
-                        "name": "request",
-                        "in": "body",
-                        "required": true,
-                        "schema": {
-                            "$ref": "#/definitions/models.LoginRequest"
-                        }
-                    }
-                ],
                 "responses": {
                     "200": {
                         "description": "OK",
@@ -191,140 +164,31 @@ const docTemplate = `{
                     }
                 }
             }
-        },
-        "/process": {
-            "post": {
-                "description": "Processes input data and returns the result",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "data"
-                ],
-                "summary": "Process data",
-                "parameters": [
-                    {
-                        "description": "Data to process",
-                        "name": "request",
-                        "in": "body",
-                        "required": true,
-                        "schema": {
-                            "$ref": "#/definitions/models.ProcessRequest"
-                        }
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "$ref": "#/definitions/models.ProcessResponse"
-                        }
-                    },
-                    "400": {
-                        "description": "Bad Request",
-                        "schema": {
-                            "$ref": "#/definitions/models.ErrorResponse"
-                        }
-                    },
-                    "500": {
-                        "description": "Internal Server Error",
-                        "schema": {
-                            "$ref": "#/definitions/models.ErrorResponse"
-                        }
-                    }
-                }
-            }
         }
     },
     "definitions": {
-        "models.BatchDownloadResponse": {
-            "description": "Batch music download response",
+        "github_com_stkevintan_miko_pkg_types.Album": {
             "type": "object",
             "properties": {
-                "errors": {
-                    "type": "array",
-                    "items": {
-                        "type": "string"
-                    }
+                "id": {
+                    "type": "integer"
                 },
-                "failed": {
-                    "type": "integer",
-                    "example": 2
+                "name": {
+                    "type": "string"
                 },
-                "songs": {
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/models.DownloadResponse"
-                    }
-                },
-                "success": {
-                    "type": "integer",
-                    "example": 8
-                },
-                "total": {
-                    "type": "integer",
-                    "example": 10
+                "picUrl": {
+                    "type": "string"
                 }
             }
         },
-        "models.DownloadResponse": {
-            "description": "Music download response",
+        "github_com_stkevintan_miko_pkg_types.Artist": {
             "type": "object",
             "properties": {
-                "album": {
-                    "type": "string",
-                    "example": "Album Name"
+                "id": {
+                    "type": "integer"
                 },
-                "album_pic_url": {
-                    "type": "string",
-                    "example": "https://..."
-                },
-                "artist": {
-                    "type": "string",
-                    "example": "Artist Name"
-                },
-                "download_url": {
-                    "type": "string",
-                    "example": "https://..."
-                },
-                "downloaded_path": {
-                    "type": "string",
-                    "example": "./downloads/Song Title.flac"
-                },
-                "duration": {
-                    "type": "integer",
-                    "example": 240000
-                },
-                "file_size": {
-                    "type": "integer",
-                    "example": 15728640
-                },
-                "file_type": {
-                    "type": "string",
-                    "example": "flac"
-                },
-                "lyrics": {
-                    "type": "string",
-                    "example": "[00:10.00] Lyrics line..."
-                },
-                "quality": {
-                    "type": "string",
-                    "example": "lossless"
-                },
-                "song_id": {
-                    "type": "string",
-                    "example": "2161154646"
-                },
-                "song_name": {
-                    "type": "string",
-                    "example": "Song Title"
-                },
-                "success": {
-                    "type": "boolean",
-                    "example": true
+                "name": {
+                    "type": "string"
                 }
             }
         },
@@ -332,7 +196,10 @@ const docTemplate = `{
             "type": "object",
             "properties": {
                 "details": {
-                    "$ref": "#/definitions/models.BatchDownloadResponse"
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/types.DownloadResult"
+                    }
                 },
                 "summary": {
                     "type": "string",
@@ -347,46 +214,6 @@ const docTemplate = `{
                 "error": {
                     "type": "string",
                     "example": "Invalid input"
-                }
-            }
-        },
-        "models.HealthResponse": {
-            "description": "Health check response",
-            "type": "object",
-            "properties": {
-                "environment": {
-                    "type": "string",
-                    "example": "development"
-                },
-                "status": {
-                    "type": "string",
-                    "example": "healthy"
-                }
-            }
-        },
-        "models.LoginRequest": {
-            "description": "User login request",
-            "type": "object",
-            "required": [
-                "password",
-                "uuid"
-            ],
-            "properties": {
-                "password": {
-                    "type": "string",
-                    "example": "password123"
-                },
-                "server": {
-                    "type": "string",
-                    "example": "netease"
-                },
-                "timeout": {
-                    "type": "integer",
-                    "example": 30000
-                },
-                "uuid": {
-                    "type": "string",
-                    "example": "user123"
                 }
             }
         },
@@ -412,26 +239,56 @@ const docTemplate = `{
                 }
             }
         },
-        "models.ProcessRequest": {
-            "description": "Data processing request",
+        "types.DownloadResult": {
             "type": "object",
-            "required": [
-                "data"
-            ],
             "properties": {
                 "data": {
-                    "type": "string",
-                    "example": "hello world"
-                }
+                    "$ref": "#/definitions/types.DownloadedMusic"
+                },
+                "error": {}
             }
         },
-        "models.ProcessResponse": {
-            "description": "Data processing response",
+        "types.DownloadedMusic": {
             "type": "object",
             "properties": {
-                "result": {
-                    "type": "string",
-                    "example": "processed: hello world"
+                "album": {
+                    "$ref": "#/definitions/github_com_stkevintan_miko_pkg_types.Album"
+                },
+                "artist": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/github_com_stkevintan_miko_pkg_types.Artist"
+                    }
+                },
+                "filePath": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "integer"
+                },
+                "lyrics": {
+                    "type": "string"
+                },
+                "name": {
+                    "type": "string"
+                },
+                "quality": {
+                    "type": "string"
+                },
+                "size": {
+                    "type": "integer"
+                },
+                "time": {
+                    "type": "integer"
+                },
+                "trackNumber": {
+                    "type": "string"
+                },
+                "type": {
+                    "type": "string"
+                },
+                "url": {
+                    "type": "string"
                 }
             }
         }

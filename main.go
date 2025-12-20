@@ -50,7 +50,7 @@ func main() {
 	}
 
 	// add netease provider
-	pr.RegisterFactory("netease", netease.NewNetEaseProviderFactory(cfg.NmApi))
+	pr.RegisterFactory("netease", netease.NewNetEaseProviderFactory(cfg.CookieCloud))
 	// add other providers here...
 
 	// Initialize HTTP handler

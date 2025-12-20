@@ -5,10 +5,10 @@ import (
 )
 
 type Config struct {
-	DefaultPlatform string `json:"default" mapstructure:"default"`
+	Platform string `json:"platform" mapstructure:"platform"`
 }
 
-// ProviderRegistry manages multiple downloader factories
+// ProviderRegistry manages multiple provider factories
 type ProviderRegistry struct {
 	factories map[string]ProviderFactory
 	Config    *Config
@@ -29,7 +29,7 @@ func (dm *ProviderRegistry) RegisterFactory(platform string, factory ProviderFac
 // CreateProvider creates a provider for the specified platform
 func (dm *ProviderRegistry) CreateProvider(platform string) (Provider, error) {
 	if platform == "" {
-		platform = dm.Config.DefaultPlatform
+		platform = dm.Config.Platform
 	}
 	factory, exists := dm.factories[platform]
 	if !exists {

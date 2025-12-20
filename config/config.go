@@ -9,8 +9,8 @@ import (
 	"path"
 	"strings"
 
-	"github.com/chaunsin/netease-cloud-music/api"
 	"github.com/spf13/viper"
+	"github.com/stkevintan/miko/pkg/cookiecloud"
 	"github.com/stkevintan/miko/pkg/log"
 	"github.com/stkevintan/miko/pkg/registry"
 )
@@ -22,11 +22,11 @@ var (
 
 // Config holds all configuration for our service
 type Config struct {
-	Version  string           `json:"version" mapstructure:"version"`
-	Server   *ServerConfig    `json:"server" mapstructure:"server"`
-	Log      *log.Config      `json:"log" mapstructure:"log"`
-	NmApi    *api.Config      `json:"nmapi" mapstructure:"nmapi"`
-	Registry *registry.Config `json:"registry" mapstructure:"registry"`
+	Version     string              `json:"version" mapstructure:"version"`
+	Server      *ServerConfig       `json:"server" mapstructure:"server"`
+	Log         *log.Config         `json:"log" mapstructure:"log"`
+	CookieCloud *cookiecloud.Config `json:"cookiecloud" mapstructure:"cookiecloud"`
+	Registry    *registry.Config    `json:"registry" mapstructure:"registry"`
 }
 
 func (c *Config) Validate() error {
@@ -36,8 +36,8 @@ func (c *Config) Validate() error {
 	if c.Log == nil {
 		return errors.New("log config is required")
 	}
-	if c.NmApi == nil {
-		return errors.New("nmapi config is required")
+	if c.CookieCloud == nil {
+		return errors.New("cookiecloud config is required")
 	}
 	if c.Registry == nil {
 		return errors.New("registry config is required")

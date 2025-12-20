@@ -37,7 +37,7 @@ func (h *Handler) handleDownload(c *gin.Context) {
 	output := c.Query("output")
 	timeoutStr := c.Query("timeout")
 	conflictPolicy := c.DefaultQuery("conflict_policy", "skip")
-	platform := c.DefaultQuery("platform", h.registry.Config.DefaultPlatform)
+	platform := c.DefaultQuery("platform", h.registry.Config.Platform)
 
 	// Validate required parameters
 	if len(uris) == 0 {
