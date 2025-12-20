@@ -33,6 +33,19 @@ definitions:
         example: Invalid input
         type: string
     type: object
+  models.LoginRequest:
+    description: User login request
+    properties:
+      password:
+        example: your-cookiecloud-password
+        type: string
+      uuid:
+        example: your-cookiecloud-uuid
+        type: string
+    required:
+    - password
+    - uuid
+    type: object
   models.LoginResponse:
     description: User login response
     properties:
@@ -185,6 +198,18 @@ paths:
       consumes:
       - application/json
       description: Authenticates user with provided credentials
+      parameters:
+      - description: Music platform
+        example: '"netease"'
+        in: query
+        name: platform
+        type: string
+      - description: Login request
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/models.LoginRequest'
       produces:
       - application/json
       responses:

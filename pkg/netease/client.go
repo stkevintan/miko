@@ -3,6 +3,7 @@ package netease
 import (
 	"net/http"
 	"os"
+	"path"
 
 	"github.com/chaunsin/netease-cloud-music/api"
 	"github.com/chaunsin/netease-cloud-music/pkg/cookie"
@@ -16,7 +17,8 @@ func NewClient(cookieJar http.CookieJar) (*api.Client, error) {
 		Debug:   false,
 		Cookie: cookie.Config{
 			Interval: 0,
-			Filepath: os.TempDir(),
+			// we don't need local cookie file, but make the lib happy
+			Filepath: path.Join(os.TempDir(), "cookie.json"),
 		},
 	}, log.Default)
 	if err != nil {

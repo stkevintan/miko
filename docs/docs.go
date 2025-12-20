@@ -143,6 +143,24 @@ const docTemplate = `{
                     "auth"
                 ],
                 "summary": "User login",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "example": "\"netease\"",
+                        "description": "Music platform",
+                        "name": "platform",
+                        "in": "query"
+                    },
+                    {
+                        "description": "Login request",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/models.LoginRequest"
+                        }
+                    }
+                ],
                 "responses": {
                     "200": {
                         "description": "OK",
@@ -214,6 +232,24 @@ const docTemplate = `{
                 "error": {
                     "type": "string",
                     "example": "Invalid input"
+                }
+            }
+        },
+        "models.LoginRequest": {
+            "description": "User login request",
+            "type": "object",
+            "required": [
+                "password",
+                "uuid"
+            ],
+            "properties": {
+                "password": {
+                    "type": "string",
+                    "example": "your-cookiecloud-password"
+                },
+                "uuid": {
+                    "type": "string",
+                    "example": "your-cookiecloud-uuid"
                 }
             }
         },

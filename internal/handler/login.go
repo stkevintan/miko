@@ -18,7 +18,7 @@ import (
 // @Success      200 {object} models.LoginResponse
 // @Failure      400 {object} models.ErrorResponse
 // @Failure      500 {object} models.ErrorResponse
-// @Router       /api/login [post]
+// @Router       /login [post]
 func (h *Handler) handleLogin(c *gin.Context) {
 	platform := c.DefaultQuery("platform", h.registry.Config.Platform)
 

@@ -68,9 +68,17 @@ func (c *CookieCloudJar) Cookies(u *url.URL) []*http.Cookie {
 }
 
 func (c *CookieCloudJar) UpdateCredential(uuid, password string) error {
+	if uuid == "" || password == "" {
+		return fmt.Errorf("uuid and password are required")
+	}
+	if c.client == nil {
+		return fmt.Errorf("cookiecloud client not initialized")
+	}
+
 	cred := &ccloudCredential{
 		Uuid:     uuid,
 		Password: password,
+		client:   c.client,
 		jar:      c,
 	}
 
