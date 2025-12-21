@@ -54,7 +54,17 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        platform: [linux/amd64, linux/arm64, darwin/amd64, darwin/arm64, windows/amd64]
+        include:
+          - platform: linux/amd64
+            artifact_name: miko-linux-amd64
+          - platform: linux/arm64
+            artifact_name: miko-linux-arm64
+          - platform: darwin/amd64
+            artifact_name: miko-darwin-amd64
+          - platform: darwin/arm64
+            artifact_name: miko-darwin-arm64
+          - platform: windows/amd64
+            artifact_name: miko-windows-amd64
     
     steps:
     - name: Checkout repository
@@ -77,6 +87,6 @@ jobs:
     - name: Upload build artifacts
       uses: actions/upload-artifact@v6
       with:
-        name: miko-${{ matrix.platform }}
+        name: ${{ matrix.artifact_name }}
         path: bin/
         retention-days: 7
