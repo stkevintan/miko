@@ -19,6 +19,7 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"net/http"
 	"os"
@@ -45,12 +46,20 @@ func main() {
 	// Initialize global logger from config.
 	log.Default = log.New(cfg.Log)
 
+	// Pretty-print loaded config for debugging.
+	if b, err := json.MarshalIndent(cfg, "", "  "); err == nil {
+		log.Debug("Loaded config:\n%s", string(b))
+	}
+
 	pr, err := registry.NewProviderRegistry(cfg.Registry)
 	if err != nil {
 		panic(fmt.Sprintf("Failed to create provider registry: %v", err))
 	}
 
-	jar, err := cookiecloud.NewCookieCloudJar(cfg.CookieCloud)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	// Initialize CookieCloud jar
+	jar, err := cookiecloud.NewCookieCloudJar(ctx, cfg.CookieCloud)
 	if err != nil {
 		log.Fatalf("Failed to create CookieCloud jar: %v", err)
 	}
@@ -82,11 +91,11 @@ func main() {
 	log.Println("Shutting down server...")
 
 	// Create a deadline to wait for
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-	defer cancel()
+	ctx2, cancel2 := context.WithTimeout(ctx, 30*time.Second)
+	defer cancel2()
 
 	// Attempt graceful shutdown
-	if err := server.Shutdown(ctx); err != nil {
+	if err := server.Shutdown(ctx2); err != nil {
 		log.Fatal("Server forced to shutdown:", err)
 	}
 

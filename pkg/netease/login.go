@@ -14,6 +14,9 @@ func (s *NMProvider) Login(ctx context.Context, uuid string, password string) (*
 	if err != nil {
 		return nil, fmt.Errorf("GetUserInfo: %s", err)
 	}
+	if user.Profile == nil {
+		return nil, nil
+	}
 	return &types.LoginResult{
 		Username: user.Profile.Nickname,
 		UserID:   user.Profile.UserId,

@@ -9,15 +9,14 @@ platform = "netease"
 
 
 [log]
-level = "info"
+level = "debug"
 file = "${HOME}/.miko/log.log"
-format = "json"
+format = "text"
 stdout = true
 
 [cookiecloud]
-url = "http://192.168.50.2:3000/cookiecloud"
-# uuid = "uSfuMSt1RM6PdC8VX7J4Zz"
-# password = "vJEB7WLWDvCZ6auUVJxf5c"
+# url = "https://movie-pilot.org/cookiecloud"
+url = "https://ccc.ft07.com"
 debug = false
 timeout = 0
 retry = 0

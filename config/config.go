@@ -73,7 +73,6 @@ func Load() (*Config, error) {
 	} else {
 		v.SetConfigName("config")
 		v.AddConfigPath(".")
-		v.AddConfigPath("./config")
 		home, err := os.UserHomeDir()
 		if err != nil {
 			panic(fmt.Sprintf("os.UserHomeDir: %s", err))
