@@ -21,15 +21,18 @@ func NewMusicDownloadResults(size int) *MusicDownloadResults {
 	}
 }
 func (d *MusicDownloadResults) Add(result *DownloadResult) {
+	if result == nil {
+		return
+	}
 	d.results = append(d.results, result)
 }
 
-func (d *MusicDownloadResults) Total() int64 {
-	return int64(len(d.results))
+func (d *MusicDownloadResults) Total() int {
+	return len(d.results)
 }
 
-func (d *MusicDownloadResults) SuccessCount() int64 {
-	var count int64
+func (d *MusicDownloadResults) SuccessCount() int {
+	var count int
 	for _, r := range d.results {
 		if r.Err == nil {
 			count++
@@ -38,7 +41,7 @@ func (d *MusicDownloadResults) SuccessCount() int64 {
 	return count
 }
 
-func (d *MusicDownloadResults) FailedCount() int64 {
+func (d *MusicDownloadResults) FailedCount() int {
 	return d.Total() - d.SuccessCount()
 }
 
