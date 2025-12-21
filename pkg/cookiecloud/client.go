@@ -102,10 +102,9 @@ func (c *CookieCloudJar) UpdateCredential(uuid, password string) error {
 }
 
 type ccloudCredential struct {
-	Uuid       string
-	Password   string
-	client     *cookiecloud.Client
-	syncCancel context.CancelFunc
+	Uuid     string
+	Password string
+	client   *cookiecloud.Client
 }
 
 // update cookies of u to cookiecloud server
