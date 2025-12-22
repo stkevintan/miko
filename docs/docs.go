@@ -130,9 +130,9 @@ const docTemplate = `{
                 }
             }
         },
-        "/login": {
+        "/platform/{platform}/auth": {
             "post": {
-                "description": "Authenticates user with provided credentials",
+                "description": "Authenticates a music platform using CookieCloud credentials (key + password) and returns basic user info when successful.",
                 "consumes": [
                     "application/json"
                 ],
@@ -142,40 +142,41 @@ const docTemplate = `{
                 "tags": [
                     "auth"
                 ],
-                "summary": "User login",
+                "summary": "Platform authentication",
                 "parameters": [
                     {
                         "type": "string",
                         "example": "\"netease\"",
                         "description": "Music platform",
                         "name": "platform",
-                        "in": "query"
+                        "in": "path",
+                        "required": true
                     },
                     {
-                        "description": "Login request",
+                        "description": "Platform auth request",
                         "name": "body",
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/models.LoginRequest"
+                            "$ref": "#/definitions/models.PlatformAuthRequest"
                         }
                     }
                 ],
                 "responses": {
                     "200": {
-                        "description": "OK",
+                        "description": "Platform auth successful",
                         "schema": {
-                            "$ref": "#/definitions/models.LoginResponse"
+                            "$ref": "#/definitions/models.PlatformAuthResponse"
                         }
                     },
                     "400": {
-                        "description": "Bad Request",
+                        "description": "Bad request - invalid JSON, missing required fields, or no cookie returned",
                         "schema": {
                             "$ref": "#/definitions/models.ErrorResponse"
                         }
                     },
                     "500": {
-                        "description": "Internal Server Error",
+                        "description": "Internal server error - provider init/auth failure",
                         "schema": {
                             "$ref": "#/definitions/models.ErrorResponse"
                         }
@@ -235,26 +236,26 @@ const docTemplate = `{
                 }
             }
         },
-        "models.LoginRequest": {
-            "description": "User login request",
+        "models.PlatformAuthRequest": {
+            "description": "platform auth request",
             "type": "object",
             "required": [
-                "password",
-                "uuid"
+                "key",
+                "password"
             ],
             "properties": {
+                "key": {
+                    "type": "string",
+                    "example": "your-cookiecloud-key"
+                },
                 "password": {
                     "type": "string",
                     "example": "your-cookiecloud-password"
-                },
-                "uuid": {
-                    "type": "string",
-                    "example": "your-cookiecloud-uuid"
                 }
             }
         },
-        "models.LoginResponse": {
-            "description": "User login response",
+        "models.PlatformAuthResponse": {
+            "description": "platform auth response",
             "type": "object",
             "properties": {
                 "message": {
