@@ -132,7 +132,7 @@ func (r *DownloadRequest) Download(ctx context.Context, registry *registry.Provi
 		r.Platform,
 	)
 	if err != nil {
-		return nil, fmt.Errorf("create batch downloader: %w", err)
+		return nil, fmt.Errorf("create provider: %w", err)
 	}
 	defer provider.Close(nctx)
 

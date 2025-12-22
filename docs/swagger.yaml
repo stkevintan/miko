@@ -16,6 +16,32 @@ definitions:
       name:
         type: string
     type: object
+  models.CookiecloudIdentity:
+    description: platform auth request
+    properties:
+      key:
+        example: your-cookiecloud-key
+        type: string
+      password:
+        example: your-cookiecloud-password
+        type: string
+    required:
+    - key
+    - password
+    type: object
+  models.CookiecloudIdentityResponse:
+    description: platform auth response
+    properties:
+      key:
+        example: your-cookiecloud-key
+        type: string
+      url:
+        example: https://cookiecloud.example.com
+        type: string
+    required:
+    - key
+    - url
+    type: object
   models.DownloadSummary:
     properties:
       details:
@@ -31,35 +57,6 @@ definitions:
     properties:
       error:
         example: Invalid input
-        type: string
-    type: object
-  models.PlatformAuthRequest:
-    description: platform auth request
-    properties:
-      key:
-        example: your-cookiecloud-key
-        type: string
-      password:
-        example: your-cookiecloud-password
-        type: string
-    required:
-    - key
-    - password
-    type: object
-  models.PlatformAuthResponse:
-    description: platform auth response
-    properties:
-      message:
-        example: Login successful
-        type: string
-      success:
-        example: true
-        type: boolean
-      user_id:
-        example: 123456789
-        type: integer
-      username:
-        example: john_doe
         type: string
     type: object
   types.DownloadResult:
@@ -97,6 +94,13 @@ definitions:
       url:
         type: string
     type: object
+  types.User:
+    properties:
+      userId:
+        type: integer
+      username:
+        type: string
+    type: object
 info:
   contact:
     email: support@swagger.io
@@ -110,6 +114,58 @@ info:
   title: Miko Service API
   version: "1.0"
 paths:
+  /cookiecloud/identity:
+    post:
+      consumes:
+      - application/json
+      description: Updates the CookieCloud server identity using the provided key
+        and password. This allows the service to fetch cookies from your CookieCloud
+        server for authentication with music platforms.
+      parameters:
+      - description: CookieCloud identity (key and password)
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/models.CookiecloudIdentity'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Identity updated successfully
+          schema:
+            $ref: '#/definitions/models.CookiecloudIdentityResponse'
+        "400":
+          description: Bad request - invalid JSON or missing required fields
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+        "500":
+          description: Internal server error - failed to update identity
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+      summary: Update CookieCloud identity
+      tags:
+      - cookiecloud
+  /cookiecloud/server:
+    get:
+      description: Returns the currently configured CookieCloud server URL
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: CookieCloud server URL
+          schema:
+            additionalProperties:
+              allOf:
+              - type: string
+              - properties:
+                  url:
+                    type: string
+                type: object
+            type: object
+      summary: Get CookieCloud server URL
+      tags:
+      - cookiecloud
   /download:
     get:
       consumes:
@@ -193,44 +249,35 @@ paths:
       summary: Download music tracks
       tags:
       - music
-  /platform/{platform}/auth:
-    post:
-      consumes:
-      - application/json
-      description: Authenticates a music platform using CookieCloud credentials (key
-        + password) and returns basic user info when successful.
+  /platform/{platform}/user:
+    get:
+      description: Retrieves the authenticated user's information from the specified
+        music platform
       parameters:
-      - description: Music platform
+      - description: Music platform name
         example: '"netease"'
         in: path
         name: platform
         required: true
         type: string
-      - description: Platform auth request
-        in: body
-        name: body
-        required: true
-        schema:
-          $ref: '#/definitions/models.PlatformAuthRequest'
       produces:
       - application/json
       responses:
         "200":
-          description: Platform auth successful
+          description: User information retrieved successfully
           schema:
-            $ref: '#/definitions/models.PlatformAuthResponse'
+            $ref: '#/definitions/types.User'
         "400":
-          description: Bad request - invalid JSON, missing required fields, or no
-            cookie returned
+          description: Bad request - authentication failed or invalid platform
           schema:
             $ref: '#/definitions/models.ErrorResponse'
         "500":
-          description: Internal server error - provider init/auth failure
+          description: Internal server error - provider creation failed
           schema:
             $ref: '#/definitions/models.ErrorResponse'
-      summary: Platform authentication
+      summary: Get user information
       tags:
-      - auth
+      - user
 schemes:
 - http
 - https

@@ -2,6 +2,7 @@ package handler
 
 import (
 	"github.com/gin-gonic/gin"
+	"github.com/stkevintan/miko/pkg/cookiecloud"
 	"github.com/stkevintan/miko/pkg/registry"
 	swaggerFiles "github.com/swaggo/files"
 	ginSwagger "github.com/swaggo/gin-swagger"
@@ -9,12 +10,14 @@ import (
 
 // Handler contains HTTP handlers for our service
 type Handler struct {
+	jar      cookiecloud.CookieJar
 	registry *registry.ProviderRegistry
 }
 
 // New creates a new handler instance
-func New(registry *registry.ProviderRegistry) *Handler {
+func New(jar cookiecloud.CookieJar, registry *registry.ProviderRegistry) *Handler {
 	return &Handler{
+		jar:      jar,
 		registry: registry,
 	}
 }
@@ -48,8 +51,10 @@ func (h *Handler) Routes() *gin.Engine {
 	// API group
 	api := r.Group("/api")
 	{
-		api.POST("/platform/:platform/auth", h.handlePlatformAuth)
+		api.GET("/cookiecloud/server", h.getCookiecloudServer)
+		api.POST("/cookiecloud/identity", h.handleCookiecloudIdentity)
 		api.GET("/download", h.handleDownload)
+		api.GET("/platform/:platform/user", h.handleUser)
 	}
 
 	return r

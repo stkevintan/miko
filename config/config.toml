@@ -15,6 +15,7 @@ format = "text"
 stdout = true
 
 [cookiecloud]
+# official cookie cloud service
 url = "https://ccc.ft07.com"
 debug = false
 timeout = 0

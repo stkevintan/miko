@@ -11,7 +11,7 @@ import (
 type Provider interface {
 	GetCookieJar() cookiecloud.CookieJar
 
-	Auth(ctx context.Context, key string, password string) (*types.LoginResult, error)
+	User(ctx context.Context) (*types.User, error)
 
 	// DownloadBatch downloads multiple songs and returns the batch result
 	Download(ctx context.Context, music []*types.Music, config *types.DownloadConfig) (*types.MusicDownloadResults, error)

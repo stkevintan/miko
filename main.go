@@ -69,7 +69,7 @@ func main() {
 	// add other providers here...
 
 	// Initialize HTTP handler
-	h := handler.New(pr)
+	h := handler.New(jar, pr)
 	// Create HTTP server
 	server := &http.Server{
 		Addr:    fmt.Sprintf(":%d", cfg.Server.Port),

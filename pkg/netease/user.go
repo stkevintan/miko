@@ -8,16 +8,15 @@ import (
 	"github.com/stkevintan/miko/pkg/types"
 )
 
-func (s *NMProvider) Auth(ctx context.Context, uuid string, password string) (*types.LoginResult, error) {
-	s.jar.UpdateCredential(uuid, password)
+func (s *NMProvider) User(ctx context.Context) (*types.User, error) {
 	user, err := s.request.GetUserInfo(ctx, &weapi.GetUserInfoReq{})
 	if err != nil {
 		return nil, fmt.Errorf("GetUserInfo: %s", err)
 	}
 	if user.Profile == nil {
-		return nil, nil
+		return nil, fmt.Errorf("get user info: no logged in user found")
 	}
-	return &types.LoginResult{
+	return &types.User{
 		Username: user.Profile.Nickname,
 		UserID:   user.Profile.UserId,
 	}, nil
