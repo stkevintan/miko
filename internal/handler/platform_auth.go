@@ -7,22 +7,22 @@ import (
 	"github.com/stkevintan/miko/internal/models"
 )
 
-// handleLogin handles user login
-// @Summary      User login
-// @Description  Authenticates user with provided credentials
+// handlePlatformAuth handles platform authentication
+// @Summary      Platform authentication
+// @Description  Authenticates a music platform using CookieCloud credentials (key + password) and returns basic user info when successful.
 // @Tags         auth
 // @Accept       json
 // @Produce      json
-// @Param        platform query string false "Music platform" example("netease")
-// @Param        body body models.LoginRequest true "Login request"
-// @Success      200 {object} models.LoginResponse
-// @Failure      400 {object} models.ErrorResponse
-// @Failure      500 {object} models.ErrorResponse
-// @Router       /login [post]
-func (h *Handler) handleLogin(c *gin.Context) {
-	platform := c.DefaultQuery("platform", h.registry.Config.Platform)
+// @Param        platform path string true "Music platform" example("netease")
+// @Param        body body models.PlatformAuthRequest true "Platform auth request"
+// @Success      200 {object} models.PlatformAuthResponse "Platform auth successful"
+// @Failure      400 {object} models.ErrorResponse "Bad request - invalid JSON, missing required fields, or no cookie returned"
+// @Failure      500 {object} models.ErrorResponse "Internal server error - provider init/auth failure"
+// @Router       /platform/{platform}/auth [post]
+func (h *Handler) handlePlatformAuth(c *gin.Context) {
+	platform := c.Param("platform")
 
-	var req models.LoginRequest
+	var req models.PlatformAuthRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		errorResp := models.ErrorResponse{Error: err.Error()}
 		c.JSON(http.StatusBadRequest, errorResp)
@@ -37,8 +37,7 @@ func (h *Handler) handleLogin(c *gin.Context) {
 	}
 	defer provider.Close(c.Request.Context())
 
-	result, err := provider.Login(c.Request.Context(), req.UUID, req.Password)
-
+	result, err := provider.Auth(c.Request.Context(), req.Key, req.Password)
 	if err != nil {
 		errorResp := models.ErrorResponse{Error: err.Error()}
 		c.JSON(http.StatusInternalServerError, errorResp)
@@ -51,7 +50,7 @@ func (h *Handler) handleLogin(c *gin.Context) {
 		return
 	}
 
-	response := models.LoginResponse{
+	response := models.PlatformAuthResponse{
 		Username: result.Username,
 		UserID:   result.UserID,
 		Success:  true,

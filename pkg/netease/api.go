@@ -8,6 +8,7 @@ import (
 	"github.com/chaunsin/netease-cloud-music/api"
 	nmTypes "github.com/chaunsin/netease-cloud-music/api/types"
 	"github.com/chaunsin/netease-cloud-music/api/weapi"
+	"github.com/stkevintan/miko/pkg/log"
 )
 
 // getSongDetail retrieves detailed information for a song
@@ -126,4 +127,11 @@ func (d *NMProvider) getDownloadAlternativeData(ctx context.Context, musicId int
 	}
 	_ = resp
 	return &reply.Data[0], nil
+}
+
+func (d *NMProvider) RetreshToken(ctx context.Context) {
+	refresh, err := d.request.TokenRefresh(ctx, &weapi.TokenRefreshReq{})
+	if err != nil || refresh.Code != 200 {
+		log.Warn("TokenRefresh resp:%+v err: %s", refresh, err)
+	}
 }

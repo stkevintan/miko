@@ -48,7 +48,7 @@ func (h *Handler) Routes() *gin.Engine {
 	// API group
 	api := r.Group("/api")
 	{
-		api.POST("/login", h.handleLogin)
+		api.POST("/platform/:platform/auth", h.handlePlatformAuth)
 		api.GET("/download", h.handleDownload)
 	}
 

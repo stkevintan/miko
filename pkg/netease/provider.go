@@ -8,7 +8,6 @@ import (
 	"github.com/chaunsin/netease-cloud-music/api/weapi"
 	nmlog "github.com/chaunsin/netease-cloud-music/pkg/log"
 	"github.com/stkevintan/miko/pkg/cookiecloud"
-	"github.com/stkevintan/miko/pkg/log"
 	"github.com/stkevintan/miko/pkg/registry"
 )
 
@@ -68,9 +67,6 @@ func (d *NMProvider) GetCookieJar() cookiecloud.CookieJar {
 
 // Close closes the provider and cleans up resources
 func (d *NMProvider) Close(ctx context.Context) error {
-	refresh, err := d.request.TokenRefresh(ctx, &weapi.TokenRefreshReq{})
-	if err != nil || refresh.Code != 200 {
-		log.Warn("TokenRefresh resp:%+v err: %s", refresh, err)
-	}
+
 	return d.cli.Close(ctx)
 }
