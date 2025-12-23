@@ -27,6 +27,7 @@ type Config struct {
 	Log         *log.Config         `json:"log" mapstructure:"log"`
 	CookieCloud *cookiecloud.Config `json:"cookiecloud" mapstructure:"cookiecloud"`
 	Registry    *registry.Config    `json:"registry" mapstructure:"registry"`
+	Database    *DatabaseConfig     `json:"database" mapstructure:"database"`
 }
 
 func (c *Config) Validate() error {
@@ -42,11 +43,19 @@ func (c *Config) Validate() error {
 	if c.Registry == nil {
 		return errors.New("registry config is required")
 	}
+	if c.Database == nil {
+		return errors.New("database config is required")
+	}
 	return nil
 }
 
 type ServerConfig struct {
 	Port int `json:"port" mapstructure:"port"`
+}
+
+type DatabaseConfig struct {
+	Driver string `json:"driver" mapstructure:"driver"`
+	DSN    string `json:"dsn" mapstructure:"dsn"`
 }
 
 // Load loads configuration from config files + environment variables with sensible defaults.

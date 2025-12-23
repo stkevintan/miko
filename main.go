@@ -27,13 +27,16 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/stkevintan/miko/api"
+	"github.com/stkevintan/miko/api/models"
 	"github.com/stkevintan/miko/config"
 	_ "github.com/stkevintan/miko/docs" // This line is important for swagger docs
-	"github.com/stkevintan/miko/internal/handler"
 	"github.com/stkevintan/miko/pkg/cookiecloud"
 	"github.com/stkevintan/miko/pkg/log"
 	"github.com/stkevintan/miko/pkg/netease"
 	"github.com/stkevintan/miko/pkg/registry"
+	"gorm.io/driver/sqlite"
+	"gorm.io/gorm"
 )
 
 func main() {
@@ -45,6 +48,39 @@ func main() {
 
 	// Initialize global logger from config.
 	log.Default = log.New(cfg.Log)
+
+	// Initialize Database
+	var db *gorm.DB
+	if cfg.Database.Driver == "sqlite" {
+		db, err = gorm.Open(sqlite.Open(cfg.Database.DSN), &gorm.Config{})
+		if err != nil {
+			log.Fatalf("Failed to connect to database: %v", err)
+		}
+	} else {
+		log.Fatalf("Unsupported database driver: %s", cfg.Database.Driver)
+	}
+
+	// Auto-migrate models
+	err = db.AutoMigrate(&models.User{})
+	if err != nil {
+		log.Fatalf("Failed to migrate database: %v", err)
+	}
+
+	// Create default user if none exists
+	var count int64
+	db.Model(&models.User{}).Count(&count)
+	if count == 0 {
+		defaultUser := models.User{
+			Username: "admin",
+			Password: "adminpassword",
+			IsAdmin:  true,
+		}
+		if err := db.Create(&defaultUser).Error; err != nil {
+			log.Error("Failed to create default user: %v", err)
+		} else {
+			log.Info("Created default admin user: admin / adminpassword")
+		}
+	}
 
 	// Pretty-print loaded config for debugging.
 	if b, err := json.MarshalIndent(cfg, "", "  "); err == nil {
@@ -69,7 +105,7 @@ func main() {
 	// add other providers here...
 
 	// Initialize HTTP handler
-	h := handler.New(jar, pr)
+	h := api.New(jar, pr, db)
 	// Create HTTP server
 	server := &http.Server{
 		Addr:    fmt.Sprintf(":%d", cfg.Server.Port),

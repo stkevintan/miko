@@ -20,3 +20,7 @@ url = "https://ccc.ft07.com"
 debug = false
 timeout = 0
 retry = 0
+
+[database]
+driver = "sqlite"
+dsn = "miko.db"

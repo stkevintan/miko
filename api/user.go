@@ -1,11 +1,11 @@
-package handler
+package api
 
 import (
 	"context"
 	"net/http"
 
 	"github.com/gin-gonic/gin"
-	"github.com/stkevintan/miko/internal/models"
+	"github.com/stkevintan/miko/api/models"
 )
 
 // handleUser retrieves user information from a music platform

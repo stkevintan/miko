@@ -1,10 +1,10 @@
-package handler
+package api
 
 import (
 	"net/http"
 
 	"github.com/gin-gonic/gin"
-	"github.com/stkevintan/miko/internal/models"
+	"github.com/stkevintan/miko/api/models"
 )
 
 // handleCookiecloudIdentity updates CookieCloud identity

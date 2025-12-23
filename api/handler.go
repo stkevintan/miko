@@ -1,24 +1,28 @@
-package handler
+package api
 
 import (
 	"github.com/gin-gonic/gin"
+	"github.com/stkevintan/miko/internal/subsonic"
 	"github.com/stkevintan/miko/pkg/cookiecloud"
 	"github.com/stkevintan/miko/pkg/registry"
 	swaggerFiles "github.com/swaggo/files"
 	ginSwagger "github.com/swaggo/gin-swagger"
+	"gorm.io/gorm"
 )
 
 // Handler contains HTTP handlers for our service
 type Handler struct {
 	jar      cookiecloud.CookieJar
 	registry *registry.ProviderRegistry
+	db       *gorm.DB
 }
 
 // New creates a new handler instance
-func New(jar cookiecloud.CookieJar, registry *registry.ProviderRegistry) *Handler {
+func New(jar cookiecloud.CookieJar, registry *registry.ProviderRegistry, db *gorm.DB) *Handler {
 	return &Handler{
 		jar:      jar,
 		registry: registry,
+		db:       db,
 	}
 }
 
@@ -56,6 +60,10 @@ func (h *Handler) Routes() *gin.Engine {
 		api.GET("/download", h.handleDownload)
 		api.GET("/platform/:platform/user", h.handleUser)
 	}
+
+	// subsonic v1.16.1 API group
+	s := subsonic.NewSubsonic(r, h.db)
+	s.RegisterRoutes()
 
 	return r
 }

@@ -1,4 +1,4 @@
-package handler
+package api
 
 import (
 	"context"
@@ -9,7 +9,7 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
-	"github.com/stkevintan/miko/internal/models"
+	"github.com/stkevintan/miko/api/models"
 	"github.com/stkevintan/miko/pkg/registry"
 	"github.com/stkevintan/miko/pkg/types"
 )
