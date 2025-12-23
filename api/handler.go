@@ -2,7 +2,7 @@ package api
 
 import (
 	"github.com/gin-gonic/gin"
-	"github.com/stkevintan/miko/internal/subsonic"
+	"github.com/stkevintan/miko/api/subsonic"
 	"github.com/stkevintan/miko/pkg/cookiecloud"
 	"github.com/stkevintan/miko/pkg/registry"
 	swaggerFiles "github.com/swaggo/files"
