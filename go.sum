@@ -8,6 +8,8 @@ github.com/bytedance/sonic v1.14.0 h1:/OfKt8HFw0kh2rj8N0F6C/qPGRESq0BbaNZgcNXXzQ
 github.com/bytedance/sonic v1.14.0/go.mod h1:WoEbx8WTcFJfzCe0hbmyTGrfjt8PzNEBdxlNUO24NhA=
 github.com/bytedance/sonic/loader v0.3.0 h1:dskwH8edlzNMctoruo8FPTJDF3vLtDT0sXZwvZJyqeA=
 github.com/bytedance/sonic/loader v0.3.0/go.mod h1:N8A3vUdtUebEY2/VQC0MyhYeKUFosQU6FxH2JmUe6VI=
+github.com/chaunsin/cookiecloud-go-sdk v0.0.0-20250502103806-722943743acd h1:Ji522HKDmgaG8BMl4slkSe0Jzmw8WOyCADGdtGqJVNc=
+github.com/chaunsin/cookiecloud-go-sdk v0.0.0-20250502103806-722943743acd/go.mod h1:nuSzcJUqVLB0e7FsA5cKZoJfSdopVe3qLKqvqsckyPE=
 github.com/chaunsin/netease-cloud-music v0.3.3 h1:+F/3CF86vMbodhSQOFQj+ucJl8nU2owYdo8xtCEKPIQ=
 github.com/chaunsin/netease-cloud-music v0.3.3/go.mod h1:VQmTX+xI26g4JsYpek4QHqm1PnCVgEy7Tmyk+LX5VaA=
 github.com/cheggaaa/pb/v3 v3.1.7 h1:2FsIW307kt7A/rz/ZI2lvPO+v3wKazzE4K/0LtTWsOI=

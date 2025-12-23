@@ -2,188 +2,176 @@ package cookiecloud
 
 import (
 	"context"
-	"crypto/tls"
-	"encoding/json"
 	"fmt"
+	"maps"
+	"net/http"
+	"net/url"
+	"sync"
 	"time"
 
-	"github.com/go-resty/resty/v2"
+	"github.com/chaunsin/cookiecloud-go-sdk"
+	"github.com/stkevintan/miko/pkg/log"
 )
 
-type Body struct {
-	Uuid      string `json:"uuid"`
-	Encrypted string `json:"encrypted"`
-}
-
-type Cookie struct {
-	CookieData       map[string][]CookieData      `json:"cookie_data"`
-	LocalStorageData map[string]map[string]string `json:"local_storage_data"`
-	UpdateTime       time.Time                    `json:"update_time"`
-}
-
-type CookieData struct {
-	Domain         string  `json:"domain"`
-	ExpirationDate float64 `json:"expirationDate"`
-	HostOnly       bool    `json:"hostOnly"`
-	HttpOnly       bool    `json:"httpOnly"`
-	Name           string  `json:"name"`
-	Path           string  `json:"path"`
-	SameSite       string  `json:"sameSite"`
-	Secure         bool    `json:"secure"`
-	Session        bool    `json:"session"`
-	StoreId        string  `json:"storeId"`
-	Value          string  `json:"value"`
-}
-
-func (c CookieData) GetExpired() time.Time {
-	sec := int64(c.ExpirationDate)                         // 提取整数秒部分
-	nsec := int64((c.ExpirationDate - float64(sec)) * 1e9) // 将小数秒转换为纳秒
-	return time.Unix(sec, nsec)
-}
-
-type GetReq struct {
-	Uuid            string `json:"-"`
-	Password        string `json:"password"`
-	CloudDecryption bool   `json:"-"` // 如果指定了ture则在服务端解密并返回,为了安全不建议这么使用。
-}
-
-type GetResp struct {
-	Body
-	Cookie
-}
-
-type PushReq struct {
-	Uuid     string `json:"uuid"`
-	Password string `json:"password"`
-	Cookie
-}
-
-type PushResp struct {
-	Action string `json:"action"` // done error
-}
-
 type Config struct {
-	ApiUrl       string        `json:"apiUrl" mapstructure:"apiUrl"`
-	Timeout      time.Duration `json:"timeout" mapstructure:"timeout"`
-	Retry        int           `json:"retry" mapstructure:"retry"`
-	Debug        bool          `json:"debug" mapstructure:"debug"`
-	Uuid         string        `json:"uuid" mapstructure:"uuid"`
-	Password     string        `json:"password" mapstructure:"password"`
-	SyncInterval time.Duration `json:"syncInterval" mapstructure:"syncInterval"`
+	Url     string        `json:"url" mapstructure:"url"`
+	Timeout time.Duration `json:"timeout" mapstructure:"timeout"`
+	Retry   int           `json:"retry" mapstructure:"retry"`
+	Debug   bool          `json:"debug" mapstructure:"debug"`
 }
 
-type Client struct {
-	cfg *Config
-	cli *resty.Client
+type CookieJar interface {
+	http.CookieJar
+	UpdateIdentity(uuid, password string) error
+	GetUrl() string
 }
 
-func NewClient(cfg *Config) (*Client, error) {
-	cli := resty.New()
-	cli.SetBaseURL(cfg.ApiUrl)
-	cli.SetRetryCount(cfg.Retry)
-	cli.SetTimeout(cfg.Timeout)
-	cli.SetTLSClientConfig(&tls.Config{InsecureSkipVerify: true})
-	cli.SetDebug(cfg.Debug)
-	return &Client{
-		cfg: cfg,
-		cli: cli,
+func NewCookieCloudJar(ctx context.Context, config *Config) (CookieJar, error) {
+	cli, err := cookiecloud.NewClient(&cookiecloud.Config{
+		Url:     config.Url,
+		Timeout: config.Timeout,
+		Retry:   config.Retry,
+		Debug:   config.Debug,
+	})
+
+	if err != nil {
+		return nil, err
+	}
+	return &CookieCloudJar{
+		client: cli,
+		ctx:    ctx,
+		url:    config.Url,
 	}, nil
 }
 
-func (c *Client) Close() {}
+type CookieCloudJar struct {
+	url      string
+	client   *cookiecloud.Client
+	ctx      context.Context
+	mu       sync.RWMutex
+	identity *cookieCloudIdentity
+}
 
-func (c *Client) SetHeaders(headers map[string]string) {
-	for k, v := range headers {
-		c.cli.SetHeader(k, v)
+func (c *CookieCloudJar) GetUrl() string {
+	return c.url
+}
+
+func (c *CookieCloudJar) SetCookies(u *url.URL, cookies []*http.Cookie) {
+	c.mu.RLock()
+	identity := c.identity
+	c.mu.RUnlock()
+
+	if identity == nil {
+		log.Warn("CookieCloudJar: identity not set, cannot set cookies")
+		return
+	}
+	err := identity.push(c.ctx, u.Hostname(), cookies)
+	if err != nil {
+		log.Warn("CookieCloudJar: failed to push cookies: %v", err)
 	}
 }
 
-// Get sends a request to the server to get the cookie.
-// see: https://github.com/easychen/CookieCloud/blob/master/api/app.js#L46
-func (c *Client) Get(ctx context.Context, req *GetReq) (*GetResp, error) {
-	if req.Uuid == "" {
-		return nil, fmt.Errorf("uuid is required")
+func (c *CookieCloudJar) Cookies(u *url.URL) []*http.Cookie {
+	c.mu.RLock()
+	identity := c.identity
+	c.mu.RUnlock()
+
+	if identity == nil {
+		log.Warn("CookieCloudJar: identity not set, cannot get cookies")
+		return nil
 	}
-	if req.Password == "" {
-		return nil, fmt.Errorf("password is required")
-	}
-
-	var (
-		resp GetResp
-		cli  = c.cli.R().SetContext(ctx)
-	)
-
-	// 云端解密
-	var method = resty.MethodGet
-	if req.CloudDecryption {
-		method = resty.MethodPost
-		cli = cli.SetBody(map[string]string{
-			"password": req.Password,
-		})
-	}
-
-	var res, err = cli.SetResult(&resp).Execute(method, "/get/"+req.Uuid)
-
+	ret, err := identity.pull(c.ctx, u.Hostname())
 	if err != nil {
-		return nil, fmt.Errorf("failed to request server: %v", err)
+		log.Warn("CookieCloudJar: failed to pull cookies: %v", err)
+		return nil
 	}
-	if res.StatusCode() == 404 {
-		return nil, fmt.Errorf("uuid %s not found", req.Uuid)
-	}
-	if res.StatusCode() != 200 {
-		return nil, fmt.Errorf("server return status %d body %+v", res.StatusCode(), resp)
-	}
-	if req.CloudDecryption {
-		return &resp, nil
-	}
-
-	// 本地解密逻辑
-	keyPassword := Md5String(req.Uuid, "-", req.Password)[:16]
-	decrypted, err := Decrypt(keyPassword, resp.Encrypted)
-	if err != nil {
-		return nil, fmt.Errorf("failed to decrypt: %v", err)
-	}
-	var cookie Cookie
-	if err := json.Unmarshal(decrypted, &cookie); err != nil {
-		return nil, fmt.Errorf("failed to parse decrypted data as json: %v", err)
-	}
-	resp.Cookie = cookie
-	return &resp, nil
+	return ret
 }
 
-// Push sends a request to the server to update the cookie.
-// see: https://github.com/easychen/CookieCloud/blob/master/api/app.js#L28
-func (c *Client) Push(ctx context.Context, req *PushReq) (*PushResp, error) {
-	if req.Uuid == "" {
-		return nil, fmt.Errorf("uuid is required")
+func (c *CookieCloudJar) UpdateIdentity(uuid, password string) error {
+	if uuid == "" || password == "" {
+		return fmt.Errorf("uuid and password are required")
 	}
-	if req.Password == "" {
-		return nil, fmt.Errorf("password is required")
+	if c.client == nil {
+		return fmt.Errorf("cookiecloud client not initialized")
 	}
 
-	data, err := json.Marshal(req)
-	if err != nil {
-		return nil, fmt.Errorf("failed to marshal request: %v", err)
-	}
-	keyPassword := Md5String(req.Uuid, "-", req.Password)[:16]
-	encrypted, err := Encrypt(keyPassword, string(data))
-	if err != nil {
-		return nil, fmt.Errorf("Encrypt: %w", err)
+	identity := &cookieCloudIdentity{
+		Uuid:     uuid,
+		Password: password,
+		client:   c.client,
 	}
 
-	var (
-		request = Body{
-			Uuid:      req.Uuid,
-			Encrypted: encrypted,
+	c.mu.Lock()
+	c.identity = identity
+	c.mu.Unlock()
+	return nil
+}
+
+type cookieCloudIdentity struct {
+	Uuid     string
+	Password string
+	client   *cookiecloud.Client
+}
+
+// update cookies of u to cookiecloud server
+func (c *cookieCloudIdentity) push(ctx context.Context, originHost string, cookies []*http.Cookie) error {
+	cookie, err := c.download(ctx)
+	if err != nil {
+		return fmt.Errorf("Failed to download cookies before push: %v", err)
+	}
+
+	cookieDataDict := make(map[string][]cookiecloud.CookieData)
+	for _, ck := range cookies {
+		domainKey, cookieData := httpCookieToCookieData(originHost, ck)
+		if cookieData == nil || domainKey == "" {
+			continue
 		}
-		body PushResp
-	)
-	res, err := c.cli.R().SetContext(ctx).SetBody(&request).SetResult(&body).Post("/update")
+		cookieDataDict[domainKey] = append(cookieDataDict[domainKey], *cookieData)
+	}
+	maps.Copy(cookie.CookieData, cookieDataDict)
+
+	log.Info("Pushing cookies of %d domains to cookiecloud", len(cookieDataDict))
+	_, err = c.client.Update(ctx, &cookiecloud.UpdateReq{
+		Uuid:     c.Uuid,
+		Password: c.Password,
+		Cookie:   cookie,
+	})
 	if err != nil {
-		return nil, fmt.Errorf("failed to request server: %v", err)
+		return fmt.Errorf("Failed to push cookies to cookiecloud: %v", err)
 	}
-	if res.StatusCode() != 200 {
-		return nil, fmt.Errorf("server return status %d body %+v", res.StatusCode(), body)
+	log.Info("Successfully pushed cookies to cookiecloud")
+	return nil
+}
+
+func (c *cookieCloudIdentity) download(ctx context.Context) (cookiecloud.Cookie, error) {
+	res, err := c.client.Get(ctx, &cookiecloud.GetReq{
+		Uuid:            c.Uuid,
+		Password:        c.Password,
+		CloudDecryption: false,
+	})
+	if err != nil {
+		return cookiecloud.Cookie{}, fmt.Errorf("failed to pull cookies: %w", err)
 	}
-	return &body, nil
+	return res.Cookie, nil
+}
+
+func (c *cookieCloudIdentity) pull(ctx context.Context, domainWanted string) ([]*http.Cookie, error) {
+
+	cookie, err := c.download(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("failed to download cookies: %w", err)
+	}
+	var httpCookies []*http.Cookie
+	needle := normalizeDomain(domainWanted)
+	for domain, cookies := range cookie.CookieData {
+		if needle != "" && needle != normalizeDomain(domain) {
+			continue
+		}
+		log.Info("Pulled %d cookies for domain %s from cookiecloud", len(cookies), domain)
+		for _, v := range cookies {
+			httpCookies = append(httpCookies, cookieDataToHttpCookies(domain, &v))
+		}
+	}
+	return httpCookies, nil
 }

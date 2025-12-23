@@ -8,7 +8,6 @@ import (
 	"github.com/chaunsin/netease-cloud-music/api/weapi"
 	nmlog "github.com/chaunsin/netease-cloud-music/pkg/log"
 	"github.com/stkevintan/miko/pkg/cookiecloud"
-	"github.com/stkevintan/miko/pkg/log"
 	"github.com/stkevintan/miko/pkg/registry"
 )
 
@@ -24,30 +23,31 @@ func init() {
 
 // NetEaseProviderFactory implements DownloaderFactory for NetEase Cloud Music
 type NetEaseProviderFactory struct {
-	cfg *cookiecloud.Config
+	jar cookiecloud.CookieJar
 }
 
-func NewNetEaseProviderFactory(cfg *cookiecloud.Config) *NetEaseProviderFactory {
+func NewNetEaseProviderFactory(jar cookiecloud.CookieJar) *NetEaseProviderFactory {
 	return &NetEaseProviderFactory{
-		cfg: cfg,
+		jar: jar,
 	}
 }
 
 // CreateProvider creates a NetEase provider
 func (f *NetEaseProviderFactory) CreateProvider() (registry.Provider, error) {
-	return NewProvider(f.cfg)
+	return NewProvider(f.jar)
 }
 
 type NMProvider struct {
 	cli     *api.Client
 	request *weapi.Api
+	jar     cookiecloud.CookieJar
 }
 
 var _ registry.Provider = (*NMProvider)(nil)
 
 // NewProvider creates a new NMProvider for multiple songs (returns concrete type)
-func NewProvider(cfg *cookiecloud.Config) (*NMProvider, error) {
-	cli, err := NewClient(cfg)
+func NewProvider(jar cookiecloud.CookieJar) (*NMProvider, error) {
+	cli, err := NewClient(jar)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create API client: %w", err)
 	}
@@ -56,14 +56,17 @@ func NewProvider(cfg *cookiecloud.Config) (*NMProvider, error) {
 	return &NMProvider{
 		cli:     cli,
 		request: request,
+		jar:     jar,
 	}, nil
+}
+
+// GetCookieJar returns the CookieJar used by the provider
+func (d *NMProvider) GetCookieJar() cookiecloud.CookieJar {
+	return d.jar
 }
 
 // Close closes the provider and cleans up resources
 func (d *NMProvider) Close(ctx context.Context) error {
-	refresh, err := d.request.TokenRefresh(ctx, &weapi.TokenRefreshReq{})
-	if err != nil || refresh.Code != 200 {
-		log.Warn("TokenRefresh resp:%+v err: %s", refresh, err)
-	}
+
 	return d.cli.Close(ctx)
 }

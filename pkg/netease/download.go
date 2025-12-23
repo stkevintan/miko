@@ -28,6 +28,9 @@ func (d *NMProvider) Download(ctx context.Context, musics []*types.Music, config
 		mutex   sync.Mutex
 	)
 
+	// refresh token after downloads
+	defer d.RetreshToken(ctx)
+
 	// Process songs concurrently
 	for _, music := range musics {
 		var music = music // capture loop variable

@@ -24,6 +24,87 @@ const docTemplate = `{
     "host": "{{.Host}}",
     "basePath": "{{.BasePath}}",
     "paths": {
+        "/cookiecloud/identity": {
+            "post": {
+                "description": "Updates the CookieCloud server identity using the provided key and password. This allows the service to fetch cookies from your CookieCloud server for authentication with music platforms.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "cookiecloud"
+                ],
+                "summary": "Update CookieCloud identity",
+                "parameters": [
+                    {
+                        "description": "CookieCloud identity (key and password)",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/models.CookiecloudIdentity"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Identity updated successfully",
+                        "schema": {
+                            "$ref": "#/definitions/models.CookiecloudIdentityResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad request - invalid JSON or missing required fields",
+                        "schema": {
+                            "$ref": "#/definitions/models.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error - failed to update identity",
+                        "schema": {
+                            "$ref": "#/definitions/models.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/cookiecloud/server": {
+            "get": {
+                "description": "Returns the currently configured CookieCloud server URL",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "cookiecloud"
+                ],
+                "summary": "Get CookieCloud server URL",
+                "responses": {
+                    "200": {
+                        "description": "CookieCloud server URL",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "allOf": [
+                                    {
+                                        "type": "string"
+                                    },
+                                    {
+                                        "type": "object",
+                                        "properties": {
+                                            "url": {
+                                                "type": "string"
+                                            }
+                                        }
+                                    }
+                                ]
+                            }
+                        }
+                    }
+                }
+            }
+        },
         "/download": {
             "get": {
                 "description": "Download single or multiple music tracks by providing song IDs, album URLs, playlist URLs, or song URLs. Supports batch downloads with various quality levels and conflict resolution policies.",
@@ -130,34 +211,41 @@ const docTemplate = `{
                 }
             }
         },
-        "/login": {
-            "post": {
-                "description": "Authenticates user with provided credentials",
-                "consumes": [
-                    "application/json"
-                ],
+        "/platform/{platform}/user": {
+            "get": {
+                "description": "Retrieves the authenticated user's information from the specified music platform",
                 "produces": [
                     "application/json"
                 ],
                 "tags": [
-                    "auth"
+                    "user"
                 ],
-                "summary": "User login",
+                "summary": "Get user information",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "example": "\"netease\"",
+                        "description": "Music platform name",
+                        "name": "platform",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
                 "responses": {
                     "200": {
-                        "description": "OK",
+                        "description": "User information retrieved successfully",
                         "schema": {
-                            "$ref": "#/definitions/models.LoginResponse"
+                            "$ref": "#/definitions/types.User"
                         }
                     },
                     "400": {
-                        "description": "Bad Request",
+                        "description": "Bad request - authentication failed or invalid platform",
                         "schema": {
                             "$ref": "#/definitions/models.ErrorResponse"
                         }
                     },
                     "500": {
-                        "description": "Internal Server Error",
+                        "description": "Internal server error - provider creation failed",
                         "schema": {
                             "$ref": "#/definitions/models.ErrorResponse"
                         }
@@ -192,6 +280,42 @@ const docTemplate = `{
                 }
             }
         },
+        "models.CookiecloudIdentity": {
+            "description": "platform auth request",
+            "type": "object",
+            "required": [
+                "key",
+                "password"
+            ],
+            "properties": {
+                "key": {
+                    "type": "string",
+                    "example": "your-cookiecloud-key"
+                },
+                "password": {
+                    "type": "string",
+                    "example": "your-cookiecloud-password"
+                }
+            }
+        },
+        "models.CookiecloudIdentityResponse": {
+            "description": "platform auth response",
+            "type": "object",
+            "required": [
+                "key",
+                "url"
+            ],
+            "properties": {
+                "key": {
+                    "type": "string",
+                    "example": "your-cookiecloud-key"
+                },
+                "url": {
+                    "type": "string",
+                    "example": "https://cookiecloud.example.com"
+                }
+            }
+        },
         "models.DownloadSummary": {
             "type": "object",
             "properties": {
@@ -214,28 +338,6 @@ const docTemplate = `{
                 "error": {
                     "type": "string",
                     "example": "Invalid input"
-                }
-            }
-        },
-        "models.LoginResponse": {
-            "description": "User login response",
-            "type": "object",
-            "properties": {
-                "message": {
-                    "type": "string",
-                    "example": "Login successful"
-                },
-                "success": {
-                    "type": "boolean",
-                    "example": true
-                },
-                "user_id": {
-                    "type": "integer",
-                    "example": 123456789
-                },
-                "username": {
-                    "type": "string",
-                    "example": "john_doe"
                 }
             }
         },
@@ -288,6 +390,17 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "url": {
+                    "type": "string"
+                }
+            }
+        },
+        "types.User": {
+            "type": "object",
+            "properties": {
+                "userId": {
+                    "type": "integer"
+                },
+                "username": {
                     "type": "string"
                 }
             }

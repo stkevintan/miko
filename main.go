@@ -19,6 +19,7 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"net/http"
 	"os"
@@ -29,6 +30,7 @@ import (
 	"github.com/stkevintan/miko/config"
 	_ "github.com/stkevintan/miko/docs" // This line is important for swagger docs
 	"github.com/stkevintan/miko/internal/handler"
+	"github.com/stkevintan/miko/pkg/cookiecloud"
 	"github.com/stkevintan/miko/pkg/log"
 	"github.com/stkevintan/miko/pkg/netease"
 	"github.com/stkevintan/miko/pkg/registry"
@@ -44,17 +46,30 @@ func main() {
 	// Initialize global logger from config.
 	log.Default = log.New(cfg.Log)
 
+	// Pretty-print loaded config for debugging.
+	if b, err := json.MarshalIndent(cfg, "", "  "); err == nil {
+		log.Debug("Loaded config:\n%s", string(b))
+	}
+
 	pr, err := registry.NewProviderRegistry(cfg.Registry)
 	if err != nil {
 		panic(fmt.Sprintf("Failed to create provider registry: %v", err))
 	}
 
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	// Initialize CookieCloud jar
+	jar, err := cookiecloud.NewCookieCloudJar(ctx, cfg.CookieCloud)
+	if err != nil {
+		log.Fatalf("Failed to create CookieCloud jar: %v", err)
+	}
+
 	// add netease provider
-	pr.RegisterFactory("netease", netease.NewNetEaseProviderFactory(cfg.CookieCloud))
+	pr.RegisterFactory("netease", netease.NewNetEaseProviderFactory(jar))
 	// add other providers here...
 
 	// Initialize HTTP handler
-	h := handler.New(pr)
+	h := handler.New(jar, pr)
 	// Create HTTP server
 	server := &http.Server{
 		Addr:    fmt.Sprintf(":%d", cfg.Server.Port),
@@ -76,11 +91,11 @@ func main() {
 	log.Println("Shutting down server...")
 
 	// Create a deadline to wait for
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-	defer cancel()
+	ctx2, cancel2 := context.WithTimeout(ctx, 30*time.Second)
+	defer cancel2()
 
 	// Attempt graceful shutdown
-	if err := server.Shutdown(ctx); err != nil {
+	if err := server.Shutdown(ctx2); err != nil {
 		log.Fatal("Server forced to shutdown:", err)
 	}
 
