@@ -50,7 +50,8 @@ func (c *Config) Validate() error {
 }
 
 type ServerConfig struct {
-	Port int `json:"port" mapstructure:"port"`
+	Port      int    `json:"port" mapstructure:"port"`
+	JWTSecret string `json:"jwtSecret" mapstructure:"jwtSecret"`
 }
 
 type DatabaseConfig struct {

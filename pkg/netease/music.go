@@ -47,7 +47,7 @@ func (d *NMProvider) GetMusic(ctx context.Context, uris []string) ([]*types.Musi
 	var (
 		source = make(map[string][]int64)
 		set    = make(map[int64]struct{})
-		musics []*types.Music
+		music  []*types.Music
 	)
 
 	for _, uri := range uris {
@@ -106,7 +106,7 @@ func (d *NMProvider) GetMusic(ctx context.Context, uris []string) ([]*types.Musi
 							Name:   v.Al.Name,
 							PicUrl: v.Al.PicUrl,
 						}
-						musics = append(musics, &types.Music{
+						music = append(music, &types.Music{
 							Id:          v.Id,
 							Name:        v.Name,
 							Artist:      artist,
@@ -147,7 +147,7 @@ func (d *NMProvider) GetMusic(ctx context.Context, uris []string) ([]*types.Musi
 						Name:   v.Al.Name,
 						PicUrl: v.Al.PicUrl,
 					}
-					musics = append(musics, &types.Music{
+					music = append(music, &types.Music{
 						Id:          v.Id,
 						Name:        v.Name,
 						Artist:      artist,
@@ -210,7 +210,7 @@ func (d *NMProvider) GetMusic(ctx context.Context, uris []string) ([]*types.Musi
 							Name:   v.Al.Name,
 							PicUrl: v.Al.PicUrl,
 						}
-						musics = append(musics, &types.Music{
+						music = append(music, &types.Music{
 							Id:          v.Id,
 							Name:        v.Name,
 							Artist:      artist,
@@ -226,9 +226,9 @@ func (d *NMProvider) GetMusic(ctx context.Context, uris []string) ([]*types.Musi
 		}
 	}
 
-	if len(musics) <= 0 {
+	if len(music) <= 0 {
 		return nil, fmt.Errorf("input uri is empty or the song is copyrighted")
 	}
 
-	return musics, nil
+	return music, nil
 }

@@ -15,6 +15,10 @@ package main
 // @host
 // @BasePath  /api
 
+// @securityDefinitions.apikey ApiKeyAuth
+// @in header
+// @name Authorization
+
 // @schemes http https
 
 import (
@@ -27,14 +31,14 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/stkevintan/miko/api"
-	"github.com/stkevintan/miko/api/models"
+	"github.com/samber/do/v2"
 	"github.com/stkevintan/miko/config"
 	_ "github.com/stkevintan/miko/docs" // This line is important for swagger docs
 	"github.com/stkevintan/miko/pkg/cookiecloud"
 	"github.com/stkevintan/miko/pkg/log"
 	"github.com/stkevintan/miko/pkg/netease"
-	"github.com/stkevintan/miko/pkg/registry"
+	"github.com/stkevintan/miko/server"
+	"github.com/stkevintan/miko/server/models"
 	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
 )
@@ -61,7 +65,7 @@ func main() {
 	}
 
 	// Auto-migrate models
-	err = db.AutoMigrate(&models.User{})
+	err = db.AutoMigrate(&models.User{}, &cookiecloud.Identity{})
 	if err != nil {
 		log.Fatalf("Failed to migrate database: %v", err)
 	}
@@ -87,29 +91,33 @@ func main() {
 		log.Debug("Loaded config:\n%s", string(b))
 	}
 
-	pr, err := registry.NewProviderRegistry(cfg.Registry)
-	if err != nil {
-		panic(fmt.Sprintf("Failed to create provider registry: %v", err))
-	}
+	// Initialize Injector
+	injector := do.New()
 
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-	// Initialize CookieCloud jar
-	jar, err := cookiecloud.NewCookieCloudJar(ctx, cfg.CookieCloud)
-	if err != nil {
-		log.Fatalf("Failed to create CookieCloud jar: %v", err)
-	}
+	// Register services
+	do.Provide(injector, func(i do.Injector) (*config.Config, error) {
+		return cfg, nil
+	})
+	do.Provide(injector, func(i do.Injector) (*gorm.DB, error) {
+		return db, nil
+	})
+	do.Provide(injector, func(i do.Injector) (*cookiecloud.Config, error) {
+		return cfg.CookieCloud, nil
+	})
 
-	// add netease provider
-	pr.RegisterFactory("netease", netease.NewNetEaseProviderFactory(jar))
-	// add other providers here...
+	// Register Providers
+	do.ProvideNamed(injector, "netease", netease.NewNetEaseProvider)
 
 	// Initialize HTTP handler
-	h := api.New(jar, pr, db)
+	h := server.New(injector)
+	r := h.Routes()
+
+	ctx := context.Background()
+
 	// Create HTTP server
 	server := &http.Server{
 		Addr:    fmt.Sprintf(":%d", cfg.Server.Port),
-		Handler: h.Routes(),
+		Handler: r,
 	}
 
 	// Start server in a goroutine

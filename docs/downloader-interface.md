@@ -83,13 +83,13 @@ if err != nil {
 defer dl.Close(ctx)
 
 // Get music from URIs (song IDs, URLs, etc.)
-musics, err := dl.GetMusic(ctx, []string{"123456", "https://music.163.com/song?id=789"})
+music, err := dl.GetMusic(ctx, []string{"123456", "https://music.163.com/song?id=789"})
 if err != nil {
     return err
 }
 
 // Download the songs
-result, err := dl.Download(ctx, musics)
+result, err := dl.Download(ctx, music)
 // result is *models.BatchDownloadResponse
 ```
 
@@ -244,8 +244,8 @@ dl, err := service.downloaderManager.CreateDownloader(ctx, "netease", &downloade
     ConflictPolicy: "skip",
     Root:           config,
 })
-musics, err := dl.GetMusic(ctx, []string{"123456", "https://music.163.com/song?id=789"})
-result, err := dl.Download(ctx, musics) // Returns *models.BatchDownloadResponse
+music, err := dl.GetMusic(ctx, []string{"123456", "https://music.163.com/song?id=789"})
+result, err := dl.Download(ctx, music) // Returns *models.BatchDownloadResponse
 ```
 
 **Service layer usage:**

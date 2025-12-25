@@ -11,6 +11,7 @@ import (
 
 	"github.com/chaunsin/cookiecloud-go-sdk"
 	"github.com/stkevintan/miko/pkg/log"
+	"gorm.io/gorm"
 )
 
 type Config struct {
@@ -26,7 +27,7 @@ type CookieJar interface {
 	GetUrl() string
 }
 
-func NewCookieCloudJar(ctx context.Context, config *Config) (CookieJar, error) {
+func NewCookieCloudJar(ctx context.Context, config *Config, db *gorm.DB, identity *Identity) (CookieJar, error) {
 	cli, err := cookiecloud.NewClient(&cookiecloud.Config{
 		Url:     config.Url,
 		Timeout: config.Timeout,
@@ -38,9 +39,11 @@ func NewCookieCloudJar(ctx context.Context, config *Config) (CookieJar, error) {
 		return nil, err
 	}
 	return &CookieCloudJar{
-		client: cli,
-		ctx:    ctx,
-		url:    config.Url,
+		client:   cli,
+		ctx:      ctx,
+		url:      config.Url,
+		db:       db,
+		identity: identity,
 	}, nil
 }
 
@@ -49,38 +52,58 @@ type CookieCloudJar struct {
 	client   *cookiecloud.Client
 	ctx      context.Context
 	mu       sync.RWMutex
-	identity *cookieCloudIdentity
+	identity *Identity
+	db       *gorm.DB
 }
 
 func (c *CookieCloudJar) GetUrl() string {
 	return c.url
 }
 
-func (c *CookieCloudJar) SetCookies(u *url.URL, cookies []*http.Cookie) {
+func (c *CookieCloudJar) getIdentity() (*Identity, error) {
 	c.mu.RLock()
-	identity := c.identity
+	if c.identity != nil {
+		defer c.mu.RUnlock()
+		return c.identity, nil
+	}
 	c.mu.RUnlock()
 
-	if identity == nil {
-		log.Warn("CookieCloudJar: identity not set, cannot set cookies")
+	if c.db == nil {
+		return nil, fmt.Errorf("database not initialized")
+	}
+
+	var identity Identity
+	if err := c.db.First(&identity).Error; err != nil {
+		return nil, err
+	}
+
+	c.mu.Lock()
+	c.identity = &identity
+	c.mu.Unlock()
+	return &identity, nil
+}
+
+func (c *CookieCloudJar) SetCookies(u *url.URL, cookies []*http.Cookie) {
+	identity, err := c.getIdentity()
+	if err != nil {
+		log.Warn("CookieCloudJar: failed to get identity: %v", err)
 		return
 	}
-	err := identity.push(c.ctx, u.Hostname(), cookies)
+
+	err = identity.push(c.ctx, c.client, u.Hostname(), cookies)
 	if err != nil {
 		log.Warn("CookieCloudJar: failed to push cookies: %v", err)
 	}
 }
 
 func (c *CookieCloudJar) Cookies(u *url.URL) []*http.Cookie {
-	c.mu.RLock()
-	identity := c.identity
-	c.mu.RUnlock()
-
-	if identity == nil {
-		log.Warn("CookieCloudJar: identity not set, cannot get cookies")
+	identity, err := c.getIdentity()
+	if err != nil {
+		log.Warn("CookieCloudJar: failed to get identity: %v", err)
 		return nil
 	}
-	ret, err := identity.pull(c.ctx, u.Hostname())
+
+	ret, err := identity.pull(c.ctx, c.client, u.Hostname())
 	if err != nil {
 		log.Warn("CookieCloudJar: failed to pull cookies: %v", err)
 		return nil
@@ -96,10 +119,9 @@ func (c *CookieCloudJar) UpdateIdentity(uuid, password string) error {
 		return fmt.Errorf("cookiecloud client not initialized")
 	}
 
-	identity := &cookieCloudIdentity{
-		Uuid:     uuid,
+	identity := &Identity{
+		UUID:     uuid,
 		Password: password,
-		client:   c.client,
 	}
 
 	c.mu.Lock()
@@ -108,15 +130,9 @@ func (c *CookieCloudJar) UpdateIdentity(uuid, password string) error {
 	return nil
 }
 
-type cookieCloudIdentity struct {
-	Uuid     string
-	Password string
-	client   *cookiecloud.Client
-}
-
 // update cookies of u to cookiecloud server
-func (c *cookieCloudIdentity) push(ctx context.Context, originHost string, cookies []*http.Cookie) error {
-	cookie, err := c.download(ctx)
+func (c *Identity) push(ctx context.Context, client *cookiecloud.Client, originHost string, cookies []*http.Cookie) error {
+	cookie, err := c.download(ctx, client)
 	if err != nil {
 		return fmt.Errorf("Failed to download cookies before push: %v", err)
 	}
@@ -132,8 +148,8 @@ func (c *cookieCloudIdentity) push(ctx context.Context, originHost string, cooki
 	maps.Copy(cookie.CookieData, cookieDataDict)
 
 	log.Info("Pushing cookies of %d domains to cookiecloud", len(cookieDataDict))
-	_, err = c.client.Update(ctx, &cookiecloud.UpdateReq{
-		Uuid:     c.Uuid,
+	_, err = client.Update(ctx, &cookiecloud.UpdateReq{
+		Uuid:     c.UUID,
 		Password: c.Password,
 		Cookie:   cookie,
 	})
@@ -144,9 +160,9 @@ func (c *cookieCloudIdentity) push(ctx context.Context, originHost string, cooki
 	return nil
 }
 
-func (c *cookieCloudIdentity) download(ctx context.Context) (cookiecloud.Cookie, error) {
-	res, err := c.client.Get(ctx, &cookiecloud.GetReq{
-		Uuid:            c.Uuid,
+func (c *Identity) download(ctx context.Context, client *cookiecloud.Client) (cookiecloud.Cookie, error) {
+	res, err := client.Get(ctx, &cookiecloud.GetReq{
+		Uuid:            c.UUID,
 		Password:        c.Password,
 		CloudDecryption: false,
 	})
@@ -156,9 +172,9 @@ func (c *cookieCloudIdentity) download(ctx context.Context) (cookiecloud.Cookie,
 	return res.Cookie, nil
 }
 
-func (c *cookieCloudIdentity) pull(ctx context.Context, domainWanted string) ([]*http.Cookie, error) {
+func (c *Identity) pull(ctx context.Context, client *cookiecloud.Client, domainWanted string) ([]*http.Cookie, error) {
 
-	cookie, err := c.download(ctx)
+	cookie, err := c.download(ctx, client)
 	if err != nil {
 		return nil, fmt.Errorf("failed to download cookies: %w", err)
 	}
