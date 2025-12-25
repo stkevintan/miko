@@ -7,7 +7,7 @@ type ErrorResponse struct {
 }
 
 // @Description platform auth request
-type CookiecloudIdentity struct {
+type CookiecloudIdentityRequest struct {
 	Key      string `json:"key" binding:"required" example:"your-cookiecloud-key" description:"CookieCloud key"`
 	Password string `json:"password" binding:"required" example:"your-cookiecloud-password" description:"CookieCloud password"`
 }

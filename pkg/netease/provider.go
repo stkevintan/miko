@@ -7,8 +7,9 @@ import (
 	"github.com/chaunsin/netease-cloud-music/api"
 	"github.com/chaunsin/netease-cloud-music/api/weapi"
 	nmlog "github.com/chaunsin/netease-cloud-music/pkg/log"
+	"github.com/samber/do/v2"
 	"github.com/stkevintan/miko/pkg/cookiecloud"
-	"github.com/stkevintan/miko/pkg/registry"
+	"github.com/stkevintan/miko/pkg/provider"
 )
 
 // Initialize default logger for netease package
@@ -21,20 +22,9 @@ func init() {
 
 }
 
-// NetEaseProviderFactory implements DownloaderFactory for NetEase Cloud Music
-type NetEaseProviderFactory struct {
-	jar cookiecloud.CookieJar
-}
-
-func NewNetEaseProviderFactory(jar cookiecloud.CookieJar) *NetEaseProviderFactory {
-	return &NetEaseProviderFactory{
-		jar: jar,
-	}
-}
-
-// CreateProvider creates a NetEase provider
-func (f *NetEaseProviderFactory) CreateProvider() (registry.Provider, error) {
-	return NewProvider(f.jar)
+func NewNetEaseProvider(i do.Injector) (provider.Provider, error) {
+	jar := do.MustInvoke[cookiecloud.CookieJar](i)
+	return NewProvider(jar)
 }
 
 type NMProvider struct {
@@ -43,7 +33,7 @@ type NMProvider struct {
 	jar     cookiecloud.CookieJar
 }
 
-var _ registry.Provider = (*NMProvider)(nil)
+var _ provider.Provider = (*NMProvider)(nil)
 
 // NewProvider creates a new NMProvider for multiple songs (returns concrete type)
 func NewProvider(jar cookiecloud.CookieJar) (*NMProvider, error) {

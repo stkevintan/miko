@@ -15,6 +15,10 @@ package main
 // @host
 // @BasePath  /api
 
+// @securityDefinitions.apikey ApiKeyAuth
+// @in header
+// @name Authorization
+
 // @schemes http https
 
 import (
@@ -24,17 +28,17 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"path"
 	"syscall"
 	"time"
 
-	"github.com/stkevintan/miko/api"
-	"github.com/stkevintan/miko/api/models"
+	"github.com/samber/do/v2"
 	"github.com/stkevintan/miko/config"
 	_ "github.com/stkevintan/miko/docs" // This line is important for swagger docs
 	"github.com/stkevintan/miko/pkg/cookiecloud"
 	"github.com/stkevintan/miko/pkg/log"
-	"github.com/stkevintan/miko/pkg/netease"
-	"github.com/stkevintan/miko/pkg/registry"
+	"github.com/stkevintan/miko/server"
+	"github.com/stkevintan/miko/server/models"
 	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
 )
@@ -49,9 +53,19 @@ func main() {
 	// Initialize global logger from config.
 	log.Default = log.New(cfg.Log)
 
+	// Pretty-print loaded config for debugging.
+	if b, err := json.MarshalIndent(cfg, "", "  "); err == nil {
+		log.Debug("Loaded config:\n%s", string(b))
+	}
+
 	// Initialize Database
 	var db *gorm.DB
 	if cfg.Database.Driver == "sqlite" {
+		// Ensure directory exists
+		dir := path.Dir(cfg.Database.DSN)
+		if err := os.MkdirAll(dir, 0755); err != nil {
+			log.Fatalf("Failed to create database directory: %v", err)
+		}
 		db, err = gorm.Open(sqlite.Open(cfg.Database.DSN), &gorm.Config{})
 		if err != nil {
 			log.Fatalf("Failed to connect to database: %v", err)
@@ -61,7 +75,7 @@ func main() {
 	}
 
 	// Auto-migrate models
-	err = db.AutoMigrate(&models.User{})
+	err = db.AutoMigrate(&models.User{}, &cookiecloud.Identity{})
 	if err != nil {
 		log.Fatalf("Failed to migrate database: %v", err)
 	}
@@ -82,34 +96,30 @@ func main() {
 		}
 	}
 
-	// Pretty-print loaded config for debugging.
-	if b, err := json.MarshalIndent(cfg, "", "  "); err == nil {
-		log.Debug("Loaded config:\n%s", string(b))
-	}
+	// Initialize Injector
+	injector := do.New()
 
-	pr, err := registry.NewProviderRegistry(cfg.Registry)
-	if err != nil {
-		panic(fmt.Sprintf("Failed to create provider registry: %v", err))
-	}
-
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-	// Initialize CookieCloud jar
-	jar, err := cookiecloud.NewCookieCloudJar(ctx, cfg.CookieCloud)
-	if err != nil {
-		log.Fatalf("Failed to create CookieCloud jar: %v", err)
-	}
-
-	// add netease provider
-	pr.RegisterFactory("netease", netease.NewNetEaseProviderFactory(jar))
-	// add other providers here...
+	// Register services
+	do.Provide(injector, func(i do.Injector) (*config.Config, error) {
+		return cfg, nil
+	})
+	do.Provide(injector, func(i do.Injector) (*gorm.DB, error) {
+		return db, nil
+	})
+	do.Provide(injector, func(i do.Injector) (*cookiecloud.Config, error) {
+		return cfg.CookieCloud, nil
+	})
 
 	// Initialize HTTP handler
-	h := api.New(jar, pr, db)
+	h := server.New(injector)
+	r := h.Routes()
+
+	ctx := context.Background()
+
 	// Create HTTP server
 	server := &http.Server{
 		Addr:    fmt.Sprintf(":%d", cfg.Server.Port),
-		Handler: h.Routes(),
+		Handler: r,
 	}
 
 	// Start server in a goroutine

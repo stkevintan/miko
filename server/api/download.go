@@ -9,9 +9,10 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
-	"github.com/stkevintan/miko/api/models"
-	"github.com/stkevintan/miko/pkg/registry"
+	"github.com/samber/do/v2"
+	"github.com/stkevintan/miko/pkg/provider"
 	"github.com/stkevintan/miko/pkg/types"
+	"github.com/stkevintan/miko/server/models"
 )
 
 // handleDownload handles music download requests
@@ -29,6 +30,7 @@ import (
 // @Success      200 {object} models.DownloadSummary "Successful batch download response with individual song results and error details"
 // @Failure      400 {object} models.ErrorResponse "Bad request - missing or invalid parameters"
 // @Failure      500 {object} models.ErrorResponse "Internal server error during download processing"
+// @Security     ApiKeyAuth
 // @Router       /download [get]
 func (h *Handler) handleDownload(c *gin.Context) {
 	// Get query parameters
@@ -37,7 +39,8 @@ func (h *Handler) handleDownload(c *gin.Context) {
 	output := c.Query("output")
 	timeoutStr := c.Query("timeout")
 	conflictPolicy := c.DefaultQuery("conflict_policy", "skip")
-	platform := c.DefaultQuery("platform", h.registry.Config.Platform)
+	platform := c.DefaultQuery("platform", h.cfg.Provider.Platform)
+	// username := c.MustGet("username").(string)
 
 	// Validate required parameters
 	if len(uris) == 0 {
@@ -68,7 +71,14 @@ func (h *Handler) handleDownload(c *gin.Context) {
 		},
 	}
 
-	result, err := req.Download(c.Request.Context(), h.registry)
+	injector, err := h.getRequestInjector(c)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, &models.ErrorResponse{Error: err.Error()})
+		return
+	}
+	defer injector.Shutdown()
+
+	result, err := req.Download(c.Request.Context(), injector)
 
 	if err != nil {
 		errorResp := models.ErrorResponse{Error: err.Error()}
@@ -107,7 +117,7 @@ type DownloadRequest struct {
 	Timeout  time.Duration
 }
 
-func (r *DownloadRequest) Download(ctx context.Context, registry *registry.ProviderRegistry) (*types.MusicDownloadResults, error) {
+func (r *DownloadRequest) Download(ctx context.Context, i do.Injector) (*types.MusicDownloadResults, error) {
 	var (
 		nctx   context.Context
 		cancel context.CancelFunc
@@ -128,18 +138,16 @@ func (r *DownloadRequest) Download(ctx context.Context, registry *registry.Provi
 	}
 
 	defer cancel()
-	provider, err := registry.CreateProvider(
-		r.Platform,
-	)
+	provider, err := do.InvokeNamed[provider.Provider](i, r.Platform)
 	if err != nil {
 		return nil, fmt.Errorf("create provider: %w", err)
 	}
 	defer provider.Close(nctx)
 
-	musics, err := provider.GetMusic(nctx, r.URIs)
+	music, err := provider.GetMusic(nctx, r.URIs)
 	if err != nil {
 		return nil, fmt.Errorf("GetMusic: %w", err)
 	}
 
-	return provider.Download(nctx, musics, &r.DownloadConfig)
+	return provider.Download(nctx, music, &r.DownloadConfig)
 }

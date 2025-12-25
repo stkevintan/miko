@@ -21,18 +21,18 @@ import (
 )
 
 // Download downloads multiple songs concurrently
-func (d *NMProvider) Download(ctx context.Context, musics []*types.Music, config *types.DownloadConfig) (*types.MusicDownloadResults, error) {
+func (d *NMProvider) Download(ctx context.Context, music []*types.Music, config *types.DownloadConfig) (*types.MusicDownloadResults, error) {
 	var (
 		sema    = semaphore.NewWeighted(5) // parallel download count
-		results = types.NewMusicDownloadResults(len(musics))
+		results = types.NewMusicDownloadResults(len(music))
 		mutex   sync.Mutex
 	)
 
-	// refresh token after downloads
-	defer d.RetreshToken(ctx)
+	// refresh token after downloads, we don't need refresh the cookie since the cookiecloud is desigend to pull
+	// defer d.RetreshToken(ctx)
 
 	// Process songs concurrently
-	for _, music := range musics {
+	for _, music := range music {
 		var music = music // capture loop variable
 		if err := sema.Acquire(ctx, 1); err != nil {
 			return nil, fmt.Errorf("acquire: %w", err)

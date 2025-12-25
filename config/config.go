@@ -12,7 +12,7 @@ import (
 	"github.com/spf13/viper"
 	"github.com/stkevintan/miko/pkg/cookiecloud"
 	"github.com/stkevintan/miko/pkg/log"
-	"github.com/stkevintan/miko/pkg/registry"
+	"github.com/stkevintan/miko/pkg/provider"
 )
 
 var (
@@ -26,7 +26,7 @@ type Config struct {
 	Server      *ServerConfig       `json:"server" mapstructure:"server"`
 	Log         *log.Config         `json:"log" mapstructure:"log"`
 	CookieCloud *cookiecloud.Config `json:"cookiecloud" mapstructure:"cookiecloud"`
-	Registry    *registry.Config    `json:"registry" mapstructure:"registry"`
+	Provider    *provider.Config    `json:"provider" mapstructure:"provider"`
 	Database    *DatabaseConfig     `json:"database" mapstructure:"database"`
 }
 
@@ -40,8 +40,8 @@ func (c *Config) Validate() error {
 	if c.CookieCloud == nil {
 		return errors.New("cookiecloud config is required")
 	}
-	if c.Registry == nil {
-		return errors.New("registry config is required")
+	if c.Provider == nil {
+		return errors.New("provider config is required")
 	}
 	if c.Database == nil {
 		return errors.New("database config is required")
@@ -50,7 +50,8 @@ func (c *Config) Validate() error {
 }
 
 type ServerConfig struct {
-	Port int `json:"port" mapstructure:"port"`
+	Port      int    `json:"port" mapstructure:"port"`
+	JWTSecret string `json:"jwtSecret" mapstructure:"jwtSecret"`
 }
 
 type DatabaseConfig struct {
@@ -115,7 +116,18 @@ func Load() (*Config, error) {
 		return nil, fmt.Errorf("cfg.Validate: %w", err)
 	}
 
+	cfg.expandEnv()
+
 	log.Debug("Configuration loaded successfully, %+v", &cfg)
 
 	return &cfg, nil
+}
+
+func (c *Config) expandEnv() {
+	if c.Log != nil && c.Log.File != "" {
+		c.Log.File = os.ExpandEnv(c.Log.File)
+	}
+	if c.Database != nil && c.Database.DSN != "" {
+		c.Database.DSN = os.ExpandEnv(c.Database.DSN)
+	}
 }

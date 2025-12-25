@@ -1,4 +1,4 @@
-package registry
+package provider
 
 import (
 	"context"
@@ -6,6 +6,10 @@ import (
 	"github.com/stkevintan/miko/pkg/cookiecloud"
 	"github.com/stkevintan/miko/pkg/types"
 )
+
+type Config struct {
+	Platform string `json:"platform" mapstructure:"platform"`
+}
 
 // Provider interface defines the contract for different music providers
 type Provider interface {
@@ -20,9 +24,4 @@ type Provider interface {
 	GetMusic(ctx context.Context, uris []string) ([]*types.Music, error)
 
 	Close(ctx context.Context) error
-}
-
-// ProviderFactory creates music provider for different music platforms
-type ProviderFactory interface {
-	CreateProvider() (Provider, error)
 }

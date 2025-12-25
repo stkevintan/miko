@@ -26,6 +26,11 @@ const docTemplate = `{
     "paths": {
         "/cookiecloud/identity": {
             "post": {
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
                 "description": "Updates the CookieCloud server identity using the provided key and password. This allows the service to fetch cookies from your CookieCloud server for authentication with music platforms.",
                 "consumes": [
                     "application/json"
@@ -44,7 +49,7 @@ const docTemplate = `{
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/models.CookiecloudIdentity"
+                            "$ref": "#/definitions/models.CookiecloudIdentityRequest"
                         }
                     }
                 ],
@@ -70,8 +75,59 @@ const docTemplate = `{
                 }
             }
         },
+        "/cookiecloud/pull": {
+            "post": {
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Forces the service to pull the latest cookies from your CookieCloud server.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "cookiecloud"
+                ],
+                "summary": "Force pull cookies",
+                "responses": {
+                    "200": {
+                        "description": "Cookies pulled successfully",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "allOf": [
+                                    {
+                                        "type": "string"
+                                    },
+                                    {
+                                        "type": "object",
+                                        "properties": {
+                                            "message": {
+                                                "type": "string"
+                                            }
+                                        }
+                                    }
+                                ]
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error - failed to pull cookies",
+                        "schema": {
+                            "$ref": "#/definitions/models.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
         "/cookiecloud/server": {
             "get": {
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
                 "description": "Returns the currently configured CookieCloud server URL",
                 "produces": [
                     "application/json"
@@ -107,6 +163,11 @@ const docTemplate = `{
         },
         "/download": {
             "get": {
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
                 "description": "Download single or multiple music tracks by providing song IDs, album URLs, playlist URLs, or song URLs. Supports batch downloads with various quality levels and conflict resolution policies.",
                 "consumes": [
                     "application/json"
@@ -211,8 +272,65 @@ const docTemplate = `{
                 }
             }
         },
+        "/login": {
+            "post": {
+                "description": "Authenticates a user with username and password and returns a JWT token",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "auth"
+                ],
+                "summary": "Login",
+                "parameters": [
+                    {
+                        "description": "Login credentials",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/models.LoginRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Login successful",
+                        "schema": {
+                            "$ref": "#/definitions/models.LoginResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad request - invalid input",
+                        "schema": {
+                            "$ref": "#/definitions/models.ErrorResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized - invalid credentials",
+                        "schema": {
+                            "$ref": "#/definitions/models.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error",
+                        "schema": {
+                            "$ref": "#/definitions/models.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
         "/platform/{platform}/user": {
             "get": {
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
                 "description": "Retrieves the authenticated user's information from the specified music platform",
                 "produces": [
                     "application/json"
@@ -239,13 +357,13 @@ const docTemplate = `{
                         }
                     },
                     "400": {
-                        "description": "Bad request - authentication failed or invalid platform",
+                        "description": "Bad request - provider creation failed",
                         "schema": {
                             "$ref": "#/definitions/models.ErrorResponse"
                         }
                     },
                     "500": {
-                        "description": "Internal server error - provider creation failed",
+                        "description": "Internal server error - authentication failed or invalid platform",
                         "schema": {
                             "$ref": "#/definitions/models.ErrorResponse"
                         }
@@ -280,7 +398,7 @@ const docTemplate = `{
                 }
             }
         },
-        "models.CookiecloudIdentity": {
+        "models.CookiecloudIdentityRequest": {
             "description": "platform auth request",
             "type": "object",
             "required": [
@@ -338,6 +456,29 @@ const docTemplate = `{
                 "error": {
                     "type": "string",
                     "example": "Invalid input"
+                }
+            }
+        },
+        "models.LoginRequest": {
+            "type": "object",
+            "required": [
+                "password",
+                "username"
+            ],
+            "properties": {
+                "password": {
+                    "type": "string"
+                },
+                "username": {
+                    "type": "string"
+                }
+            }
+        },
+        "models.LoginResponse": {
+            "type": "object",
+            "properties": {
+                "token": {
+                    "type": "string"
                 }
             }
         },
@@ -404,6 +545,13 @@ const docTemplate = `{
                     "type": "string"
                 }
             }
+        }
+    },
+    "securityDefinitions": {
+        "ApiKeyAuth": {
+            "type": "apiKey",
+            "name": "Authorization",
+            "in": "header"
         }
     }
 }`

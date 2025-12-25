@@ -16,7 +16,7 @@ definitions:
       name:
         type: string
     type: object
-  models.CookiecloudIdentity:
+  models.CookiecloudIdentityRequest:
     description: platform auth request
     properties:
       key:
@@ -57,6 +57,21 @@ definitions:
     properties:
       error:
         example: Invalid input
+        type: string
+    type: object
+  models.LoginRequest:
+    properties:
+      password:
+        type: string
+      username:
+        type: string
+    required:
+    - password
+    - username
+    type: object
+  models.LoginResponse:
+    properties:
+      token:
         type: string
     type: object
   types.DownloadResult:
@@ -127,7 +142,7 @@ paths:
         name: body
         required: true
         schema:
-          $ref: '#/definitions/models.CookiecloudIdentity'
+          $ref: '#/definitions/models.CookiecloudIdentityRequest'
       produces:
       - application/json
       responses:
@@ -143,7 +158,36 @@ paths:
           description: Internal server error - failed to update identity
           schema:
             $ref: '#/definitions/models.ErrorResponse'
+      security:
+      - ApiKeyAuth: []
       summary: Update CookieCloud identity
+      tags:
+      - cookiecloud
+  /cookiecloud/pull:
+    post:
+      description: Forces the service to pull the latest cookies from your CookieCloud
+        server.
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Cookies pulled successfully
+          schema:
+            additionalProperties:
+              allOf:
+              - type: string
+              - properties:
+                  message:
+                    type: string
+                type: object
+            type: object
+        "500":
+          description: Internal server error - failed to pull cookies
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+      security:
+      - ApiKeyAuth: []
+      summary: Force pull cookies
       tags:
       - cookiecloud
   /cookiecloud/server:
@@ -163,6 +207,8 @@ paths:
                     type: string
                 type: object
             type: object
+      security:
+      - ApiKeyAuth: []
       summary: Get CookieCloud server URL
       tags:
       - cookiecloud
@@ -246,9 +292,46 @@ paths:
           description: Internal server error during download processing
           schema:
             $ref: '#/definitions/models.ErrorResponse'
+      security:
+      - ApiKeyAuth: []
       summary: Download music tracks
       tags:
       - music
+  /login:
+    post:
+      consumes:
+      - application/json
+      description: Authenticates a user with username and password and returns a JWT
+        token
+      parameters:
+      - description: Login credentials
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/models.LoginRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Login successful
+          schema:
+            $ref: '#/definitions/models.LoginResponse'
+        "400":
+          description: Bad request - invalid input
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+        "401":
+          description: Unauthorized - invalid credentials
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+      summary: Login
+      tags:
+      - auth
   /platform/{platform}/user:
     get:
       description: Retrieves the authenticated user's information from the specified
@@ -268,17 +351,24 @@ paths:
           schema:
             $ref: '#/definitions/types.User'
         "400":
-          description: Bad request - authentication failed or invalid platform
+          description: Bad request - provider creation failed
           schema:
             $ref: '#/definitions/models.ErrorResponse'
         "500":
-          description: Internal server error - provider creation failed
+          description: Internal server error - authentication failed or invalid platform
           schema:
             $ref: '#/definitions/models.ErrorResponse'
+      security:
+      - ApiKeyAuth: []
       summary: Get user information
       tags:
       - user
 schemes:
 - http
 - https
+securityDefinitions:
+  ApiKeyAuth:
+    in: header
+    name: Authorization
+    type: apiKey
 swagger: "2.0"
