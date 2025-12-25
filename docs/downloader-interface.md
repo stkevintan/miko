@@ -1,61 +1,44 @@
-# Generic Downloader Interface
+# Generic Provider Interface
 
-This document describes the generic downloader interface implementation that abstracts different music platform downloaders.
+This document describes the generic music provider interface implementation that abstracts different music platform implementations.
 
 ## Overview
 
-The generic downloader interface provides a unified way to interact with different music platform downloaders (currently NetEase Cloud Music, with support for future platforms).
+The generic provider interface provides a unified way to interact with different music platforms (currently NetEase Cloud Music, with support for future platforms). It leverages Dependency Injection for resource management and request-scoped isolation.
 
 ## Architecture
 
 ### Interface Definition
 
 ```go
-type Downloader interface {
+type Provider interface {
+    // GetCookieJar returns the CookieJar used by the provider
+    GetCookieJar() cookiecloud.CookieJar
+
+    // User retrieves user information from the platform
+    User(ctx context.Context) (*types.User, error)
+
     // Download downloads multiple songs and returns the batch result
-    Download(ctx context.Context, music []*models.Music) (*models.BatchDownloadResponse, error)
+    Download(ctx context.Context, music []*types.Music, config *types.DownloadConfig) (*types.MusicDownloadResults, error)
 
     // GetMusic returns the music information array from URIs
-    GetMusic(ctx context.Context, uris []string) ([]*models.Music, error)
+    GetMusic(ctx context.Context, uris []string) ([]*types.Music, error)
 
-    // GetLevel returns the quality level
-    GetLevel() types.Level
-
-    // GetOutput returns the output directory
-    GetOutput() string
-
-    // GetConflictPolicy returns the conflict handling policy
-    GetConflictPolicy() ConflictPolicy
-
-    // Close cleans up downloader resources
+    // Close cleans up provider resources
     Close(ctx context.Context) error
 }
 ```
 
-### Factory Pattern
+### Dependency Injection
+
+The project uses `samber/do/v2` for dependency injection. Providers are registered as named services and resolved within a request-scoped injector that provides a user-specific `CookieJar`.
 
 ```go
-type DownloaderFactory interface {
-    // CreateDownloader creates a new downloader instance
-    CreateDownloader(ctx context.Context, config *DownloaderConfig) (Downloader, error)
-    
-    // SupportedPlatforms returns the list of supported platforms
-    SupportedPlatforms() []string
-}
-```
+// Example registration in a request scope
+do.ProvideNamed(scope, "netease", netease.NewNetEaseProvider)
 
-### Manager
-
-```go
-type DownloaderManager struct {
-    factories map[string]DownloaderFactory
-}
-
-// Methods:
-func NewDownloaderManager() *DownloaderManager
-func (dm *DownloaderManager) RegisterFactory(platform string, factory DownloaderFactory)
-func (dm *DownloaderManager) CreateDownloader(ctx context.Context, platform string, config *DownloaderConfig) (Downloader, error)
-func (dm *DownloaderManager) GetSupportedPlatforms() []string
+// Example invocation
+provider, err := do.InvokeNamed[provider.Provider](injector, "netease")
 ```
 
 ## Usage
@@ -63,41 +46,30 @@ func (dm *DownloaderManager) GetSupportedPlatforms() []string
 ### Basic Usage
 
 ```go
-// Create manager (done once in service initialization)
-manager := downloader.NewDownloaderManager()
-
-// Create a downloader instance
-dl, err := manager.CreateDownloader(
-    ctx,
-    "netease", // platform
-    &downloader.DownloaderConfig{
-        Level:          "standard",
-        Output:         "./downloads",
-        ConflictPolicy: "skip",
-        Root:           configInstance, // *config.Config
-    },
-)
+// Resolve a provider from the injector (usually done in an API handler)
+p, err := do.InvokeNamed[provider.Provider](injector, "netease")
 if err != nil {
     return err
 }
-defer dl.Close(ctx)
+defer p.Close(ctx)
 
 // Get music from URIs (song IDs, URLs, etc.)
-music, err := dl.GetMusic(ctx, []string{"123456", "https://music.163.com/song?id=789"})
+music, err := p.GetMusic(ctx, []string{"2161154646", "https://music.163.com/song?id=441532"})
 if err != nil {
     return err
 }
 
 // Download the songs
-result, err := dl.Download(ctx, music)
-// result is *models.BatchDownloadResponse
+result, err := p.Download(ctx, music, &types.DownloadConfig{
+    Level:          "lossless",
+    Output:         "./songs",
+    ConflictPolicy: "skip",
+})
 ```
 
-### Configuration
+### Cookie Management
 
-```go
-type DownloaderConfig struct {
-    Level          string        // quality level ("standard", "higher", "lossless", etc.)
+Each provider is initialized with a `CookieJar` that is automatically synchronized with a CookieCloud server. This allows the provider to maintain authenticated sessions across different environments.
     Output         string        // output directory path
     ConflictPolicy string        // conflict policy ("skip", "overwrite", "rename", "update_tags")
     Root           *config.Config // application configuration

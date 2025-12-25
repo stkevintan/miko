@@ -1,17 +1,18 @@
-# Miko Go Service
-
-A Go service library built with **Gin HTTP framework**, featuring OpenAPI-documented endpoints, configuration management, and graceful shutdown.
+# Miko 
+- A music downloader (mainly for Chinese users)
+- A subsonic 1.16.1 server implementation
 
 ## Features
 
 - **Gin HTTP framework** for high-performance routing and middleware
-- Clean architecture with separation of concerns
+- **Dependency Injection** using `samber/do/v2` for clean architecture
+- **Request-scoped isolation** for user-specific resources (e.g., CookieJars)
+- **CookieCloud Integration** for seamless authentication across devices
 - **OpenAPI 3.0 documentation with Swagger UI**
 - **All API endpoints under `/api/` path**
 - **CORS support** for cross-origin requests
 - **JSON validation** with automatic error handling
-- Configuration management via environment variables
-- HTTP API with health check endpoint
+- Configuration management via environment variables and TOML
 - Graceful shutdown handling
 - Comprehensive testing
 - Docker support
@@ -21,21 +22,19 @@ A Go service library built with **Gin HTTP framework**, featuring OpenAPI-docume
 ```
 .
 ├── main.go                 # Application entry point
-├── main_test.go           # Integration tests
-├── docs/                   # Generated OpenAPI documentation
-│   ├── docs.go
-│   ├── swagger.json
-│   └── swagger.yaml
-├── internal/
-│   ├── config/
-│   │   └── config.go      # Configuration management
-│   ├── models/
-│   │   └── models.go      # API data models
-│   ├── service/
-│   │   └── service.go     # Business logic
-│   └── handler/
-│       ├── handler.go     # HTTP handlers with OpenAPI annotations
-│       └── handler_test.go # Handler tests
+├── config/
+│   ├── config.go          # Configuration management
+│   └── config.toml        # Default configuration
+├── pkg/
+│   ├── cookiecloud/       # CookieCloud client and identity management
+│   ├── log/               # Structured logging
+│   ├── netease/           # NetEase music provider implementation
+│   ├── provider/          # Generic music provider interface
+│   └── types/             # Common data types
+├── server/
+│   ├── api/               # HTTP API handlers
+│   ├── models/            # API data models
+│   └── subsonic/          # Subsonic API implementation
 ├── docker/
 │   └── Dockerfile         # Docker configuration
 ├── scripts/
@@ -58,46 +57,43 @@ A Go service library built with **Gin HTTP framework**, featuring OpenAPI-docume
 
 3. **Test the service:**
    ```bash
-   # Health check
-   curl http://localhost:8080/api/health
-   
-   # User login (requires NetEase account)
-   curl -X POST http://localhost:8080/api/login \
+   # User login
+   curl -X POST http://localhost:8082/api/login \
         -H "Content-Type: application/json" \
-        -d '{"uuid": "your_username", "password": "your_password"}'
+        -d '{"username": "admin", "password": "adminpassword"}'
    
-   # Download music (requires login)
-   curl -X POST http://localhost:8080/api/download \
+   # Update CookieCloud identity (requires token)
+   curl -X POST http://localhost:8082/api/cookiecloud/identity \
+        -H "Authorization: Bearer <token>" \
         -H "Content-Type: application/json" \
-        -d '{"song_id": "2161154646", "level": "lossless"}'
+        -d '{"key": "your-uuid", "password": "your-password"}'
    
-   # Process data
-   curl -X POST http://localhost:8080/api/process \
-        -H "Content-Type: application/json" \
-        -d '{"data": "hello world"}'
+   # Download music (requires token)
+   curl -X GET "http://localhost:8082/api/download?uri=https://music.163.com/song?id=2161154646&output=./songs" \
+        -H "Authorization: Bearer <token>"
    
    # View OpenAPI documentation
-   open http://localhost:8080/swagger/index.html
+   open http://localhost:8082/swagger/index.html
    ```
 
 ## Configuration
 
 Miko loads configuration in this order (later sources override earlier ones):
 
-- Built-in defaults
-- Optional config file
+- Built-in defaults (`config/config.toml`)
+- Optional config file (`./config.toml`, `./config/config.toml`, or `$HOME/.miko/config.toml`)
 - Environment variables (`MIKO_*`)
-- Legacy environment variables (`PORT`, `ENVIRONMENT`, `LOG_LEVEL`)
 
 ### Config file
 
 By default, Miko looks for a `config` file in the following locations (first match wins):
 
-- `./config.yaml` (also supports `yml`, `json`, `toml`)
-- `./config/config.yaml`
-- `$HOME/.miko/config.yaml`
+- `./config.toml`
+- `./config/config.toml`
+- `$HOME/.miko/config.toml`
 
-You can also point directly to a config file path via:
+You can also point directly to a config file path via `MIKO_CONFIG` environment variable.
+Paths in the config file (like database DSN or log file) support environment variable expansion (e.g., `${HOME}/.miko/miko.db`).
 
 - `MIKO_CONFIG=/path/to/config.yaml`
 
@@ -162,23 +158,28 @@ docker run -p 8080:8080 miko
 
 All API endpoints are under the `/api/` path as per OpenAPI best practices.
 
-### Health Check
-- **GET** `/api/health` - Returns service health status
-
 ### Authentication  
-- **POST** `/api/login` - User authentication with NetEase Cloud Music
-  - Request body: `{"uuid": "user_id", "password": "password", "timeout": 30000, "server": "cookiecloud_url"}`
-  - Response: `{"username": "user", "user_id": 123456, "success": true}`
+- **POST** `/api/login` - User authentication
+  - Request body: `{"username": "admin", "password": "password"}`
+  - Response: `{"token": "jwt-token"}`
+
+### CookieCloud
+- **GET** `/api/cookiecloud/server` - Get CookieCloud server URL
+- **POST** `/api/cookiecloud/identity` - Update CookieCloud identity (key and password)
+  - Request body: `{"key": "your-uuid", "password": "your-password"}`
+- **POST** `/api/cookiecloud/pull` - Force pull cookies from CookieCloud
 
 ### Music Download
-- **POST** `/api/download` - Get download URL and metadata for a song
-  - Request body: `{"song_id": "123456", "level": "lossless", "output": "./downloads", "timeout": 30000}`
-  - Response: `{"download_url": "https://...", "song_name": "title", "artist": "artist", "quality": "lossless"}`
+- **GET** `/api/download` - Download music tracks
+  - Query parameters:
+    - `uri`: Resource URIs (song ID, album URL, etc.)
+    - `level`: Audio quality (standard, lossless, hires, etc.)
+    - `output`: Output directory
+    - `platform`: Music platform (e.g., netease)
+  - Response: `{"summary": "..."}`
 
-### Process Data  
-- **POST** `/api/process` - Processes input data
-  - Request body: `{"data": "string"}`
-  - Response: `{"result": "processed: string"}`
+### Platform
+- **GET** `/api/platform/:platform/user` - Get user information for a specific platform
 
 ### Documentation
 - **GET** `/swagger/index.html` - OpenAPI/Swagger UI documentation

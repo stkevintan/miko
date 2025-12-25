@@ -80,7 +80,6 @@ Docker will automatically pull the correct architecture for your platform.
 
 - Uses minimal Alpine Linux base image
 - Runs as non-root user (`miko`)
-- Includes health check endpoint
 - Static binaries with no external dependencies (CGO_ENABLED=0)
 
 ## Container Registry
