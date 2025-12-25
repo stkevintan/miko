@@ -7,6 +7,7 @@ import (
 	"io"
 	"log/slog"
 	"os"
+	"path/filepath"
 	"strings"
 )
 
@@ -60,13 +61,17 @@ func New(cfg *Config) *Logger {
 
 	w := base
 	if strings.TrimSpace(cfg.File) != "" {
-		path := os.ExpandEnv(strings.TrimSpace(cfg.File))
-		f, err := os.OpenFile(path, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0o644)
-		if err == nil {
-			if cfg.Stdout {
-				w = io.MultiWriter(base, f)
-			} else {
-				w = f
+		path := strings.TrimSpace(cfg.File)
+		// Ensure directory exists
+		dir := filepath.Dir(path)
+		if err := os.MkdirAll(dir, 0755); err == nil {
+			f, err := os.OpenFile(path, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0o644)
+			if err == nil {
+				if cfg.Stdout {
+					w = io.MultiWriter(base, f)
+				} else {
+					w = f
+				}
 			}
 		}
 	}

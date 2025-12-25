@@ -3,7 +3,7 @@ version = "1.0.0"
 [server]
 port = 8082
 
-[registry]
+[provider]
 # Default platform to use when none is specified
 platform = "netease"
 
@@ -23,4 +23,4 @@ retry = 0
 
 [database]
 driver = "sqlite"
-dsn = "miko.db"
+dsn = "${HOME}/.miko/miko.db"

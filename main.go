@@ -28,6 +28,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"path"
 	"syscall"
 	"time"
 
@@ -36,7 +37,6 @@ import (
 	_ "github.com/stkevintan/miko/docs" // This line is important for swagger docs
 	"github.com/stkevintan/miko/pkg/cookiecloud"
 	"github.com/stkevintan/miko/pkg/log"
-	"github.com/stkevintan/miko/pkg/netease"
 	"github.com/stkevintan/miko/server"
 	"github.com/stkevintan/miko/server/models"
 	"gorm.io/driver/sqlite"
@@ -53,9 +53,19 @@ func main() {
 	// Initialize global logger from config.
 	log.Default = log.New(cfg.Log)
 
+	// Pretty-print loaded config for debugging.
+	if b, err := json.MarshalIndent(cfg, "", "  "); err == nil {
+		log.Debug("Loaded config:\n%s", string(b))
+	}
+
 	// Initialize Database
 	var db *gorm.DB
 	if cfg.Database.Driver == "sqlite" {
+		// Ensure directory exists
+		dir := path.Dir(cfg.Database.DSN)
+		if err := os.MkdirAll(dir, 0755); err != nil {
+			log.Fatalf("Failed to create database directory: %v", err)
+		}
 		db, err = gorm.Open(sqlite.Open(cfg.Database.DSN), &gorm.Config{})
 		if err != nil {
 			log.Fatalf("Failed to connect to database: %v", err)
@@ -86,11 +96,6 @@ func main() {
 		}
 	}
 
-	// Pretty-print loaded config for debugging.
-	if b, err := json.MarshalIndent(cfg, "", "  "); err == nil {
-		log.Debug("Loaded config:\n%s", string(b))
-	}
-
 	// Initialize Injector
 	injector := do.New()
 
@@ -104,9 +109,6 @@ func main() {
 	do.Provide(injector, func(i do.Injector) (*cookiecloud.Config, error) {
 		return cfg.CookieCloud, nil
 	})
-
-	// Register Providers
-	do.ProvideNamed(injector, "netease", netease.NewNetEaseProvider)
 
 	// Initialize HTTP handler
 	h := server.New(injector)

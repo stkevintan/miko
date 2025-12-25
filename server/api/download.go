@@ -10,7 +10,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/samber/do/v2"
-	"github.com/stkevintan/miko/pkg/registry"
+	"github.com/stkevintan/miko/pkg/provider"
 	"github.com/stkevintan/miko/pkg/types"
 	"github.com/stkevintan/miko/server/models"
 )
@@ -39,7 +39,7 @@ func (h *Handler) handleDownload(c *gin.Context) {
 	output := c.Query("output")
 	timeoutStr := c.Query("timeout")
 	conflictPolicy := c.DefaultQuery("conflict_policy", "skip")
-	platform := c.DefaultQuery("platform", h.cfg.Registry.Platform)
+	platform := c.DefaultQuery("platform", h.cfg.Provider.Platform)
 	// username := c.MustGet("username").(string)
 
 	// Validate required parameters
@@ -76,6 +76,7 @@ func (h *Handler) handleDownload(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, &models.ErrorResponse{Error: err.Error()})
 		return
 	}
+	defer injector.Shutdown()
 
 	result, err := req.Download(c.Request.Context(), injector)
 
@@ -137,7 +138,7 @@ func (r *DownloadRequest) Download(ctx context.Context, i do.Injector) (*types.M
 	}
 
 	defer cancel()
-	provider, err := do.InvokeNamed[registry.Provider](i, r.Platform)
+	provider, err := do.InvokeNamed[provider.Provider](i, r.Platform)
 	if err != nil {
 		return nil, fmt.Errorf("create provider: %w", err)
 	}

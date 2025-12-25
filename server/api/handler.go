@@ -2,11 +2,13 @@ package api
 
 import (
 	"fmt"
+	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/samber/do/v2"
 	"github.com/stkevintan/miko/config"
 	"github.com/stkevintan/miko/pkg/cookiecloud"
+	"github.com/stkevintan/miko/pkg/netease"
 	"gorm.io/gorm"
 )
 
@@ -35,15 +37,20 @@ func (h *Handler) getRequestInjector(c *gin.Context) (do.Injector, error) {
 		return nil, fmt.Errorf("failed to find identity for user %s: %w", username, err)
 	}
 
-	jar, err := cookiecloud.NewCookieCloudJar(c.Request.Context(), h.cfg.CookieCloud, h.db, &identity)
+	jar, err := cookiecloud.NewCookieCloudJar(c.Request.Context(), h.cfg.CookieCloud, &identity)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create cookie jar: %w", err)
 	}
 
-	scope := h.injector.Scope(username.(string))
+	// Create a request-scoped injector
+	scope := h.injector.Scope(fmt.Sprintf("request-%s-%d", username.(string), time.Now().UnixNano()))
 	do.Provide(scope, func(i do.Injector) (cookiecloud.CookieJar, error) {
 		return jar, nil
 	})
+
+	// Register providers in this scope so they can resolve the CookieJar
+	do.ProvideNamed(scope, "netease", netease.NewNetEaseProvider)
+
 	return scope, nil
 }
 func (h *Handler) RegisterRoutes(r *gin.Engine) *gin.RouterGroup {
@@ -58,6 +65,7 @@ func (h *Handler) RegisterRoutes(r *gin.Engine) *gin.RouterGroup {
 		{
 			protected.GET("/cookiecloud/server", h.getCookiecloudServer)
 			protected.POST("/cookiecloud/identity", h.handleCookiecloudIdentity)
+			protected.POST("/cookiecloud/pull", h.handleCookiecloudPull)
 			protected.GET("/download", h.handleDownload)
 			protected.GET("/platform/:platform/user", h.handlePlatformUser)
 		}

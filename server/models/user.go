@@ -40,4 +40,3 @@ type User struct {
 	// AvatarLastChanged   *time.Time `xml:"avatarLastChanged,attr,omitempty" json:"avatarLastChanged,omitempty"`
 	// Folder              []int      `xml:"folder,omitempty" json:"folder,omitempty"`
 }
-
