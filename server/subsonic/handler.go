@@ -94,8 +94,8 @@ func (s *Subsonic) RegisterRoutes(r *gin.Engine) *gin.RouterGroup {
 	rest.GET("/startScan.view", s.handleStartScan)
 
 	// User
-	rest.GET("/getUser.view", s.handleNotImplemented)
-	rest.GET("/getUsers.view", s.handleNotImplemented)
+	rest.GET("/getUser.view", s.handleGetUser)
+	rest.GET("/getUsers.view", s.handleGetUsers)
 	return rest
 }
 
