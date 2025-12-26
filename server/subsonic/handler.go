@@ -4,6 +4,7 @@ import (
 	"crypto/md5"
 	"fmt"
 	"net/http"
+	"strconv"
 	"strings"
 
 	"github.com/gin-gonic/gin"
@@ -41,16 +42,16 @@ func (s *Subsonic) RegisterRoutes(r *gin.Engine) *gin.RouterGroup {
 	rest.GET("/getAlbum", s.handleGetAlbum)
 	rest.GET("/getSong", s.handleGetSong)
 
-	rest.GET("/getVideos", s.handleUnspported)
-	rest.GET("/getVideoInfo", s.handleUnspported)
-	rest.GET("/getArtistInfo", s.handleUnspported)
+	rest.GET("/getVideos", s.handleUnsupported)
+	rest.GET("/getVideoInfo", s.handleUnsupported)
+	rest.GET("/getArtistInfo", s.handleUnsupported)
 
 	rest.GET("/getArtistInfo2", s.handleNotImplemented)
-	rest.GET("/getAlbumInfo", s.handleUnspported)
+	rest.GET("/getAlbumInfo", s.handleUnsupported)
 	rest.GET("/getAlbumInfo2", s.handleNotImplemented)
-	rest.GET("/getSimilarSongs", s.handleUnspported)
+	rest.GET("/getSimilarSongs", s.handleUnsupported)
 	rest.GET("/getSimilarSongs2", s.handleNotImplemented)
-	rest.GET("/getTopSongs", s.handleUnspported)
+	rest.GET("/getTopSongs", s.handleUnsupported)
 
 	// Album/song lists
 	rest.GET("/getAlbumList", s.handleGetAlbumList)
@@ -147,12 +148,24 @@ func (s *Subsonic) sendResponse(c *gin.Context, resp *models.SubsonicResponse) {
 	}
 }
 
-func (s *Subsonic) handleUnspported(c *gin.Context) {
+func (s *Subsonic) handleUnsupported(c *gin.Context) {
 	s.sendResponse(c, models.NewErrorResponse(0, "Not supported"))
 }
 
 func (s *Subsonic) handleNotImplemented(c *gin.Context) {
 	s.sendResponse(c, models.NewErrorResponse(0, "Not implemented"))
+}
+
+func (s *Subsonic) getQueryInt(c *gin.Context, key string, defaultValue int) (int, error) {
+	valStr := c.Query(key)
+	if valStr == "" {
+		return defaultValue, nil
+	}
+	val, err := strconv.Atoi(valStr)
+	if err != nil {
+		return 0, fmt.Errorf("invalid value for parameter '%s': %s", key, valStr)
+	}
+	return val, nil
 }
 
 func (s *Subsonic) stripViewSuffix() gin.HandlerFunc {

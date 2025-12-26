@@ -63,15 +63,9 @@ func (s *Subsonic) handleGetCoverArt(c *gin.Context) {
 	// Try to find as song first
 	var song models.Child
 	if err := db.Where("id = ?", id).First(&song).Error; err == nil {
-		// Look for cover art in the same directory
-		dir := filepath.Dir(song.Path)
-		covers := []string{"cover.jpg", "cover.png", "folder.jpg", "folder.png", "front.jpg", "front.png"}
-		for _, cover := range covers {
-			coverPath := filepath.Join(dir, cover)
-			if _, err := os.Stat(coverPath); err == nil {
-				c.File(coverPath)
-				return
-			}
+		if coverPath := s.findCoverArt(filepath.Dir(song.Path)); coverPath != "" {
+			c.File(coverPath)
+			return
 		}
 	}
 
@@ -81,18 +75,24 @@ func (s *Subsonic) handleGetCoverArt(c *gin.Context) {
 		// For albums, we need to find one song in the album to get the directory
 		var firstSong models.Child
 		if err := db.Where("album_id = ?", album.ID).First(&firstSong).Error; err == nil {
-			dir := filepath.Dir(firstSong.Path)
-			covers := []string{"cover.jpg", "cover.png", "folder.jpg", "folder.png", "front.jpg", "front.png"}
-			for _, cover := range covers {
-				coverPath := filepath.Join(dir, cover)
-				if _, err := os.Stat(coverPath); err == nil {
-					c.File(coverPath)
-					return
-				}
+			if coverPath := s.findCoverArt(filepath.Dir(firstSong.Path)); coverPath != "" {
+				c.File(coverPath)
+				return
 			}
 		}
 	}
 
 	// Fallback to a default cover or 404
 	c.Status(http.StatusNotFound)
+}
+
+func (s *Subsonic) findCoverArt(dir string) string {
+	covers := []string{"cover.jpg", "cover.png", "folder.jpg", "folder.png", "front.jpg", "front.png"}
+	for _, cover := range covers {
+		coverPath := filepath.Join(dir, cover)
+		if _, err := os.Stat(coverPath); err == nil {
+			return coverPath
+		}
+	}
+	return ""
 }

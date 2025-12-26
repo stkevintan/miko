@@ -1,26 +1,43 @@
 package subsonic
 
 import (
-	"strconv"
-
 	"github.com/gin-gonic/gin"
 	"github.com/samber/do/v2"
 	"github.com/stkevintan/miko/models"
 	"gorm.io/gorm"
 )
 
-func (s *Subsonic) handleGetAlbumList2(c *gin.Context) {
+func (s *Subsonic) getAlbums(c *gin.Context) ([]models.AlbumID3, error) {
 	listType := c.DefaultQuery("type", "newest")
-	size, _ := strconv.Atoi(c.DefaultQuery("size", "10"))
-	offset, _ := strconv.Atoi(c.DefaultQuery("offset", "0"))
+	size, err := s.getQueryInt(c, "size", 10)
+	if err != nil {
+		return nil, err
+	}
+	offset, err := s.getQueryInt(c, "offset", 0)
+	if err != nil {
+		return nil, err
+	}
 	genre := c.Query("genre")
-	fromYear, _ := strconv.Atoi(c.DefaultQuery("fromYear", "0"))
-	toYear, _ := strconv.Atoi(c.DefaultQuery("toYear", "3000"))
+	fromYear, err := s.getQueryInt(c, "fromYear", 0)
+	if err != nil {
+		return nil, err
+	}
+	toYear, err := s.getQueryInt(c, "toYear", 3000)
+	if err != nil {
+		return nil, err
+	}
+	musicFolderId := c.Query("musicFolderId")
 
 	db := do.MustInvoke[*gorm.DB](s.injector)
 	var albums []models.AlbumID3
 
 	query := db.Limit(size).Offset(offset)
+
+	if musicFolderId != "" {
+		query = query.Joins("JOIN children ON children.album_id = album_id3s.id").
+			Where("children.music_folder_id = ?", musicFolderId).
+			Group("album_id3s.id")
+	}
 
 	switch listType {
 	case "random":
@@ -42,8 +59,14 @@ func (s *Subsonic) handleGetAlbumList2(c *gin.Context) {
 		query = query.Order("created DESC")
 	}
 
-	if err := query.Find(&albums).Error; err != nil {
-		s.sendResponse(c, models.NewErrorResponse(0, "Failed to fetch albums"))
+	err = query.Find(&albums).Error
+	return albums, err
+}
+
+func (s *Subsonic) handleGetAlbumList2(c *gin.Context) {
+	albums, err := s.getAlbums(c)
+	if err != nil {
+		s.sendResponse(c, models.NewErrorResponse(0, err.Error()))
 		return
 	}
 
@@ -60,30 +83,9 @@ func (s *Subsonic) handleGetAlbumList(c *gin.Context) {
 	// Actually it returns <albumList> which is same as <albumList2> but with different element names.
 	// For simplicity, let's just use the same logic but return AlbumList.
 
-	listType := c.DefaultQuery("type", "newest")
-	size, _ := strconv.Atoi(c.DefaultQuery("size", "10"))
-	offset, _ := strconv.Atoi(c.DefaultQuery("offset", "0"))
-
-	db := do.MustInvoke[*gorm.DB](s.injector)
-	var albums []models.AlbumID3
-
-	query := db.Limit(size).Offset(offset)
-
-	switch listType {
-	case "random":
-		query = query.Order("RANDOM()")
-	case "newest":
-		query = query.Order("created DESC")
-	case "alphabeticalByName":
-		query = query.Order("name ASC")
-	case "alphabeticalByArtist":
-		query = query.Order("artist ASC")
-	default:
-		query = query.Order("created DESC")
-	}
-
-	if err := query.Find(&albums).Error; err != nil {
-		s.sendResponse(c, models.NewErrorResponse(0, "Failed to fetch albums"))
+	albums, err := s.getAlbums(c)
+	if err != nil {
+		s.sendResponse(c, models.NewErrorResponse(0, err.Error()))
 		return
 	}
 
@@ -111,15 +113,32 @@ func (s *Subsonic) handleGetAlbumList(c *gin.Context) {
 }
 
 func (s *Subsonic) handleGetRandomSongs(c *gin.Context) {
-	size, _ := strconv.Atoi(c.DefaultQuery("size", "10"))
+	size, err := s.getQueryInt(c, "size", 10)
+	if err != nil {
+		s.sendResponse(c, models.NewErrorResponse(0, err.Error()))
+		return
+	}
 	genre := c.Query("genre")
-	fromYear, _ := strconv.Atoi(c.DefaultQuery("fromYear", "0"))
-	toYear, _ := strconv.Atoi(c.DefaultQuery("toYear", "3000"))
+	fromYear, err := s.getQueryInt(c, "fromYear", 0)
+	if err != nil {
+		s.sendResponse(c, models.NewErrorResponse(0, err.Error()))
+		return
+	}
+	toYear, err := s.getQueryInt(c, "toYear", 3000)
+	if err != nil {
+		s.sendResponse(c, models.NewErrorResponse(0, err.Error()))
+		return
+	}
+	musicFolderId := c.Query("musicFolderId")
 
 	db := do.MustInvoke[*gorm.DB](s.injector)
 	var songs []models.Child
 
 	query := db.Where("is_dir = ?", false).Limit(size).Order("RANDOM()")
+
+	if musicFolderId != "" {
+		query = query.Where("music_folder_id = ?", musicFolderId)
+	}
 
 	if genre != "" {
 		query = query.Joins("JOIN song_genres ON song_genres.child_id = children.id").
