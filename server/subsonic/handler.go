@@ -4,6 +4,7 @@ import (
 	"crypto/md5"
 	"fmt"
 	"net/http"
+	"strings"
 
 	"github.com/gin-gonic/gin"
 	"github.com/samber/do/v2"
@@ -23,79 +24,117 @@ func New(injector do.Injector) *Subsonic {
 
 func (s *Subsonic) RegisterRoutes(r *gin.Engine) *gin.RouterGroup {
 	rest := r.Group("/rest")
-	rest.Use(s.subsonicAuthMiddleware())
+	rest.Use(s.stripViewSuffix())
+	rest.Use(s.subsonicAuth())
 
 	// System
-	rest.GET("/ping.view", s.handlePing)
-	rest.GET("/getLicense.view", s.handleGetLicense)
+	rest.GET("/ping", s.handlePing)
+	rest.GET("/getLicense", s.handleGetLicense)
 
 	// Browsing
-	rest.GET("/getMusicFolders.view", s.handleGetMusicFolders)
-	rest.GET("/getIndexes.view", s.handleGetIndexes)
-	rest.GET("/getMusicDirectory.view", s.handleGetMusicDirectory)
-	rest.GET("/getGenres.view", s.handleGetGenres)
-	rest.GET("/getArtists.view", s.handleGetArtists)
-	rest.GET("/getArtist.view", s.handleGetArtist)
-	rest.GET("/getAlbum.view", s.handleGetAlbum)
-	rest.GET("/getSong.view", s.handleGetSong)
-	rest.GET("/getVideos.view", s.handleNotImplemented)
-	rest.GET("/getVideoInfo.view", s.handleNotImplemented)
-	rest.GET("/getNowPlaying.view", s.handleNotImplemented)
+	rest.GET("/getMusicFolders", s.handleGetMusicFolders)
+	rest.GET("/getIndexes", s.handleGetIndexes)
+	rest.GET("/getMusicDirectory", s.handleGetMusicDirectory)
+	rest.GET("/getGenres", s.handleGetGenres)
+	rest.GET("/getArtists", s.handleGetArtists)
+	rest.GET("/getArtist", s.handleGetArtist)
+	rest.GET("/getAlbum", s.handleGetAlbum)
+	rest.GET("/getSong", s.handleGetSong)
 
-	// Search
-	rest.GET("/search2.view", s.handleNotImplemented)
-	rest.GET("/search3.view", s.handleNotImplemented)
+	rest.GET("/getVideos", s.handleUnspported)
+	rest.GET("/getVideoInfo", s.handleUnspported)
+	rest.GET("/getArtistInfo", s.handleUnspported)
+
+	rest.GET("/getArtistInfo2", s.handleNotImplemented)
+	rest.GET("/getAlbumInfo", s.handleUnspported)
+	rest.GET("/getAlbumInfo2", s.handleNotImplemented)
+	rest.GET("/getSimilarSongs", s.handleUnspported)
+	rest.GET("/getSimilarSongs2", s.handleNotImplemented)
+	rest.GET("/getTopSongs", s.handleUnspported)
+
+	// Album/song lists
+	rest.GET("/getAlbumList", s.handleGetAlbumList)
+	rest.GET("/getAlbumList2", s.handleGetAlbumList2)
+	rest.GET("/getRandomSongs", s.handleGetRandomSongs)
+	rest.GET("/getSongsByGenre", s.handleNotImplemented)
+	rest.GET("/getNowPlaying", s.handleNotImplemented)
+	rest.GET("/getStarred", s.handleNotImplemented)
+	rest.GET("/getStarred2", s.handleNotImplemented)
+
+	// Searching
+	rest.GET("/search", s.handleSearch)
+	rest.GET("/search2", s.handleSearch2)
+	rest.GET("/search3", s.handleSearch3)
 
 	// Playlists
-	rest.GET("/getPlaylists.view", s.handleNotImplemented)
-	rest.GET("/getPlaylist.view", s.handleNotImplemented)
+	rest.GET("/getPlaylists", s.handleNotImplemented)
+	rest.GET("/getPlaylist", s.handleNotImplemented)
+	rest.GET("/createPlaylist", s.handleNotImplemented)
+	rest.GET("/updatePlaylist", s.handleNotImplemented)
+	rest.GET("/deletePlaylist", s.handleNotImplemented)
 
-	// Lists
-	rest.GET("/getAlbumList.view", s.handleNotImplemented)
-	rest.GET("/getAlbumList2.view", s.handleNotImplemented)
-	rest.GET("/getRandomSongs.view", s.handleNotImplemented)
-	rest.GET("/getSongsByGenre.view", s.handleNotImplemented)
+	// Media retrieval
+	rest.GET("/stream", s.handleStream)
+	rest.GET("/download", s.handleDownload)
+	rest.GET("/hls.m3u8", s.handleNotImplemented)
+	rest.GET("/getCaptions", s.handleNotImplemented)
+	rest.GET("/getCoverArt", s.handleGetCoverArt)
+	rest.GET("/getLyrics", s.handleNotImplemented)
+	rest.GET("/getAvatar", s.handleNotImplemented)
 
-	// Media
-	rest.GET("/stream.view", s.handleNotImplemented)
-	rest.GET("/download.view", s.handleNotImplemented)
-	rest.GET("/getCoverArt.view", s.handleNotImplemented)
-	rest.GET("/getLyrics.view", s.handleNotImplemented)
-	rest.GET("/getAvatar.view", s.handleNotImplemented)
-
-	// Podcasts
-	rest.GET("/getPodcasts.view", s.handleNotImplemented)
-	rest.GET("/getNewestPodcasts.view", s.handleNotImplemented)
-
-	// Radio
-	rest.GET("/getInternetRadioStations.view", s.handleNotImplemented)
-
-	// Bookmarks
-	rest.GET("/getBookmarks.view", s.handleNotImplemented)
-	rest.GET("/getPlayQueue.view", s.handleNotImplemented)
+	// Media annotation
+	rest.GET("/star", s.handleNotImplemented)
+	rest.GET("/unstar", s.handleNotImplemented)
+	rest.GET("/setRating", s.handleNotImplemented)
+	rest.GET("/scrobble", s.handleNotImplemented)
 
 	// Sharing
-	rest.GET("/getShares.view", s.handleNotImplemented)
+	rest.GET("/getShares", s.handleNotImplemented)
+	rest.GET("/createShare", s.handleNotImplemented)
+	rest.GET("/updateShare", s.handleNotImplemented)
+	rest.GET("/deleteShare", s.handleNotImplemented)
 
-	// Starred
-	rest.GET("/getStarred.view", s.handleNotImplemented)
-	rest.GET("/getStarred2.view", s.handleNotImplemented)
+	// Podcast
+	rest.GET("/getPodcasts", s.handleNotImplemented)
+	rest.GET("/getNewestPodcasts", s.handleNotImplemented)
+	rest.GET("/refreshPodcasts", s.handleNotImplemented)
+	rest.GET("/createPodcastChannel", s.handleNotImplemented)
+	rest.GET("/deletePodcastChannel", s.handleNotImplemented)
+	rest.GET("/deletePodcastEpisode", s.handleNotImplemented)
+	rest.GET("/downloadPodcastEpisode", s.handleNotImplemented)
 
-	// Info
-	rest.GET("/getAlbumInfo.view", s.handleNotImplemented)
-	rest.GET("/getArtistInfo.view", s.handleNotImplemented)
-	rest.GET("/getArtistInfo2.view", s.handleNotImplemented)
-	rest.GET("/getSimilarSongs.view", s.handleNotImplemented)
-	rest.GET("/getSimilarSongs2.view", s.handleNotImplemented)
-	rest.GET("/getTopSongs.view", s.handleNotImplemented)
+	// Jukebox
+	rest.GET("/jukeboxControl", s.handleNotImplemented)
 
-	// Scan
-	rest.GET("/getScanStatus.view", s.handleGetScanStatus)
-	rest.GET("/startScan.view", s.handleStartScan)
+	// Internet radio
+	rest.GET("/getInternetRadioStations", s.handleNotImplemented)
+	rest.GET("/createInternetRadioStation", s.handleNotImplemented)
+	rest.GET("/updateInternetRadioStation", s.handleNotImplemented)
+	rest.GET("/deleteInternetRadioStation", s.handleNotImplemented)
 
-	// User
-	rest.GET("/getUser.view", s.handleGetUser)
-	rest.GET("/getUsers.view", s.handleGetUsers)
+	// Chat
+	rest.GET("/getChatMessages", s.handleNotImplemented)
+	rest.GET("/addChatMessage", s.handleNotImplemented)
+
+	// User management
+	rest.GET("/getUser", s.handleGetUser)
+	rest.GET("/getUsers", s.handleGetUsers)
+	rest.GET("/createUser", s.handleNotImplemented)
+	rest.GET("/updateUser", s.handleNotImplemented)
+	rest.GET("/deleteUser", s.handleNotImplemented)
+	rest.GET("/changePassword", s.handleNotImplemented)
+
+	// Bookmarks
+	rest.GET("/getBookmarks", s.handleNotImplemented)
+	rest.GET("/createBookmark", s.handleNotImplemented)
+	rest.GET("/deleteBookmark", s.handleNotImplemented)
+	rest.GET("/getPlayQueue", s.handleNotImplemented)
+	rest.GET("/savePlayQueue", s.handleNotImplemented)
+
+	// Media library scanning
+	rest.GET("/getScanStatus", s.handleGetScanStatus)
+	rest.GET("/startScan", s.handleStartScan)
+
 	return rest
 }
 
@@ -108,11 +147,25 @@ func (s *Subsonic) sendResponse(c *gin.Context, resp *models.SubsonicResponse) {
 	}
 }
 
+func (s *Subsonic) handleUnspported(c *gin.Context) {
+	s.sendResponse(c, models.NewErrorResponse(0, "Not supported"))
+}
+
 func (s *Subsonic) handleNotImplemented(c *gin.Context) {
 	s.sendResponse(c, models.NewErrorResponse(0, "Not implemented"))
 }
 
-func (s *Subsonic) subsonicAuthMiddleware() gin.HandlerFunc {
+func (s *Subsonic) stripViewSuffix() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		path := c.Request.URL.Path
+		if strings.HasSuffix(path, ".view") {
+			c.Request.URL.Path = strings.TrimSuffix(path, ".view")
+		}
+		c.Next()
+	}
+}
+
+func (s *Subsonic) subsonicAuth() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		username := c.Query("u")
 		password := c.Query("p")
