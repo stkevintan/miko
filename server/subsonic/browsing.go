@@ -3,7 +3,6 @@ package subsonic
 import (
 	"path/filepath"
 	"strings"
-	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/samber/do/v2"
@@ -66,7 +65,7 @@ func (s *Subsonic) handleGetIndexes(c *gin.Context) {
 
 	resp := models.NewResponse(models.ResponseStatusOK)
 	resp.Indexes = &models.Indexes{
-		LastModified: time.Now().Unix(),
+		LastModified: lastScanTime.Load(),
 		Index:        indexes,
 	}
 	s.sendResponse(c, resp)
@@ -103,12 +102,15 @@ func (s *Subsonic) handleGetGenres(c *gin.Context) {
 	var genres []models.Genre
 
 	// Query genres with counts
-	db.Raw(`
+	if err := db.Raw(`
 		SELECT g.name, 
 		       (SELECT COUNT(*) FROM song_genres WHERE genre_name = g.name) as song_count,
 		       (SELECT COUNT(*) FROM album_genres WHERE genre_name = g.name) as album_count
 		FROM genres g
-	`).Scan(&genres)
+	`).Scan(&genres).Error; err != nil {
+		s.sendResponse(c, models.NewErrorResponse(0, "Failed to query genres"))
+		return
+	}
 
 	resp := models.NewResponse(models.ResponseStatusOK)
 	resp.Genres = &models.Genres{
@@ -121,11 +123,14 @@ func (s *Subsonic) handleGetArtists(c *gin.Context) {
 	db := do.MustInvoke[*gorm.DB](s.injector)
 	var artists []models.ArtistID3
 
-	db.Raw(`
+	if err := db.Raw(`
 		SELECT a.*, 
 		       (SELECT COUNT(*) FROM album_artists WHERE artist_id3_id = a.id) as album_count
 		FROM artist_id3 a
-	`).Scan(&artists)
+	`).Scan(&artists).Error; err != nil {
+		s.sendResponse(c, models.NewErrorResponse(0, "Failed to query artists"))
+		return
+	}
 
 	// Group by index
 	indexMap := make(map[string][]models.ArtistID3)

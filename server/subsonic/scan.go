@@ -7,7 +7,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
-	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -17,19 +17,20 @@ import (
 	"github.com/stkevintan/miko/pkg/log"
 	"go.senan.xyz/taglib"
 	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 )
 
 var (
-	scanMutex  sync.Mutex
-	isScanning bool
-	scanCount  int64
+	isScanning   atomic.Bool
+	scanCount    atomic.Int64
+	lastScanTime atomic.Int64
 )
 
 func (s *Subsonic) handleGetScanStatus(c *gin.Context) {
 	resp := models.NewResponse(models.ResponseStatusOK)
 	resp.ScanStatus = &models.ScanStatus{
-		Scanning: isScanning,
-		Count:    scanCount,
+		Scanning: isScanning.Load(),
+		Count:    scanCount.Load(),
 	}
 	s.sendResponse(c, resp)
 }
@@ -44,23 +45,27 @@ func (s *Subsonic) handleStartScan(c *gin.Context) {
 }
 
 func (s *Subsonic) scan() {
-	scanMutex.Lock()
-	if isScanning {
-		scanMutex.Unlock()
+	if !isScanning.CompareAndSwap(false, true) {
 		return
 	}
-	isScanning = true
-	scanCount = 0
-	scanMutex.Unlock()
+	scanCount.Store(0)
 
-	defer func() {
-		scanMutex.Lock()
-		isScanning = false
-		scanMutex.Unlock()
-	}()
+	defer isScanning.Store(false)
 
 	db := do.MustInvoke[*gorm.DB](s.injector)
 	cfg := do.MustInvoke[*config.Config](s.injector)
+
+	seenArtists := make(map[string]bool)
+	seenGenres := make(map[string]bool)
+	seenAlbums := make(map[string]bool)
+
+	var children []models.Child
+	flushChildren := func() {
+		if len(children) > 0 {
+			db.Clauses(clause.OnConflict{UpdateAll: true}).CreateInBatches(children, 100)
+			children = children[:0]
+		}
+	}
 
 	for _, rootPath := range cfg.Subsonic.Folders {
 		var folder models.MusicFolder
@@ -68,6 +73,7 @@ func (s *Subsonic) scan() {
 
 		filepath.WalkDir(rootPath, func(path string, d fs.DirEntry, err error) error {
 			if err != nil {
+				log.Warn("Error accessing path %q: %v", path, err)
 				return nil
 			}
 
@@ -92,7 +98,10 @@ func (s *Subsonic) scan() {
 					Path:          path,
 					MusicFolderID: folder.ID,
 				}
-				db.Save(&child)
+				children = append(children, child)
+				if len(children) >= 100 {
+					flushChildren()
+				}
 			} else {
 				// Check if it's a music file
 				ext := strings.ToLower(filepath.Ext(path))
@@ -100,7 +109,11 @@ func (s *Subsonic) scan() {
 					return nil
 				}
 
-				info, _ := d.Info()
+				info, err := d.Info()
+				if err != nil {
+					log.Warn("Failed to get file info for %q: %v", path, err)
+					return nil
+				}
 				child := models.Child{
 					ID:            id,
 					Parent:        parentID,
@@ -120,15 +133,10 @@ func (s *Subsonic) scan() {
 					}
 					if a, ok := tags[taglib.Artist]; ok && len(a) > 0 {
 						child.Artist = strings.Join(a, "; ")
-						for _, ar := range a {
-							artist := models.ArtistID3{
-								ID:   fmt.Sprintf("%x", md5.Sum([]byte(ar))),
-								Name: ar,
-							}
-							db.Save(&artist)
-							child.Artists = append(child.Artists, artist)
+						child.Artists = s.getArtistsFromNames(db, a, seenArtists)
+						if len(child.Artists) > 0 {
+							child.ArtistID = child.Artists[0].ID
 						}
-						child.ArtistID = child.Artists[0].ID
 					}
 					if al, ok := tags[taglib.Album]; ok && len(al) > 0 {
 						child.Album = al[0]
@@ -141,11 +149,7 @@ func (s *Subsonic) scan() {
 					}
 					if g, ok := tags[taglib.Genre]; ok && len(g) > 0 {
 						child.Genre = strings.Join(g, "; ")
-						for _, genName := range g {
-							genre := models.Genre{Name: genName}
-							db.Save(&genre)
-							child.Genres = append(child.Genres, genre)
-						}
+						child.Genres = s.getGenresFromNames(db, g, seenGenres)
 					}
 
 					// Extract properties
@@ -159,26 +163,15 @@ func (s *Subsonic) scan() {
 						// Try to find Album Artist
 						var albumArtists []models.ArtistID3
 						albumArtistStr := ""
-						if aa, ok := tags["ALBUMARTIST"]; ok && len(aa) > 0 {
+
+						aa, ok := tags["ALBUMARTIST"]
+						if !ok || len(aa) == 0 {
+							aa, ok = tags["ALBUM ARTIST"]
+						}
+
+						if ok && len(aa) > 0 {
 							albumArtistStr = strings.Join(aa, "; ")
-							for _, name := range aa {
-								artist := models.ArtistID3{
-									ID:   fmt.Sprintf("%x", md5.Sum([]byte(name))),
-									Name: name,
-								}
-								db.Save(&artist)
-								albumArtists = append(albumArtists, artist)
-							}
-						} else if aa, ok := tags["ALBUM ARTIST"]; ok && len(aa) > 0 {
-							albumArtistStr = strings.Join(aa, "; ")
-							for _, name := range aa {
-								artist := models.ArtistID3{
-									ID:   fmt.Sprintf("%x", md5.Sum([]byte(name))),
-									Name: name,
-								}
-								db.Save(&artist)
-								albumArtists = append(albumArtists, artist)
-							}
+							albumArtists = s.getArtistsFromNames(db, aa, seenArtists)
 						}
 
 						groupArtist := child.Artist
@@ -191,25 +184,61 @@ func (s *Subsonic) scan() {
 						albumID := fmt.Sprintf("%x", md5.Sum([]byte(groupArtist+child.Album)))
 						child.AlbumID = albumID
 
-						album := models.AlbumID3{
-							ID:       albumID,
-							Name:     child.Album,
-							Artist:   groupArtist,
-							ArtistID: groupArtists[0].ID,
-							Artists:  groupArtists,
-							Created:  time.Now(),
+						if !seenAlbums[albumID] {
+							album := models.AlbumID3{
+								ID:       albumID,
+								Name:     child.Album,
+								Artist:   groupArtist,
+								ArtistID: groupArtists[0].ID,
+								Artists:  groupArtists,
+								Created:  time.Now(),
+							}
+							db.Clauses(clause.OnConflict{UpdateAll: true}).Create(&album)
+							seenAlbums[albumID] = true
 						}
-						db.Save(&album)
 					}
 				}
 
-				db.Save(&child)
-				scanMutex.Lock()
-				scanCount++
-				scanMutex.Unlock()
+				children = append(children, child)
+				if len(children) >= 100 {
+					flushChildren()
+				}
+				scanCount.Add(1)
 			}
 			return nil
 		})
+		flushChildren()
 	}
-	log.Info("Scan completed. Total files: %d", scanCount)
+	lastScanTime.Store(time.Now().Unix())
+	log.Info("Scan completed. Total files: %d", scanCount.Load())
+}
+
+func (s *Subsonic) getArtistsFromNames(db *gorm.DB, names []string, seen map[string]bool) []models.ArtistID3 {
+	var artists []models.ArtistID3
+	for _, name := range names {
+		artistID := fmt.Sprintf("%x", md5.Sum([]byte(name)))
+		artist := models.ArtistID3{
+			ID:   artistID,
+			Name: name,
+		}
+		if !seen[artistID] {
+			db.Clauses(clause.OnConflict{UpdateAll: true}).Create(&artist)
+			seen[artistID] = true
+		}
+		artists = append(artists, artist)
+	}
+	return artists
+}
+
+func (s *Subsonic) getGenresFromNames(db *gorm.DB, names []string, seen map[string]bool) []models.Genre {
+	var genres []models.Genre
+	for _, name := range names {
+		genre := models.Genre{Name: name}
+		if !seen[name] {
+			db.Clauses(clause.OnConflict{UpdateAll: true}).Create(&genre)
+			seen[name] = true
+		}
+		genres = append(genres, genre)
+	}
+	return genres
 }
