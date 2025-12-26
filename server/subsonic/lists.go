@@ -147,3 +147,115 @@ func (s *Subsonic) handleGetRandomSongs(c *gin.Context) {
 	}
 	s.sendResponse(c, resp)
 }
+
+func (s *Subsonic) handleGetSongsByGenre(c *gin.Context) {
+	genre := c.Query("genre")
+	if genre == "" {
+		s.sendResponse(c, models.NewErrorResponse(10, "Genre is required"))
+		return
+	}
+
+	var err error
+	count := s.getQueryIntOrDefault(c, "count", 10, &err)
+	offset := s.getQueryIntOrDefault(c, "offset", 0, &err)
+	if err != nil {
+		s.sendResponse(c, models.NewErrorResponse(0, err.Error()))
+		return
+	}
+
+	db := do.MustInvoke[*gorm.DB](s.injector)
+	var songs []models.Child
+	err = db.Joins("JOIN song_genres ON song_genres.child_id = children.id").
+		Where("song_genres.genre_name = ?", genre).
+		Limit(count).Offset(offset).
+		Find(&songs).Error
+
+	if err != nil {
+		s.sendResponse(c, models.NewErrorResponse(0, err.Error()))
+		return
+	}
+
+	resp := models.NewResponse(models.ResponseStatusOK)
+	resp.SongsByGenre = &models.Songs{
+		Song: songs,
+	}
+	s.sendResponse(c, resp)
+}
+
+func (s *Subsonic) handleGetNowPlaying(c *gin.Context) {
+	resp := models.NewResponse(models.ResponseStatusOK)
+	resp.NowPlaying = &models.NowPlaying{
+		Entry: []models.NowPlayingEntry{},
+	}
+	s.sendResponse(c, resp)
+}
+
+func (s *Subsonic) handleGetStarred(c *gin.Context) {
+	db := do.MustInvoke[*gorm.DB](s.injector)
+
+	var artists []models.ArtistID3
+	db.Where("starred IS NOT NULL").Find(&artists)
+
+	var albums []models.AlbumID3
+	db.Where("starred IS NOT NULL").Find(&albums)
+
+	var songs []models.Child
+	db.Where("is_dir = ? AND starred IS NOT NULL", false).Find(&songs)
+
+	// Convert ArtistID3 to Artist
+	starredArtists := make([]models.Artist, len(artists))
+	for i, a := range artists {
+		starredArtists[i] = models.Artist{
+			ID:             a.ID,
+			Name:           a.Name,
+			ArtistImageUrl: a.ArtistImageUrl,
+			Starred:        a.Starred,
+		}
+	}
+
+	// Convert AlbumID3 to Child
+	starredAlbums := make([]models.Child, len(albums))
+	for i, a := range albums {
+		starredAlbums[i] = models.Child{
+			ID:       a.ID,
+			Title:    a.Name,
+			Artist:   a.Artist,
+			ArtistID: a.ArtistID,
+			CoverArt: a.CoverArt,
+			IsDir:    true,
+			Created:  &a.Created,
+			Year:     a.Year,
+			Genre:    a.Genre,
+			Starred:  a.Starred,
+		}
+	}
+
+	resp := models.NewResponse(models.ResponseStatusOK)
+	resp.Starred = &models.Starred{
+		Artist: starredArtists,
+		Album:  starredAlbums,
+		Song:   songs,
+	}
+	s.sendResponse(c, resp)
+}
+
+func (s *Subsonic) handleGetStarred2(c *gin.Context) {
+	db := do.MustInvoke[*gorm.DB](s.injector)
+
+	var artists []models.ArtistID3
+	db.Where("starred IS NOT NULL").Find(&artists)
+
+	var albums []models.AlbumID3
+	db.Where("starred IS NOT NULL").Find(&albums)
+
+	var songs []models.Child
+	db.Where("is_dir = ? AND starred IS NOT NULL", false).Find(&songs)
+
+	resp := models.NewResponse(models.ResponseStatusOK)
+	resp.Starred2 = &models.Starred2{
+		Artist: artists,
+		Album:  albums,
+		Song:   songs,
+	}
+	s.sendResponse(c, resp)
+}
