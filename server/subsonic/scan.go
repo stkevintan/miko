@@ -181,23 +181,24 @@ func (s *Subsonic) scan() {
 							groupArtists = albumArtists
 						}
 
-						// Only create album if we have at least one artist
-						if len(groupArtists) > 0 {
-							albumID := fmt.Sprintf("%x", md5.Sum([]byte(groupArtist+child.Album)))
-							child.AlbumID = albumID
+						// Create album ID based on artist (or empty string) + album name
+						albumID := fmt.Sprintf("%x", md5.Sum([]byte(groupArtist+child.Album)))
+						child.AlbumID = albumID
 
-							if !seenAlbums[albumID] {
-								album := models.AlbumID3{
-									ID:       albumID,
-									Name:     child.Album,
-									Artist:   groupArtist,
-									ArtistID: groupArtists[0].ID,
-									Artists:  groupArtists,
-									Created:  time.Now(),
-								}
-								db.Clauses(clause.OnConflict{UpdateAll: true}).Create(&album)
-								seenAlbums[albumID] = true
+						if !seenAlbums[albumID] {
+							album := models.AlbumID3{
+								ID:      albumID,
+								Name:    child.Album,
+								Artist:  groupArtist,
+								Created: time.Now(),
 							}
+							// Set ArtistID and Artists only if we have at least one artist
+							if len(groupArtists) > 0 {
+								album.ArtistID = groupArtists[0].ID
+								album.Artists = groupArtists
+							}
+							db.Clauses(clause.OnConflict{UpdateAll: true}).Create(&album)
+							seenAlbums[albumID] = true
 						}
 					}
 				}
