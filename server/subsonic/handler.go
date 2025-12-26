@@ -7,7 +7,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/samber/do/v2"
-	"github.com/stkevintan/miko/server/models"
+	"github.com/stkevintan/miko/models"
 	"gorm.io/gorm"
 )
 
@@ -30,14 +30,14 @@ func (s *Subsonic) RegisterRoutes(r *gin.Engine) *gin.RouterGroup {
 	rest.GET("/getLicense.view", s.handleGetLicense)
 
 	// Browsing
-	rest.GET("/getMusicFolders.view", s.handleNotImplemented)
-	rest.GET("/getIndexes.view", s.handleNotImplemented)
-	rest.GET("/getMusicDirectory.view", s.handleNotImplemented)
-	rest.GET("/getGenres.view", s.handleNotImplemented)
-	rest.GET("/getArtists.view", s.handleNotImplemented)
-	rest.GET("/getArtist.view", s.handleNotImplemented)
-	rest.GET("/getAlbum.view", s.handleNotImplemented)
-	rest.GET("/getSong.view", s.handleNotImplemented)
+	rest.GET("/getMusicFolders.view", s.handleGetMusicFolders)
+	rest.GET("/getIndexes.view", s.handleGetIndexes)
+	rest.GET("/getMusicDirectory.view", s.handleGetMusicDirectory)
+	rest.GET("/getGenres.view", s.handleGetGenres)
+	rest.GET("/getArtists.view", s.handleGetArtists)
+	rest.GET("/getArtist.view", s.handleGetArtist)
+	rest.GET("/getAlbum.view", s.handleGetAlbum)
+	rest.GET("/getSong.view", s.handleGetSong)
 	rest.GET("/getVideos.view", s.handleNotImplemented)
 	rest.GET("/getVideoInfo.view", s.handleNotImplemented)
 	rest.GET("/getNowPlaying.view", s.handleNotImplemented)
@@ -90,7 +90,8 @@ func (s *Subsonic) RegisterRoutes(r *gin.Engine) *gin.RouterGroup {
 	rest.GET("/getTopSongs.view", s.handleNotImplemented)
 
 	// Scan
-	rest.GET("/getScanStatus.view", s.handleNotImplemented)
+	rest.GET("/getScanStatus.view", s.handleGetScanStatus)
+	rest.GET("/startScan.view", s.handleStartScan)
 
 	// User
 	rest.GET("/getUser.view", s.handleNotImplemented)
@@ -109,21 +110,6 @@ func (s *Subsonic) sendResponse(c *gin.Context, resp *models.SubsonicResponse) {
 
 func (s *Subsonic) handleNotImplemented(c *gin.Context) {
 	s.sendResponse(c, models.NewErrorResponse(0, "Not implemented"))
-}
-
-func (s *Subsonic) handlePing(c *gin.Context) {
-	resp := models.NewResponse(models.ResponseStatusOK)
-	resp.Ping = &models.Ping{}
-	s.sendResponse(c, resp)
-}
-
-func (s *Subsonic) handleGetLicense(c *gin.Context) {
-	resp := models.NewResponse(models.ResponseStatusOK)
-	resp.License = &models.License{
-		Valid: true,
-		Email: "miko@example.com",
-	}
-	s.sendResponse(c, resp)
 }
 
 func (s *Subsonic) subsonicAuthMiddleware() gin.HandlerFunc {

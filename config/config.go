@@ -28,6 +28,7 @@ type Config struct {
 	CookieCloud *cookiecloud.Config `json:"cookiecloud" mapstructure:"cookiecloud"`
 	Provider    *provider.Config    `json:"provider" mapstructure:"provider"`
 	Database    *DatabaseConfig     `json:"database" mapstructure:"database"`
+	Subsonic    *SubsonicConfig     `json:"subsonic" mapstructure:"subsonic"`
 }
 
 func (c *Config) Validate() error {
@@ -46,12 +47,19 @@ func (c *Config) Validate() error {
 	if c.Database == nil {
 		return errors.New("database config is required")
 	}
+	if c.Subsonic == nil {
+		return errors.New("subsonic config is required")
+	}
 	return nil
 }
 
 type ServerConfig struct {
 	Port      int    `json:"port" mapstructure:"port"`
 	JWTSecret string `json:"jwtSecret" mapstructure:"jwtSecret"`
+}
+
+type SubsonicConfig struct {
+	Folders []string `json:"folders" mapstructure:"folders"`
 }
 
 type DatabaseConfig struct {
@@ -129,5 +137,10 @@ func (c *Config) expandEnv() {
 	}
 	if c.Database != nil && c.Database.DSN != "" {
 		c.Database.DSN = os.ExpandEnv(c.Database.DSN)
+	}
+	if c.Subsonic != nil {
+		for i, folder := range c.Subsonic.Folders {
+			c.Subsonic.Folders[i] = os.ExpandEnv(folder)
+		}
 	}
 }

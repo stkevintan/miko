@@ -35,10 +35,10 @@ import (
 	"github.com/samber/do/v2"
 	"github.com/stkevintan/miko/config"
 	_ "github.com/stkevintan/miko/docs" // This line is important for swagger docs
+	"github.com/stkevintan/miko/models"
 	"github.com/stkevintan/miko/pkg/cookiecloud"
 	"github.com/stkevintan/miko/pkg/log"
 	"github.com/stkevintan/miko/server"
-	"github.com/stkevintan/miko/server/models"
 	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
 )
@@ -75,7 +75,15 @@ func main() {
 	}
 
 	// Auto-migrate models
-	err = db.AutoMigrate(&models.User{}, &cookiecloud.Identity{})
+	err = db.AutoMigrate(
+		&models.User{},
+		&cookiecloud.Identity{},
+		&models.MusicFolder{},
+		&models.ArtistID3{},
+		&models.AlbumID3{},
+		&models.Child{},
+		&models.Genre{},
+	)
 	if err != nil {
 		log.Fatalf("Failed to migrate database: %v", err)
 	}

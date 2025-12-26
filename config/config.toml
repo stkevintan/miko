@@ -24,3 +24,6 @@ retry = 0
 [database]
 driver = "sqlite"
 dsn = "${HOME}/.miko/miko.db"
+
+[subsonic]
+folders = ["${HOME}/Music"]
