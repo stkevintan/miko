@@ -6,8 +6,8 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/samber/do/v2"
+	"github.com/stkevintan/miko/models"
 	"github.com/stkevintan/miko/pkg/provider"
-	"github.com/stkevintan/miko/server/models"
 )
 
 // handleUser retrieves user information from a music platform

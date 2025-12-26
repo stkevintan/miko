@@ -8,7 +8,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/golang-jwt/jwt/v5"
-	"github.com/stkevintan/miko/server/models"
+	"github.com/stkevintan/miko/models"
 )
 
 type Claims struct {

@@ -4,7 +4,7 @@ import (
 	"net/http"
 
 	"github.com/gin-gonic/gin"
-	"github.com/stkevintan/miko/server/models"
+	"github.com/stkevintan/miko/models"
 )
 
 // handleLogin authenticates a user and returns a JWT token

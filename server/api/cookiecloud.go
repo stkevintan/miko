@@ -5,8 +5,8 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/samber/do/v2"
+	"github.com/stkevintan/miko/models"
 	"github.com/stkevintan/miko/pkg/cookiecloud"
-	"github.com/stkevintan/miko/server/models"
 )
 
 // handleCookiecloudIdentity updates CookieCloud identity
