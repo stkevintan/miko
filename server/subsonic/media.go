@@ -1,6 +1,7 @@
 package subsonic
 
 import (
+	"mime"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -47,7 +48,7 @@ func (s *Subsonic) handleDownload(c *gin.Context) {
 		return
 	}
 
-	c.Header("Content-Disposition", "attachment; filename=\""+filepath.Base(song.Path)+"\"")
+	c.Header("Content-Disposition", mime.FormatMediaType("attachment", map[string]string{"filename": filepath.Base(song.Path)}))
 	c.File(song.Path)
 }
 

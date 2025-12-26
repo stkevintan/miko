@@ -168,6 +168,15 @@ func (s *Subsonic) getQueryInt(c *gin.Context, key string, defaultValue int) (in
 	return val, nil
 }
 
+func (s *Subsonic) getQueryIntOrDefault(c *gin.Context, key string, defaultValue int, err *error) int {
+	if *err != nil {
+		return 0
+	}
+	var val int
+	val, *err = s.getQueryInt(c, key, defaultValue)
+	return val
+}
+
 func (s *Subsonic) stripViewSuffix() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		path := c.Request.URL.Path
