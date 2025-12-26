@@ -181,15 +181,21 @@ func (s *Subsonic) scan() {
 							groupArtists = albumArtists
 						}
 
-						// Create album ID based on artist (or empty string) + album name
-						albumID := fmt.Sprintf("%x", md5.Sum([]byte(groupArtist+child.Album)))
+						// Use "Unknown Artist" for albums without artist information
+						displayArtist := groupArtist
+						if displayArtist == "" {
+							displayArtist = "Unknown Artist"
+						}
+
+						// Create album ID with delimiter to avoid collisions
+						albumID := fmt.Sprintf("%x", md5.Sum([]byte(displayArtist+"|"+child.Album)))
 						child.AlbumID = albumID
 
 						if !seenAlbums[albumID] {
 							album := models.AlbumID3{
 								ID:      albumID,
 								Name:    child.Album,
-								Artist:  groupArtist,
+								Artist:  displayArtist,
 								Created: time.Now(),
 							}
 							// Set ArtistID and Artists only if we have at least one artist
