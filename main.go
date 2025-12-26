@@ -77,6 +77,7 @@ func main() {
 	// Auto-migrate models
 	err = db.AutoMigrate(
 		&models.User{},
+		&models.SubsonicSettings{},
 		&cookiecloud.Identity{},
 		&models.MusicFolder{},
 		&models.ArtistID3{},
