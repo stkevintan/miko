@@ -34,12 +34,13 @@ func (u *User) AfterCreate(tx *gorm.DB) (err error) {
 func (u *User) AfterFind(tx *gorm.DB) (err error) {
 	if u.SubsonicSettings == nil {
 		u.SubsonicSettings = &SubsonicSettings{
-			StreamRole:   true,
-			DownloadRole: true,
-			PlaylistRole: true,
-			CoverArtRole: true,
-			CommentRole:  true,
-			ShareRole:    true,
+			ScrobblingEnabled: true,
+			StreamRole:        true,
+			DownloadRole:      true,
+			PlaylistRole:      true,
+			CoverArtRole:      true,
+			CommentRole:       true,
+			ShareRole:         true,
 		}
 	}
 	return nil

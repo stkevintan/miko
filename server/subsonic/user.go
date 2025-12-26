@@ -36,11 +36,8 @@ func (s *Subsonic) handleGetUsers(c *gin.Context) {
 	db := do.MustInvoke[*gorm.DB](s.injector)
 	var users []models.User
 	if err := db.Preload("SubsonicSettings").Find(&users).Error; err != nil {
-		if errors.Is(err, gorm.ErrRecordNotFound) {
-			s.sendResponse(c, models.NewErrorResponse(70, "User not found"))
-		} else {
-			s.sendResponse(c, models.NewErrorResponse(0, "An internal error occurred"))
-		}
+		// err should never be ErrRecordNotFound here
+		s.sendResponse(c, models.NewErrorResponse(0, "An internal error occurred"))
 		return
 	}
 
