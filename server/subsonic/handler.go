@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+	"sync"
 
 	"github.com/gin-gonic/gin"
 	"github.com/samber/do/v2"
@@ -14,12 +15,14 @@ import (
 )
 
 type Subsonic struct {
-	injector do.Injector
+	injector   do.Injector
+	nowPlaying sync.Map // key: string (username:playerId), value: models.NowPlayingRecord
 }
 
 func New(injector do.Injector) *Subsonic {
 	return &Subsonic{
-		injector: injector,
+		injector:   injector,
+		nowPlaying: sync.Map{},
 	}
 }
 
@@ -87,7 +90,7 @@ func (s *Subsonic) RegisterRoutes(r *gin.Engine) *gin.RouterGroup {
 	rest.GET("/star", s.handleNotImplemented)
 	rest.GET("/unstar", s.handleNotImplemented)
 	rest.GET("/setRating", s.handleNotImplemented)
-	rest.GET("/scrobble", s.handleNotImplemented)
+	rest.GET("/scrobble", s.handleScrobble)
 
 	// Sharing
 	rest.GET("/getShares", s.handleNotImplemented)

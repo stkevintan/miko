@@ -1,10 +1,13 @@
 package subsonic
 
 import (
+	"fmt"
+	"hash/adler32"
 	"mime"
 	"net/http"
 	"os"
 	"path/filepath"
+	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/samber/do/v2"
@@ -96,4 +99,56 @@ func (s *Subsonic) findCoverArt(dir string) string {
 		}
 	}
 	return ""
+}
+
+func (s *Subsonic) handleUpdateNowPlaying(c *gin.Context) {
+	id := c.Query("id")
+	if id == "" {
+		s.sendResponse(c, models.NewErrorResponse(10, "ID is required"))
+		return
+	}
+
+	user, _ := c.Get("user")
+	u := user.(models.User)
+	clientName := c.DefaultQuery("c", "Unknown")
+	playerId := int(adler32.Checksum([]byte(clientName)))
+
+	// Update in-memory now playing record
+	key := fmt.Sprintf("%s:%s", u.Username, clientName)
+	s.nowPlaying.Store(key, models.NowPlayingRecord{
+		Username:   u.Username,
+		ChildID:    id,
+		PlayerID:   playerId,
+		PlayerName: clientName,
+		UpdatedAt:  time.Now(),
+	})
+
+	s.sendResponse(c, models.NewResponse(models.ResponseStatusOK))
+}
+
+func (s *Subsonic) handleScrobble(c *gin.Context) {
+	id := c.Query("id")
+	if id == "" {
+		s.sendResponse(c, models.NewErrorResponse(10, "ID is required"))
+		return
+	}
+
+	submission := c.Query("submission")
+	if submission == "false" {
+		// If submission is false, it's just an update now playing call
+		s.handleUpdateNowPlaying(c)
+		return
+	}
+
+	db := do.MustInvoke[*gorm.DB](s.injector)
+	db.Model(&models.Child{}).Where("id = ?", id).UpdateColumn("play_count", gorm.Expr("play_count + 1"))
+
+	// Remove now playing record since it's now scrobbled (finished)
+	user, _ := c.Get("user")
+	u := user.(models.User)
+	clientName := c.DefaultQuery("c", "Unknown")
+	key := fmt.Sprintf("%s:%s", u.Username, clientName)
+	s.nowPlaying.Delete(key)
+
+	s.sendResponse(c, models.NewResponse(models.ResponseStatusOK))
 }
