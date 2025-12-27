@@ -35,13 +35,8 @@ jobs:
 
     - name: Build application
       run: |
-        if [[ "${{ github.ref_type }}" == "tag" ]]; then
-          CC=aarch64-linux-gnu-gcc ./scripts/build.sh --release linux/arm64
-          ./scripts/build.sh --release linux/amd64
-        else
-          CC=aarch64-linux-gnu-gcc ./scripts/build.sh --dev linux/arm64
-          ./scripts/build.sh --dev linux/amd64
-        fi
+        CC=aarch64-linux-gnu-gcc ./scripts/build.sh --release linux/arm64
+        ./scripts/build.sh --release linux/amd64
 
     - name: Set up Docker Buildx
       uses: docker/setup-buildx-action@v3
