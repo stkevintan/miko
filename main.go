@@ -84,6 +84,8 @@ func main() {
 		&models.AlbumID3{},
 		&models.Child{},
 		&models.Genre{},
+		&models.PlaylistRecord{},
+		&models.PlaylistSong{},
 	)
 	if err != nil {
 		log.Fatalf("Failed to migrate database: %v", err)

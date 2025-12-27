@@ -10,8 +10,8 @@ import (
 func (s *Subsonic) handleSearch(c *gin.Context) {
 	query := c.Query("query")
 	var err error
-	count := s.getQueryIntOrDefault(c, "count", 20, &err)
-	offset := s.getQueryIntOrDefault(c, "offset", 0, &err)
+	count := getQueryIntOrDefault(c, "count", 20, &err)
+	offset := getQueryIntOrDefault(c, "offset", 0, &err)
 	if err != nil {
 		s.sendResponse(c, models.NewErrorResponse(0, err.Error()))
 		return
@@ -45,12 +45,12 @@ func (s *Subsonic) handleSearch(c *gin.Context) {
 func (s *Subsonic) searchCommon(c *gin.Context) ([]models.ArtistID3, []models.AlbumID3, []models.Child, error) {
 	query := c.Query("query")
 	var err error
-	artistCount := s.getQueryIntOrDefault(c, "artistCount", 20, &err)
-	artistOffset := s.getQueryIntOrDefault(c, "artistOffset", 0, &err)
-	albumCount := s.getQueryIntOrDefault(c, "albumCount", 20, &err)
-	albumOffset := s.getQueryIntOrDefault(c, "albumOffset", 0, &err)
-	songCount := s.getQueryIntOrDefault(c, "songCount", 20, &err)
-	songOffset := s.getQueryIntOrDefault(c, "songOffset", 0, &err)
+	artistCount := getQueryIntOrDefault(c, "artistCount", 20, &err)
+	artistOffset := getQueryIntOrDefault(c, "artistOffset", 0, &err)
+	albumCount := getQueryIntOrDefault(c, "albumCount", 20, &err)
+	albumOffset := getQueryIntOrDefault(c, "albumOffset", 0, &err)
+	songCount := getQueryIntOrDefault(c, "songCount", 20, &err)
+	songOffset := getQueryIntOrDefault(c, "songOffset", 0, &err)
 	if err != nil {
 		return nil, nil, nil, err
 	}
