@@ -9,7 +9,7 @@ import (
 	"gorm.io/gorm"
 )
 
-func (s *Subsonic) getAlbums(c *gin.Context) ([]models.AlbumID3, error) {
+func getAlbums(c *gin.Context, s *Subsonic) ([]models.AlbumID3, error) {
 	listType := c.DefaultQuery("type", "newest")
 	var err error
 	size := s.getQueryIntOrDefault(c, "size", 10, &err)
@@ -58,7 +58,7 @@ func (s *Subsonic) getAlbums(c *gin.Context) ([]models.AlbumID3, error) {
 }
 
 func (s *Subsonic) handleGetAlbumList2(c *gin.Context) {
-	albums, err := s.getAlbums(c)
+	albums, err := getAlbums(c, s)
 	if err != nil {
 		s.sendResponse(c, models.NewErrorResponse(0, err.Error()))
 		return
@@ -77,7 +77,7 @@ func (s *Subsonic) handleGetAlbumList(c *gin.Context) {
 	// Actually it returns <albumList> which is same as <albumList2> but with different element names.
 	// For simplicity, let's just use the same logic but return AlbumList.
 
-	albums, err := s.getAlbums(c)
+	albums, err := getAlbums(c, s)
 	if err != nil {
 		s.sendResponse(c, models.NewErrorResponse(0, err.Error()))
 		return
@@ -196,7 +196,10 @@ func (s *Subsonic) handleGetNowPlaying(c *gin.Context) {
 	entries := make([]models.NowPlayingEntry, 0)
 
 	s.nowPlaying.Range(func(key, value interface{}) bool {
-		record := value.(models.NowPlayingRecord)
+		record, ok := value.(models.NowPlayingRecord)
+		if !ok {
+			return true
+		}
 
 		// Clean up records older than 10 minutes
 		if record.UpdatedAt.Before(tenMinutesAgo) {
@@ -224,7 +227,7 @@ func (s *Subsonic) handleGetNowPlaying(c *gin.Context) {
 	s.sendResponse(c, resp)
 }
 
-func (s *Subsonic) handleGetStarred(c *gin.Context) {
+func getStarredItems(c *gin.Context, s *Subsonic) ([]models.ArtistID3, []models.AlbumID3, []models.Child, error) {
 	db := do.MustInvoke[*gorm.DB](s.injector)
 	musicFolderId := c.Query("musicFolderId")
 
@@ -235,7 +238,9 @@ func (s *Subsonic) handleGetStarred(c *gin.Context) {
 			Where("children.music_folder_id = ?", musicFolderId).
 			Group("artist_id3s.id")
 	}
-	artistQuery.Find(&artists)
+	if err := artistQuery.Find(&artists).Error; err != nil {
+		return nil, nil, nil, err
+	}
 
 	var albums []models.AlbumID3
 	albumQuery := db.Where("starred IS NOT NULL")
@@ -244,14 +249,28 @@ func (s *Subsonic) handleGetStarred(c *gin.Context) {
 			Where("children.music_folder_id = ?", musicFolderId).
 			Group("album_id3s.id")
 	}
-	albumQuery.Find(&albums)
+	if err := albumQuery.Find(&albums).Error; err != nil {
+		return nil, nil, nil, err
+	}
 
 	var songs []models.Child
 	songQuery := db.Where("is_dir = ? AND starred IS NOT NULL", false)
 	if musicFolderId != "" {
 		songQuery = songQuery.Where("music_folder_id = ?", musicFolderId)
 	}
-	songQuery.Find(&songs)
+	if err := songQuery.Find(&songs).Error; err != nil {
+		return nil, nil, nil, err
+	}
+
+	return artists, albums, songs, nil
+}
+
+func (s *Subsonic) handleGetStarred(c *gin.Context) {
+	artists, albums, songs, err := getStarredItems(c, s)
+	if err != nil {
+		s.sendResponse(c, models.NewErrorResponse(0, err.Error()))
+		return
+	}
 
 	// Convert ArtistID3 to Artist
 	starredArtists := make([]models.Artist, len(artists))
@@ -291,33 +310,11 @@ func (s *Subsonic) handleGetStarred(c *gin.Context) {
 }
 
 func (s *Subsonic) handleGetStarred2(c *gin.Context) {
-	db := do.MustInvoke[*gorm.DB](s.injector)
-	musicFolderId := c.Query("musicFolderId")
-
-	var artists []models.ArtistID3
-	artistQuery := db.Where("starred IS NOT NULL")
-	if musicFolderId != "" {
-		artistQuery = artistQuery.Joins("JOIN children ON children.artist_id = artist_id3s.id").
-			Where("children.music_folder_id = ?", musicFolderId).
-			Group("artist_id3s.id")
+	artists, albums, songs, err := getStarredItems(c, s)
+	if err != nil {
+		s.sendResponse(c, models.NewErrorResponse(0, err.Error()))
+		return
 	}
-	artistQuery.Find(&artists)
-
-	var albums []models.AlbumID3
-	albumQuery := db.Where("starred IS NOT NULL")
-	if musicFolderId != "" {
-		albumQuery = albumQuery.Joins("JOIN children ON children.album_id = album_id3s.id").
-			Where("children.music_folder_id = ?", musicFolderId).
-			Group("album_id3s.id")
-	}
-	albumQuery.Find(&albums)
-
-	var songs []models.Child
-	songQuery := db.Where("is_dir = ? AND starred IS NOT NULL", false)
-	if musicFolderId != "" {
-		songQuery = songQuery.Where("music_folder_id = ?", musicFolderId)
-	}
-	songQuery.Find(&songs)
 
 	resp := models.NewResponse(models.ResponseStatusOK)
 	resp.Starred2 = &models.Starred2{

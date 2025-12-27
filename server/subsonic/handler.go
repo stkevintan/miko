@@ -16,7 +16,7 @@ import (
 
 type Subsonic struct {
 	injector   do.Injector
-	nowPlaying sync.Map // key: string (username:playerId), value: models.NowPlayingRecord
+	nowPlaying sync.Map // key: string (username:clientName), value: models.NowPlayingRecord
 }
 
 func New(injector do.Injector) *Subsonic {

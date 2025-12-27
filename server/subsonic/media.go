@@ -101,13 +101,7 @@ func (s *Subsonic) findCoverArt(dir string) string {
 	return ""
 }
 
-func (s *Subsonic) handleUpdateNowPlaying(c *gin.Context) {
-	id := c.Query("id")
-	if id == "" {
-		s.sendResponse(c, models.NewErrorResponse(10, "ID is required"))
-		return
-	}
-
+func updateNowPlaying(c *gin.Context, s *Subsonic, id string) {
 	user, _ := c.Get("user")
 	u := user.(models.User)
 	clientName := c.DefaultQuery("c", "Unknown")
@@ -136,12 +130,15 @@ func (s *Subsonic) handleScrobble(c *gin.Context) {
 	submission := c.Query("submission")
 	if submission == "false" {
 		// If submission is false, it's just an update now playing call
-		s.handleUpdateNowPlaying(c)
+		updateNowPlaying(c, s, id)
 		return
 	}
 
 	db := do.MustInvoke[*gorm.DB](s.injector)
-	db.Model(&models.Child{}).Where("id = ?", id).UpdateColumn("play_count", gorm.Expr("play_count + 1"))
+	if err := db.Model(&models.Child{}).Where("id = ?", id).UpdateColumn("play_count", gorm.Expr("play_count + 1")).Error; err != nil {
+		s.sendResponse(c, models.NewErrorResponse(0, "Failed to update play count"))
+		return
+	}
 
 	// Remove now playing record since it's now scrobbled (finished)
 	user, _ := c.Get("user")
