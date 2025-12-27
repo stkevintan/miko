@@ -213,3 +213,94 @@ func (s *Subsonic) handleGetSong(c *gin.Context) {
 	resp.Song = &song
 	s.sendResponse(c, resp)
 }
+
+// TODO: Use music provider to get real data
+func (s *Subsonic) handleGetArtistInfo2(c *gin.Context) {
+	id := c.Query("id")
+	if id == "" {
+		s.sendResponse(c, models.NewErrorResponse(10, "ID is required"))
+		return
+	}
+
+	// For now, we don't have external metadata provider, so return empty info
+	resp := models.NewResponse(models.ResponseStatusOK)
+	resp.ArtistInfo2 = &models.ArtistInfo2{}
+	s.sendResponse(c, resp)
+}
+
+// TODO: Use music provider to get real data
+func (s *Subsonic) handleGetAlbumInfo2(c *gin.Context) {
+	id := c.Query("id")
+	if id == "" {
+		s.sendResponse(c, models.NewErrorResponse(10, "ID is required"))
+		return
+	}
+
+	// For now, we don't have external metadata provider, so return empty info
+	resp := models.NewResponse(models.ResponseStatusOK)
+	resp.AlbumInfo = &models.AlbumInfo{}
+	s.sendResponse(c, resp)
+}
+
+// TODO: Use music provider to get real data
+func (s *Subsonic) handleGetSimilarSongs2(c *gin.Context) {
+	id := c.Query("id")
+	if id == "" {
+		s.sendResponse(c, models.NewErrorResponse(10, "ID is required"))
+		return
+	}
+
+	// For now, we don't have external metadata provider, so return empty list
+	resp := models.NewResponse(models.ResponseStatusOK)
+	resp.SimilarSongs2 = &models.SimilarSongs2{
+		Song: []models.Child{},
+	}
+	s.sendResponse(c, resp)
+}
+
+func (s *Subsonic) handleGetAlbumInfo(c *gin.Context) {
+	s.handleGetAlbumInfo2(c)
+}
+
+func (s *Subsonic) handleGetArtistInfo(c *gin.Context) {
+	id := c.Query("id")
+	if id == "" {
+		s.sendResponse(c, models.NewErrorResponse(10, "ID is required"))
+		return
+	}
+
+	// For now, we don't have external metadata provider, so return empty info
+	resp := models.NewResponse(models.ResponseStatusOK)
+	resp.ArtistInfo = &models.ArtistInfo{}
+	s.sendResponse(c, resp)
+}
+
+func (s *Subsonic) handleGetSimilarSongs(c *gin.Context) {
+	id := c.Query("id")
+	if id == "" {
+		s.sendResponse(c, models.NewErrorResponse(10, "ID is required"))
+		return
+	}
+
+	// For now, we don't have external metadata provider, so return empty list
+	resp := models.NewResponse(models.ResponseStatusOK)
+	resp.SimilarSongs = &models.SimilarSongs{
+		Song: []models.Child{},
+	}
+	s.sendResponse(c, resp)
+}
+
+func (s *Subsonic) handleGetTopSongs(c *gin.Context) {
+	artist := c.Query("artist")
+	if artist == "" {
+		s.sendResponse(c, models.NewErrorResponse(10, "Artist is required"))
+		return
+	}
+
+	// For now, we don't have external metadata provider, so return empty list
+	resp := models.NewResponse(models.ResponseStatusOK)
+	resp.TopSongs = &models.TopSongs{
+		Song: []models.Child{},
+	}
+	s.sendResponse(c, resp)
+}

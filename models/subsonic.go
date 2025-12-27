@@ -244,6 +244,14 @@ type NowPlaying struct {
 	Entry []NowPlayingEntry `xml:"entry" json:"entry"`
 }
 
+type NowPlayingRecord struct {
+	Username   string
+	ChildID    string
+	PlayerID   int
+	PlayerName string
+	UpdatedAt  time.Time
+}
+
 type NowPlayingEntry struct {
 	Child
 	Username   string `xml:"username,attr" json:"username"`

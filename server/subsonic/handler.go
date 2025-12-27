@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+	"sync"
 
 	"github.com/gin-gonic/gin"
 	"github.com/samber/do/v2"
@@ -14,12 +15,14 @@ import (
 )
 
 type Subsonic struct {
-	injector do.Injector
+	injector   do.Injector
+	nowPlaying sync.Map // key: string (username:clientName), value: models.NowPlayingRecord
 }
 
 func New(injector do.Injector) *Subsonic {
 	return &Subsonic{
-		injector: injector,
+		injector:   injector,
+		nowPlaying: sync.Map{},
 	}
 }
 
@@ -44,23 +47,23 @@ func (s *Subsonic) RegisterRoutes(r *gin.Engine) *gin.RouterGroup {
 
 	rest.GET("/getVideos", s.handleUnsupported)
 	rest.GET("/getVideoInfo", s.handleUnsupported)
-	rest.GET("/getArtistInfo", s.handleUnsupported)
+	rest.GET("/getArtistInfo", s.handleGetArtistInfo)
 
-	rest.GET("/getArtistInfo2", s.handleNotImplemented)
-	rest.GET("/getAlbumInfo", s.handleUnsupported)
-	rest.GET("/getAlbumInfo2", s.handleNotImplemented)
-	rest.GET("/getSimilarSongs", s.handleUnsupported)
-	rest.GET("/getSimilarSongs2", s.handleNotImplemented)
-	rest.GET("/getTopSongs", s.handleUnsupported)
+	rest.GET("/getArtistInfo2", s.handleGetArtistInfo2)
+	rest.GET("/getAlbumInfo", s.handleGetAlbumInfo)
+	rest.GET("/getAlbumInfo2", s.handleGetAlbumInfo2)
+	rest.GET("/getSimilarSongs", s.handleGetSimilarSongs)
+	rest.GET("/getSimilarSongs2", s.handleGetSimilarSongs2)
+	rest.GET("/getTopSongs", s.handleGetTopSongs)
 
 	// Album/song lists
 	rest.GET("/getAlbumList", s.handleGetAlbumList)
 	rest.GET("/getAlbumList2", s.handleGetAlbumList2)
 	rest.GET("/getRandomSongs", s.handleGetRandomSongs)
-	rest.GET("/getSongsByGenre", s.handleNotImplemented)
-	rest.GET("/getNowPlaying", s.handleNotImplemented)
-	rest.GET("/getStarred", s.handleNotImplemented)
-	rest.GET("/getStarred2", s.handleNotImplemented)
+	rest.GET("/getSongsByGenre", s.handleGetSongsByGenre)
+	rest.GET("/getNowPlaying", s.handleGetNowPlaying)
+	rest.GET("/getStarred", s.handleGetStarred)
+	rest.GET("/getStarred2", s.handleGetStarred2)
 
 	// Searching
 	rest.GET("/search", s.handleSearch)
@@ -87,7 +90,7 @@ func (s *Subsonic) RegisterRoutes(r *gin.Engine) *gin.RouterGroup {
 	rest.GET("/star", s.handleNotImplemented)
 	rest.GET("/unstar", s.handleNotImplemented)
 	rest.GET("/setRating", s.handleNotImplemented)
-	rest.GET("/scrobble", s.handleNotImplemented)
+	rest.GET("/scrobble", s.handleScrobble)
 
 	// Sharing
 	rest.GET("/getShares", s.handleNotImplemented)
