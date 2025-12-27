@@ -98,8 +98,11 @@ func (s *Subsonic) handleGetCoverArt(c *gin.Context) {
 	if path != "" {
 		if data, err := taglib.ReadImage(path); err == nil && len(data) > 0 {
 			// Cache it for next time
-			os.MkdirAll(cacheDir, 0755)
-			os.WriteFile(filepath.Join(cacheDir, id), data, 0644)
+if err := os.MkdirAll(cacheDir, 0755); err != nil {
+    log.Warn("Failed to create cover art cache directory %q: %v", cacheDir, err)
+} else if err := os.WriteFile(filepath.Join(cacheDir, id), data, 0644); err != nil {
+    log.Warn("Failed to write cover art to cache for id %s: %v", id, err)
+}
 
 			contentType := http.DetectContentType(data)
 			c.Data(http.StatusOK, contentType, data)
