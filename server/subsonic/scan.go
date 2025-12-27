@@ -56,8 +56,11 @@ func (s *Subsonic) scan() {
 	db := do.MustInvoke[*gorm.DB](s.injector)
 	cfg := do.MustInvoke[*config.Config](s.injector)
 
-	cacheDir := filepath.Join(cfg.Subsonic.CacheDir, "covers")
-	os.MkdirAll(cacheDir, 0755)
+	cacheDir := filepath.Join(cfg.Subsonic.DataDir, "cache", "covers")
+	if err := os.MkdirAll(cacheDir, 0755); err != nil {
+		log.Error("Failed to create cache directory %q: %v", cacheDir, err)
+		return
+	}
 
 	seenArtists := make(map[string]bool)
 	seenGenres := make(map[string]bool)
@@ -169,7 +172,10 @@ func (s *Subsonic) scan() {
 					}
 
 					// Extract image data
-					imgData, _ := taglib.ReadImage(path)
+					imgData, err := taglib.ReadImage(path)
+					if err != nil {
+						log.Warn("Failed to read image from %q: %v", path, err)
+					}
 
 					// Create/Update Album
 					if child.Album != "" {
@@ -219,7 +225,9 @@ func (s *Subsonic) scan() {
 							// Use song's cover art for album if available
 							if len(imgData) > 0 {
 								album.CoverArt = album.ID
-								os.WriteFile(filepath.Join(cacheDir, album.ID), imgData, 0644)
+								if err := os.WriteFile(filepath.Join(cacheDir, album.ID), imgData, 0644); err != nil {
+									log.Warn("Failed to write album cover to cache for album %s: %v", album.ID, err)
+								}
 							}
 							db.Clauses(clause.OnConflict{UpdateAll: true}).Create(&album)
 							seenAlbums[albumID] = true
@@ -234,7 +242,9 @@ func (s *Subsonic) scan() {
 					// If still no cover art (not in album or album has no cover), use song's own if it has one
 					if child.CoverArt == "" && len(imgData) > 0 {
 						child.CoverArt = child.ID
-						os.WriteFile(filepath.Join(cacheDir, child.ID), imgData, 0644)
+						if err := os.WriteFile(filepath.Join(cacheDir, child.ID), imgData, 0644); err != nil {
+							log.Warn("Failed to write song cover to cache for song %s: %v", child.ID, err)
+						}
 					}
 				}
 

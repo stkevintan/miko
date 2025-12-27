@@ -1,6 +1,7 @@
 package subsonic
 
 import (
+	"crypto/md5"
 	"fmt"
 	"hash/adler32"
 	"mime"
@@ -65,7 +66,7 @@ func (s *Subsonic) handleGetCoverArt(c *gin.Context) {
 	}
 
 	cfg := do.MustInvoke[*config.Config](s.injector)
-	cacheDir := filepath.Join(cfg.Subsonic.CacheDir, "covers")
+	cacheDir := filepath.Join(cfg.Subsonic.DataDir, "cache", "covers")
 
 	// Try to serve from cache first
 	cachePath := filepath.Join(cacheDir, id)
@@ -117,9 +118,15 @@ func (s *Subsonic) handleGetAvatar(c *gin.Context) {
 		return
 	}
 
-	avatarPath := filepath.Join("data", "avatars", username+".jpg")
+	cfg := do.MustInvoke[*config.Config](s.injector)
+	avatarDir := filepath.Join(cfg.Subsonic.DataDir, "avatars")
+
+	hash := md5.Sum([]byte(username))
+	filename := fmt.Sprintf("%x", hash)
+
+	avatarPath := filepath.Join(avatarDir, filename+".jpg")
 	if _, err := os.Stat(avatarPath); err != nil {
-		avatarPath = filepath.Join("data", "avatars", username+".png")
+		avatarPath = filepath.Join(avatarDir, filename+".png")
 		if _, err := os.Stat(avatarPath); err != nil {
 			c.Status(http.StatusNotFound)
 			return
