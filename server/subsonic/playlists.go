@@ -6,6 +6,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/samber/do/v2"
 	"github.com/stkevintan/miko/models"
+	"github.com/stkevintan/miko/pkg/log"
 	"gorm.io/gorm"
 )
 
@@ -83,9 +84,7 @@ func (s *Subsonic) handleGetPlaylist(c *gin.Context) {
 	}
 
 	var p models.PlaylistRecord
-	if err := db.Preload("Songs", func(db *gorm.DB) *gorm.DB {
-		return db.Order("position ASC")
-	}).First(&p, id).Error; err != nil {
+	if err := db.First(&p, id).Error; err != nil {
 		s.sendResponse(c, models.NewErrorResponse(70, "Playlist not found"))
 		return
 	}
@@ -98,31 +97,18 @@ func (s *Subsonic) handleGetPlaylist(c *gin.Context) {
 	}
 
 	var songs []models.Child
+	if err := db.Model(&models.Child{}).
+		Joins("JOIN playlist_songs ON playlist_songs.song_id = children.id").
+		Where("playlist_songs.playlist_id = ?", p.ID).
+		Order("playlist_songs.position ASC").
+		Find(&songs).Error; err != nil {
+		s.sendResponse(c, models.NewErrorResponse(0, "Failed to retrieve songs"))
+		return
+	}
+
 	var duration int
-	if len(p.Songs) > 0 {
-		songIDs := make([]string, len(p.Songs))
-		for i, ps := range p.Songs {
-			songIDs[i] = ps.SongID
-		}
-
-		var childRecords []models.Child
-		if err := db.Where("id IN ?", songIDs).Find(&childRecords).Error; err != nil {
-			s.sendResponse(c, models.NewErrorResponse(0, "Failed to retrieve songs"))
-			return
-		}
-
-		childMap := make(map[string]models.Child)
-		for _, child := range childRecords {
-			childMap[child.ID] = child
-		}
-
-		songs = make([]models.Child, 0, len(p.Songs))
-		for _, ps := range p.Songs {
-			if song, ok := childMap[ps.SongID]; ok {
-				songs = append(songs, song)
-				duration += song.Duration
-			}
-		}
+	for _, song := range songs {
+		duration += song.Duration
 	}
 
 	resp := models.NewResponse(models.ResponseStatusOK)
@@ -206,13 +192,13 @@ func (s *Subsonic) handleUpdatePlaylist(c *gin.Context) {
 	}
 
 	err = db.Transaction(func(tx *gorm.DB) error {
-		if name := c.Query("name"); name != "" {
+		if name, ok := c.GetQuery("name"); ok {
 			p.Name = name
 		}
-		if comment := c.Query("comment"); comment != "" {
+		if comment, ok := c.GetQuery("comment"); ok {
 			p.Comment = comment
 		}
-		if public := c.Query("public"); public != "" {
+		if public, ok := c.GetQuery("public"); ok {
 			p.Public = public == "true"
 		}
 
@@ -245,8 +231,11 @@ func (s *Subsonic) handleUpdatePlaylist(c *gin.Context) {
 			for _, idxStr := range indicesToRemove {
 				if idx, err := strconv.Atoi(idxStr); err == nil {
 					posList = append(posList, idx)
+				} else {
+					log.Warn("Invalid songIndexToRemove: %s for playlist %d", idxStr, p.ID)
 				}
 			}
+
 			if len(posList) > 0 {
 				if err := tx.Where("playlist_id = ? AND position IN ?", p.ID, posList).Delete(&models.PlaylistSong{}).Error; err != nil {
 					return err
