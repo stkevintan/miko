@@ -11,7 +11,9 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/samber/do/v2"
+	"github.com/stkevintan/miko/config"
 	"github.com/stkevintan/miko/models"
+	"go.senan.xyz/taglib"
 	"gorm.io/gorm"
 )
 
@@ -62,27 +64,45 @@ func (s *Subsonic) handleGetCoverArt(c *gin.Context) {
 		return
 	}
 
+	cfg := do.MustInvoke[*config.Config](s.injector)
+	cacheDir := filepath.Join(cfg.Subsonic.CacheDir, "covers")
+
+	// Try to serve from cache first
+	cachePath := filepath.Join(cacheDir, id)
+	if data, err := os.ReadFile(cachePath); err == nil && len(data) > 0 {
+		contentType := http.DetectContentType(data)
+		c.Data(http.StatusOK, contentType, data)
+		return
+	}
+
 	db := do.MustInvoke[*gorm.DB](s.injector)
 
+	var path string
 	// Try to find as song first
 	var song models.Child
 	if err := db.Where("id = ?", id).First(&song).Error; err == nil {
-		if coverPath := s.findCoverArt(filepath.Dir(song.Path)); coverPath != "" {
-			c.File(coverPath)
-			return
+		path = song.Path
+	} else {
+		// Try to find as album
+		var album models.AlbumID3
+		if err := db.Where("id = ?", id).First(&album).Error; err == nil {
+			// For albums, we need to find one song in the album to get the file
+			var firstSong models.Child
+			if err := db.Where("album_id = ?", album.ID).First(&firstSong).Error; err == nil {
+				path = firstSong.Path
+			}
 		}
 	}
 
-	// Try to find as album
-	var album models.AlbumID3
-	if err := db.Where("id = ?", id).First(&album).Error; err == nil {
-		// For albums, we need to find one song in the album to get the directory
-		var firstSong models.Child
-		if err := db.Where("album_id = ?", album.ID).First(&firstSong).Error; err == nil {
-			if coverPath := s.findCoverArt(filepath.Dir(firstSong.Path)); coverPath != "" {
-				c.File(coverPath)
-				return
-			}
+	if path != "" {
+		if data, err := taglib.ReadImage(path); err == nil && len(data) > 0 {
+			// Cache it for next time
+			os.MkdirAll(cacheDir, 0755)
+			os.WriteFile(filepath.Join(cacheDir, id), data, 0644)
+
+			contentType := http.DetectContentType(data)
+			c.Data(http.StatusOK, contentType, data)
+			return
 		}
 	}
 
@@ -90,15 +110,48 @@ func (s *Subsonic) handleGetCoverArt(c *gin.Context) {
 	c.Status(http.StatusNotFound)
 }
 
-func (s *Subsonic) findCoverArt(dir string) string {
-	covers := []string{"cover.jpg", "cover.png", "folder.jpg", "folder.png", "front.jpg", "front.png"}
-	for _, cover := range covers {
-		coverPath := filepath.Join(dir, cover)
-		if _, err := os.Stat(coverPath); err == nil {
-			return coverPath
+func (s *Subsonic) handleGetLyrics(c *gin.Context) {
+	artist := c.Query("artist")
+	title := c.Query("title")
+
+	if artist == "" || title == "" {
+		s.sendResponse(c, models.NewErrorResponse(10, "Artist and title are required"))
+		return
+	}
+
+	db := do.MustInvoke[*gorm.DB](s.injector)
+	var song models.Child
+	if err := db.Where("artist = ? AND title = ?", artist, title).First(&song).Error; err != nil {
+		s.sendResponse(c, models.NewErrorResponse(70, "Lyrics not found"))
+		return
+	}
+
+	resp := models.NewResponse(models.ResponseStatusOK)
+	resp.Lyrics = &models.Lyrics{
+		Artist: song.Artist,
+		Title:  song.Title,
+		Value:  song.Lyrics,
+	}
+	s.sendResponse(c, resp)
+}
+
+func (s *Subsonic) handleGetAvatar(c *gin.Context) {
+	username := c.Query("username")
+	if username == "" {
+		s.sendResponse(c, models.NewErrorResponse(10, "Username is required"))
+		return
+	}
+
+	avatarPath := filepath.Join("data", "avatars", username+".jpg")
+	if _, err := os.Stat(avatarPath); err != nil {
+		avatarPath = filepath.Join("data", "avatars", username+".png")
+		if _, err := os.Stat(avatarPath); err != nil {
+			c.Status(http.StatusNotFound)
+			return
 		}
 	}
-	return ""
+
+	c.File(avatarPath)
 }
 
 func updateNowPlaying(c *gin.Context, s *Subsonic, id string) {

@@ -236,6 +236,7 @@ type Child struct {
 	BookmarkPosition      int64       `xml:"bookmarkPosition,attr,omitempty" json:"bookmarkPosition,omitempty"`
 	OriginalWidth         int         `xml:"originalWidth,attr,omitempty" json:"originalWidth,omitempty"`
 	OriginalHeight        int         `xml:"originalHeight,attr,omitempty" json:"originalHeight,omitempty"`
+	Lyrics                string      `gorm:"type:text" xml:"-" json:"-"`
 	Artists               []ArtistID3 `gorm:"many2many:song_artists;" xml:"-" json:"-"`
 	Genres                []Genre     `gorm:"many2many:song_genres;" xml:"-" json:"-"`
 }
