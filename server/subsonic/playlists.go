@@ -21,31 +21,50 @@ func (s *Subsonic) handleGetPlaylists(c *gin.Context) {
 	if targetUsername != currentUser.Username {
 		query = query.Where("public = ?", true)
 	}
-	query.Find(&playlists)
+	if err := query.Find(&playlists).Error; err != nil {
+		s.sendResponse(c, models.NewErrorResponse(0, "Failed to retrieve playlists"))
+		return
+	}
 
 	subsonicPlaylists := make([]models.Playlist, 0, len(playlists))
-	for _, p := range playlists {
-		var songCount int64
-		db.Model(&models.PlaylistSong{}).Where("playlist_id = ?", p.ID).Count(&songCount)
+	if len(playlists) > 0 {
+		playlistIDs := make([]uint, len(playlists))
+		for i, p := range playlists {
+			playlistIDs[i] = p.ID
+		}
 
-		var duration int
+		type PlaylistStats struct {
+			PlaylistID uint
+			SongCount  int
+			Duration   int
+		}
+		var stats []PlaylistStats
 		db.Table("playlist_songs").
-			Select("SUM(children.duration)").
-			Joins("JOIN children ON children.id = playlist_songs.song_id").
-			Where("playlist_songs.playlist_id = ?", p.ID).
-			Scan(&duration)
+			Select("playlist_id, COUNT(playlist_songs.id) as song_count, SUM(children.duration) as duration").
+			Joins("LEFT JOIN children ON children.id = playlist_songs.song_id").
+			Where("playlist_id IN ?", playlistIDs).
+			Group("playlist_id").
+			Scan(&stats)
 
-		subsonicPlaylists = append(subsonicPlaylists, models.Playlist{
-			ID:        strconv.FormatUint(uint64(p.ID), 10),
-			Name:      p.Name,
-			Comment:   p.Comment,
-			Owner:     p.Owner,
-			Public:    p.Public,
-			SongCount: int(songCount),
-			Duration:  duration,
-			Created:   p.CreatedAt,
-			Changed:   p.UpdatedAt,
-		})
+		statsMap := make(map[uint]PlaylistStats)
+		for _, s := range stats {
+			statsMap[s.PlaylistID] = s
+		}
+
+		for _, p := range playlists {
+			s := statsMap[p.ID]
+			subsonicPlaylists = append(subsonicPlaylists, models.Playlist{
+				ID:        strconv.FormatUint(uint64(p.ID), 10),
+				Name:      p.Name,
+				Comment:   p.Comment,
+				Owner:     p.Owner,
+				Public:    p.Public,
+				SongCount: s.SongCount,
+				Duration:  s.Duration,
+				Created:   p.CreatedAt,
+				Changed:   p.UpdatedAt,
+			})
+		}
 	}
 
 	resp := models.NewResponse(models.ResponseStatusOK)
@@ -80,11 +99,29 @@ func (s *Subsonic) handleGetPlaylist(c *gin.Context) {
 
 	var songs []models.Child
 	var duration int
-	for _, ps := range p.Songs {
-		var song models.Child
-		if err := db.First(&song, "id = ?", ps.SongID).Error; err == nil {
-			songs = append(songs, song)
-			duration += song.Duration
+	if len(p.Songs) > 0 {
+		songIDs := make([]string, len(p.Songs))
+		for i, ps := range p.Songs {
+			songIDs[i] = ps.SongID
+		}
+
+		var childRecords []models.Child
+		if err := db.Where("id IN ?", songIDs).Find(&childRecords).Error; err != nil {
+			s.sendResponse(c, models.NewErrorResponse(0, "Failed to retrieve songs"))
+			return
+		}
+
+		childMap := make(map[string]models.Child)
+		for _, child := range childRecords {
+			childMap[child.ID] = child
+		}
+
+		songs = make([]models.Child, 0, len(p.Songs))
+		for _, ps := range p.Songs {
+			if song, ok := childMap[ps.SongID]; ok {
+				songs = append(songs, song)
+				duration += song.Duration
+			}
 		}
 	}
 
@@ -137,7 +174,10 @@ func (s *Subsonic) handleCreatePlaylist(c *gin.Context) {
 				Position:   i,
 			}
 		}
-		db.Create(&songs)
+		if err := db.Create(&songs).Error; err != nil {
+			s.sendResponse(c, models.NewErrorResponse(0, "Failed to add songs to playlist"))
+			return
+		}
 	}
 
 	resp := models.NewResponse(models.ResponseStatusOK)
@@ -165,52 +205,76 @@ func (s *Subsonic) handleUpdatePlaylist(c *gin.Context) {
 		return
 	}
 
-	if name := c.Query("name"); name != "" {
-		p.Name = name
-	}
-	if comment := c.Query("comment"); comment != "" {
-		p.Comment = comment
-	}
-	if public := c.Query("public"); public != "" {
-		p.Public = public == "true"
-	}
+	err = db.Transaction(func(tx *gorm.DB) error {
+		if name := c.Query("name"); name != "" {
+			p.Name = name
+		}
+		if comment := c.Query("comment"); comment != "" {
+			p.Comment = comment
+		}
+		if public := c.Query("public"); public != "" {
+			p.Public = public == "true"
+		}
 
-	db.Save(&p)
+		if err := tx.Save(&p).Error; err != nil {
+			return err
+		}
 
-	// Handle song additions
-	songIDsToAdd := c.QueryArray("songIdToAdd")
-	if len(songIDsToAdd) > 0 {
-		var maxPos int
-		db.Model(&models.PlaylistSong{}).Where("playlist_id = ?", p.ID).Select("COALESCE(MAX(position), -1)").Scan(&maxPos)
-		songsToAdd := make([]models.PlaylistSong, len(songIDsToAdd))
-		for i, songID := range songIDsToAdd {
-			songsToAdd[i] = models.PlaylistSong{
-				PlaylistID: p.ID,
-				SongID:     songID,
-				Position:   maxPos + 1 + i,
+		// Handle song additions
+		songIDsToAdd := c.QueryArray("songIdToAdd")
+		if len(songIDsToAdd) > 0 {
+			var maxPos int
+			tx.Model(&models.PlaylistSong{}).Where("playlist_id = ?", p.ID).Select("COALESCE(MAX(position), -1)").Scan(&maxPos)
+			songsToAdd := make([]models.PlaylistSong, len(songIDsToAdd))
+			for i, songID := range songIDsToAdd {
+				songsToAdd[i] = models.PlaylistSong{
+					PlaylistID: p.ID,
+					SongID:     songID,
+					Position:   maxPos + 1 + i,
+				}
+			}
+			if err := tx.Create(&songsToAdd).Error; err != nil {
+				return err
 			}
 		}
-		db.Create(&songsToAdd)
-	}
 
-	// Handle song removals
-	indicesToRemove := c.QueryArray("songIndexToRemove")
-	if len(indicesToRemove) > 0 {
-		var posList []int
-		for _, idxStr := range indicesToRemove {
-			if idx, err := strconv.Atoi(idxStr); err == nil {
-				posList = append(posList, idx)
+		// Handle song removals
+		indicesToRemove := c.QueryArray("songIndexToRemove")
+		if len(indicesToRemove) > 0 {
+			var posList []int
+			for _, idxStr := range indicesToRemove {
+				if idx, err := strconv.Atoi(idxStr); err == nil {
+					posList = append(posList, idx)
+				}
+			}
+			if len(posList) > 0 {
+				if err := tx.Where("playlist_id = ? AND position IN ?", p.ID, posList).Delete(&models.PlaylistSong{}).Error; err != nil {
+					return err
+				}
+				// Re-index using a single UPDATE with ROW_NUMBER()
+				if err := tx.Exec(`
+					UPDATE playlist_songs
+					SET position = (
+						SELECT new_pos
+						FROM (
+							SELECT id, (ROW_NUMBER() OVER (ORDER BY position)) - 1 AS new_pos
+							FROM playlist_songs
+							WHERE playlist_id = ?
+						) AS cte
+						WHERE cte.id = playlist_songs.id
+					)
+					WHERE playlist_id = ?
+				`, p.ID, p.ID).Error; err != nil {
+					return err
+				}
 			}
 		}
-		if len(posList) > 0 {
-			db.Where("playlist_id = ? AND position IN ?", p.ID, posList).Delete(&models.PlaylistSong{})
-			// Re-index
-			var songs []models.PlaylistSong
-			db.Where("playlist_id = ?", p.ID).Order("position ASC").Find(&songs)
-			for i, s := range songs {
-				db.Model(&s).Update("position", i)
-			}
-		}
+		return nil
+	})
+
+	if err != nil {
+		s.sendResponse(c, models.NewErrorResponse(0, "Failed to update playlist: "+err.Error()))
+		return
 	}
 
 	resp := models.NewResponse(models.ResponseStatusOK)
@@ -238,7 +302,10 @@ func (s *Subsonic) handleDeletePlaylist(c *gin.Context) {
 		return
 	}
 
-	db.Delete(&p)
+	if err := db.Delete(&p).Error; err != nil {
+		s.sendResponse(c, models.NewErrorResponse(0, "Failed to delete playlist"))
+		return
+	}
 
 	resp := models.NewResponse(models.ResponseStatusOK)
 	s.sendResponse(c, resp)
