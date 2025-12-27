@@ -102,8 +102,11 @@ func (s *Subsonic) findCoverArt(dir string) string {
 }
 
 func updateNowPlaying(c *gin.Context, s *Subsonic, id string) {
-	user, _ := c.Get("user")
-	u := user.(models.User)
+	u, err := getAuthUser(c)
+	if err != nil {
+		s.sendResponse(c, models.NewErrorResponse(20, "Authentication required"))
+		return
+	}
 	clientName := c.DefaultQuery("c", "Unknown")
 	playerId := int(adler32.Checksum([]byte(clientName)))
 
@@ -141,8 +144,11 @@ func (s *Subsonic) handleScrobble(c *gin.Context) {
 	}
 
 	// Remove now playing record since it's now scrobbled (finished)
-	user, _ := c.Get("user")
-	u := user.(models.User)
+	u, err := getAuthUser(c)
+	if err != nil {
+		s.sendResponse(c, models.NewErrorResponse(0, "Internal server error"))
+		return
+	}
 	clientName := c.DefaultQuery("c", "Unknown")
 	key := fmt.Sprintf("%s:%s", u.Username, clientName)
 	s.nowPlaying.Delete(key)

@@ -12,8 +12,11 @@ import (
 
 func (s *Subsonic) handleGetPlaylists(c *gin.Context) {
 	db := do.MustInvoke[*gorm.DB](s.injector)
-	user, _ := c.Get("user")
-	currentUser := user.(models.User)
+	currentUser, err := getAuthUser(c)
+	if err != nil {
+		s.sendResponse(c, models.NewErrorResponse(0, "Internal server error"))
+		return
+	}
 
 	targetUsername := c.DefaultQuery("username", currentUser.Username)
 	var playlists []models.PlaylistRecord
@@ -89,8 +92,11 @@ func (s *Subsonic) handleGetPlaylist(c *gin.Context) {
 		return
 	}
 
-	user, _ := c.Get("user")
-	currentUser := user.(models.User)
+	currentUser, err := getAuthUser(c)
+	if err != nil {
+		s.sendResponse(c, models.NewErrorResponse(0, "Internal server error"))
+		return
+	}
 	if !p.Public && p.Owner != currentUser.Username {
 		s.sendResponse(c, models.NewErrorResponse(70, "Playlist not found"))
 		return
@@ -137,8 +143,11 @@ func (s *Subsonic) handleCreatePlaylist(c *gin.Context) {
 		return
 	}
 
-	user, _ := c.Get("user")
-	currentUser := user.(models.User)
+	currentUser, err := getAuthUser(c)
+	if err != nil {
+		s.sendResponse(c, models.NewErrorResponse(0, "Internal server error"))
+		return
+	}
 
 	p := models.PlaylistRecord{
 		Name:  name,
@@ -184,8 +193,11 @@ func (s *Subsonic) handleUpdatePlaylist(c *gin.Context) {
 		return
 	}
 
-	user, _ := c.Get("user")
-	currentUser := user.(models.User)
+	currentUser, err := getAuthUser(c)
+	if err != nil {
+		s.sendResponse(c, models.NewErrorResponse(0, "Internal server error"))
+		return
+	}
 	if p.Owner != currentUser.Username {
 		s.sendResponse(c, models.NewErrorResponse(0, "Permission denied"))
 		return
@@ -299,8 +311,11 @@ func (s *Subsonic) handleDeletePlaylist(c *gin.Context) {
 		return
 	}
 
-	user, _ := c.Get("user")
-	currentUser := user.(models.User)
+	currentUser, err := getAuthUser(c)
+	if err != nil {
+		s.sendResponse(c, models.NewErrorResponse(0, "Internal server error"))
+		return
+	}
 	if p.Owner != currentUser.Username {
 		s.sendResponse(c, models.NewErrorResponse(0, "Permission denied"))
 		return
