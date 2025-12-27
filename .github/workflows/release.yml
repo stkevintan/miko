@@ -26,6 +26,9 @@ jobs:
     - name: Install swag
       run: go install github.com/swaggo/swag/cmd/swag@latest
 
+    - name: Install ARM64 cross-compiler
+      run: sudo apt-get update && sudo apt-get install -y gcc-aarch64-linux-gnu
+
     - name: Make build script executable
       run: chmod +x scripts/build.sh
 
@@ -34,14 +37,16 @@ jobs:
         platforms=(
           "linux/amd64"
           "linux/arm64" 
-          "darwin/amd64"
-          "darwin/arm64"
           "windows/amd64"
         )
         
         for platform in "${platforms[@]}"; do
           echo "Building for $platform"
-          ./scripts/build.sh --release "$platform"
+          if [ "$platform" = "linux/arm64" ]; then
+            CC=aarch64-linux-gnu-gcc ./scripts/build.sh --release "$platform"
+          else
+            ./scripts/build.sh --release "$platform"
+          fi
         done
 
     - name: Create checksums
