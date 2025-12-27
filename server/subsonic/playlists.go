@@ -41,7 +41,7 @@ func (s *Subsonic) handleGetPlaylists(c *gin.Context) {
 		}
 		var stats []PlaylistStats
 		db.Table("playlist_songs").
-			Select("playlist_id, COUNT(playlist_songs.id) as song_count, SUM(children.duration) as duration").
+			Select("playlist_id, COUNT(playlist_songs.id) as song_count, COALESCE(SUM(children.duration), 0) as duration").
 			Joins("LEFT JOIN children ON children.id = playlist_songs.song_id").
 			Where("playlist_id IN ?", playlistIDs).
 			Group("playlist_id").
