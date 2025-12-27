@@ -158,25 +158,31 @@ func (s *Subsonic) handleCreatePlaylist(c *gin.Context) {
 		Owner: currentUser.Username,
 	}
 
-	if err := db.Create(&p).Error; err != nil {
-		s.sendResponse(c, models.NewErrorResponse(0, "Failed to create playlist"))
-		return
-	}
+	err = db.Transaction(func(tx *gorm.DB) error {
+		if err := tx.Create(&p).Error; err != nil {
+			return err
+		}
 
-	songIDs := c.QueryArray("songId")
-	if len(songIDs) > 0 {
-		songs := make([]models.PlaylistSong, len(songIDs))
-		for i, songID := range songIDs {
-			songs[i] = models.PlaylistSong{
-				PlaylistID: p.ID,
-				SongID:     songID,
-				Position:   i,
+		songIDs := c.QueryArray("songId")
+		if len(songIDs) > 0 {
+			songs := make([]models.PlaylistSong, len(songIDs))
+			for i, songID := range songIDs {
+				songs[i] = models.PlaylistSong{
+					PlaylistID: p.ID,
+					SongID:     songID,
+					Position:   i,
+				}
+			}
+			if err := tx.Create(&songs).Error; err != nil {
+				return err
 			}
 		}
-		if err := db.Create(&songs).Error; err != nil {
-			s.sendResponse(c, models.NewErrorResponse(0, "Failed to add songs to playlist"))
-			return
-		}
+		return nil
+	})
+
+	if err != nil {
+		s.sendResponse(c, models.NewErrorResponse(0, "Failed to create playlist"))
+		return
 	}
 
 	resp := models.NewResponse(models.ResponseStatusOK)
