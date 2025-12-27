@@ -241,19 +241,34 @@ func (s *Subsonic) handleUpdatePlaylist(c *gin.Context) {
 					return err
 				}
 				// Re-index using a single UPDATE with ROW_NUMBER()
+				// if err := tx.Exec(`
+				// 	UPDATE playlist_songs
+				// 	SET position = (
+				// 		SELECT new_pos
+				// 		FROM (
+				// 			SELECT id, (ROW_NUMBER() OVER (ORDER BY position)) - 1 AS new_pos
+				// 			FROM playlist_songs
+				// 			WHERE playlist_id = ?
+				// 		) AS cte
+				// 		WHERE cte.id = playlist_songs.id
+				// 	)
+				// 	WHERE playlist_id = ?
+				// `, p.ID, p.ID).Error; err != nil {
+				// 	return err
+				// }
+
+				// Re-index using a single UPDATE with a CTE
 				if err := tx.Exec(`
-					UPDATE playlist_songs
-					SET position = (
-						SELECT new_pos
-						FROM (
-							SELECT id, (ROW_NUMBER() OVER (ORDER BY position)) - 1 AS new_pos
-							FROM playlist_songs
-							WHERE playlist_id = ?
-						) AS cte
-						WHERE cte.id = playlist_songs.id
+					WITH new_positions AS (
+						SELECT id, (ROW_NUMBER() OVER (ORDER BY position)) - 1 AS new_pos
+						FROM playlist_songs
+						WHERE playlist_id = ?
 					)
-					WHERE playlist_id = ?
-				`, p.ID, p.ID).Error; err != nil {
+					UPDATE playlist_songs
+					SET position = new_positions.new_pos
+					FROM new_positions
+					WHERE playlist_songs.id = new_positions.id
+				`, p.ID).Error; err != nil {
 					return err
 				}
 			}
