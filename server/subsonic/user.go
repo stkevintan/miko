@@ -18,7 +18,7 @@ func (s *Subsonic) handleGetUser(c *gin.Context) {
 
 	db := do.MustInvoke[*gorm.DB](s.injector)
 	var user models.User
-	if err := db.Preload("SubsonicSettings").Where("username = ?", username).First(&user).Error; err != nil {
+	if err := db.Preload("MusicFolders").Where("username = ?", username).First(&user).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			s.sendResponse(c, models.NewErrorResponse(70, "User not found"))
 		} else {
@@ -34,9 +34,8 @@ func (s *Subsonic) handleGetUser(c *gin.Context) {
 
 func (s *Subsonic) handleGetUsers(c *gin.Context) {
 	db := do.MustInvoke[*gorm.DB](s.injector)
-	var users []models.User
-	if err := db.Preload("SubsonicSettings").Find(&users).Error; err != nil {
-		// err should never be ErrRecordNotFound here
+	var users []*models.User
+	if err := db.Preload("MusicFolders").Find(&users).Error; err != nil {
 		s.sendResponse(c, models.NewErrorResponse(0, "An internal error occurred"))
 		return
 	}

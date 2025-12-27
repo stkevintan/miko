@@ -10,6 +10,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/samber/do/v2"
 	"github.com/stkevintan/miko/models"
+	"github.com/stkevintan/miko/pkg/log"
 	"gorm.io/gorm"
 )
 
@@ -27,7 +28,16 @@ func New(injector do.Injector) *Subsonic {
 
 func (s *Subsonic) RegisterRoutes(r *gin.Engine) *gin.RouterGroup {
 	rest := r.Group("/rest")
-	rest.Use(s.stripViewSuffix())
+	// Handle Subsonic .view suffix by rewriting and re-routing
+	r.NoRoute(func(c *gin.Context) {
+		path := c.Request.URL.Path
+		if strings.HasPrefix(path, "/rest") && strings.HasSuffix(path, ".view") {
+			c.Request.URL.Path = strings.TrimSuffix(path, ".view")
+			log.Info("Rewriting Subsonic path (NoRoute): %s -> %s", path, c.Request.URL.Path)
+			r.HandleContext(c)
+			return
+		}
+	})
 	rest.Use(s.subsonicAuth())
 
 	// System
@@ -158,16 +168,6 @@ func (s *Subsonic) handleNotImplemented(c *gin.Context) {
 	s.sendResponse(c, models.NewErrorResponse(0, "Not implemented"))
 }
 
-func (s *Subsonic) stripViewSuffix() gin.HandlerFunc {
-	return func(c *gin.Context) {
-		path := c.Request.URL.Path
-		if strings.HasSuffix(path, ".view") {
-			c.Request.URL.Path = strings.TrimSuffix(path, ".view")
-		}
-		c.Next()
-	}
-}
-
 func (s *Subsonic) subsonicAuth() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		username := c.Query("u")
@@ -181,9 +181,9 @@ func (s *Subsonic) subsonicAuth() gin.HandlerFunc {
 			return
 		}
 
-		var user models.User
+		user := models.LoginRequest{}
 		db := do.MustInvoke[*gorm.DB](s.injector)
-		if err := db.Where("username = ?", username).First(&user).Error; err != nil {
+		if err := db.Model(&models.User{}).Select("username", "password").Where("username = ?", username).First(&user).Error; err != nil {
 			s.sendResponse(c, models.NewErrorResponse(10, "User not found"))
 			c.Abort()
 			return
@@ -209,7 +209,7 @@ func (s *Subsonic) subsonicAuth() gin.HandlerFunc {
 			return
 		}
 
-		c.Set("user", &user)
+		c.Set("Username", user.Username)
 		c.Next()
 	}
 }

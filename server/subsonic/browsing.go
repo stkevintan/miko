@@ -32,11 +32,11 @@ func (s *Subsonic) handleGetMusicFolders(c *gin.Context) {
 
 func (s *Subsonic) handleGetIndexes(c *gin.Context) {
 	db := do.MustInvoke[*gorm.DB](s.injector)
-	folderID := c.Query("musicFolderId")
 
 	var children []models.Child
 	query := db.Where("is_dir = ?", true).Where("parent = ?", "")
-	if folderID != "" {
+	folderID, err := getQueryInt[uint](c, "musicFolderId")
+	if err == nil {
 		query = query.Where("music_folder_id = ?", folderID)
 	}
 	query.Find(&children)
@@ -77,7 +77,6 @@ func (s *Subsonic) handleGetMusicDirectory(c *gin.Context) {
 		s.sendResponse(c, models.NewErrorResponse(10, "ID is required"))
 		return
 	}
-
 	db := do.MustInvoke[*gorm.DB](s.injector)
 	var dir models.Child
 	if err := db.Where("id = ? AND is_dir = ?", id, true).First(&dir).Error; err != nil {
@@ -86,13 +85,18 @@ func (s *Subsonic) handleGetMusicDirectory(c *gin.Context) {
 	}
 
 	var children []models.Child
-	db.Where("parent = ?", id).Find(&children)
+	db.Where("parent = ?", dir.ID).Find(&children)
 
 	resp := models.NewResponse(models.ResponseStatusOK)
 	resp.Directory = &models.Directory{
-		ID:    dir.ID,
-		Name:  dir.Title,
-		Child: children,
+		ID:            dir.ID,
+		Parent:        dir.Parent,
+		Name:          dir.Title,
+		Starred:       dir.Starred,
+		UserRating:    dir.UserRating,
+		AverageRating: dir.AverageRating,
+		PlayCount:     dir.PlayCount,
+		Child:         children,
 	}
 	s.sendResponse(c, resp)
 }
