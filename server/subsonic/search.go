@@ -9,13 +9,8 @@ import (
 
 func (s *Subsonic) handleSearch(c *gin.Context) {
 	query := c.Query("query")
-	var err error
-	count := getQueryIntOrDefault(c, "count", 20, &err)
-	offset := getQueryIntOrDefault(c, "offset", 0, &err)
-	if err != nil {
-		s.sendResponse(c, models.NewErrorResponse(0, err.Error()))
-		return
-	}
+	count := getQueryIntOrDefault(c, "count", 20)
+	offset := getQueryIntOrDefault(c, "offset", 0)
 
 	db := do.MustInvoke[*gorm.DB](s.injector)
 
@@ -44,20 +39,13 @@ func (s *Subsonic) handleSearch(c *gin.Context) {
 
 func (s *Subsonic) searchCommon(c *gin.Context) ([]models.ArtistID3, []models.AlbumID3, []models.Child, error) {
 	query := c.Query("query")
-	var err error
-	artistCount := getQueryIntOrDefault(c, "artistCount", 20, &err)
-	artistOffset := getQueryIntOrDefault(c, "artistOffset", 0, &err)
-	albumCount := getQueryIntOrDefault(c, "albumCount", 20, &err)
-	albumOffset := getQueryIntOrDefault(c, "albumOffset", 0, &err)
-	songCount := getQueryIntOrDefault(c, "songCount", 20, &err)
-	songOffset := getQueryIntOrDefault(c, "songOffset", 0, &err)
-	if err != nil {
-		return nil, nil, nil, err
-	}
-	musicFolderId, err := getQueryInt[uint](c, "musicFolderId")
-	if err != nil {
-		return nil, nil, nil, err
-	}
+
+	artistCount := getQueryIntOrDefault(c, "artistCount", 20)
+	artistOffset := getQueryIntOrDefault(c, "artistOffset", 0)
+	albumCount := getQueryIntOrDefault(c, "albumCount", 20)
+	albumOffset := getQueryIntOrDefault(c, "albumOffset", 0)
+	songCount := getQueryIntOrDefault(c, "songCount", 20)
+	songOffset := getQueryIntOrDefault(c, "songOffset", 0)
 
 	db := do.MustInvoke[*gorm.DB](s.injector)
 
@@ -70,8 +58,9 @@ func (s *Subsonic) searchCommon(c *gin.Context) ([]models.ArtistID3, []models.Al
 	artistQuery := db.Where("name LIKE ?", searchQuery).Limit(artistCount).Offset(artistOffset)
 	albumQuery := db.Where("name LIKE ?", searchQuery).Limit(albumCount).Offset(albumOffset)
 	songQuery := db.Where("title LIKE ?", searchQuery).Limit(songCount).Offset(songOffset)
-
-	if musicFolderId != 0 {
+	// Optional musicFolderId filter
+	musicFolderId, err := getQueryInt[uint](c, "musicFolderId")
+	if err == nil {
 		// For artists and albums, we filter by checking if they have songs in the folder
 		artistQuery = artistQuery.Joins("JOIN song_artists ON song_artists.artist_id3_id = artist_id3s.id").
 			Joins("JOIN children ON children.id = song_artists.child_id").

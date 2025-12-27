@@ -11,23 +11,19 @@ import (
 
 func getAlbums(c *gin.Context, s *Subsonic) ([]models.AlbumID3, error) {
 	listType := c.DefaultQuery("type", "newest")
-	var err error
-	size := getQueryIntOrDefault(c, "size", 10, &err)
-	offset := getQueryIntOrDefault(c, "offset", 0, &err)
+	size := getQueryIntOrDefault(c, "size", 10)
+	offset := getQueryIntOrDefault(c, "offset", 0)
 	genre := c.Query("genre")
-	fromYear := getQueryIntOrDefault(c, "fromYear", 0, &err)
-	toYear := getQueryIntOrDefault(c, "toYear", 3000, &err)
-	if err != nil {
-		return nil, err
-	}
-	musicFolderId, _ := getQueryInt[uint](c, "musicFolderId")
+	fromYear := getQueryIntOrDefault(c, "fromYear", 0)
+	toYear := getQueryIntOrDefault(c, "toYear", 3000)
 
 	db := do.MustInvoke[*gorm.DB](s.injector)
 	var albums []models.AlbumID3
 
 	query := db.Limit(size).Offset(offset)
 
-	if musicFolderId != 0 {
+	musicFolderId, err := getQueryInt[uint](c, "musicFolderId")
+	if err == nil {
 		query = query.Joins("JOIN children ON children.album_id = album_id3s.id").
 			Where("children.music_folder_id = ?", musicFolderId).
 			Group("album_id3s.id")
@@ -107,23 +103,19 @@ func (s *Subsonic) handleGetAlbumList(c *gin.Context) {
 }
 
 func (s *Subsonic) handleGetRandomSongs(c *gin.Context) {
-	var err error
-	size := getQueryIntOrDefault(c, "size", 10, &err)
+	size := getQueryIntOrDefault(c, "size", 10)
 	genre := c.Query("genre")
-	fromYear := getQueryIntOrDefault(c, "fromYear", 0, &err)
-	toYear := getQueryIntOrDefault(c, "toYear", 3000, &err)
-	if err != nil {
-		s.sendResponse(c, models.NewErrorResponse(0, err.Error()))
-		return
-	}
-	musicFolderId, _ := getQueryInt[uint](c, "musicFolderId")
+	fromYear := getQueryIntOrDefault(c, "fromYear", 0)
+	toYear := getQueryIntOrDefault(c, "toYear", 3000)
 
 	db := do.MustInvoke[*gorm.DB](s.injector)
 	var songs []models.Child
 
 	query := db.Where("is_dir = ?", false).Limit(size).Order("RANDOM()")
 
-	if musicFolderId != 0 {
+	// Optional musicFolderId filter
+	musicFolderId, err := getQueryInt[uint](c, "musicFolderId")
+	if err == nil {
 		query = query.Where("music_folder_id = ?", musicFolderId)
 	}
 
@@ -157,21 +149,16 @@ func (s *Subsonic) handleGetSongsByGenre(c *gin.Context) {
 		return
 	}
 
-	var err error
-	count := getQueryIntOrDefault(c, "count", 10, &err)
-	offset := getQueryIntOrDefault(c, "offset", 0, &err)
-	if err != nil {
-		s.sendResponse(c, models.NewErrorResponse(0, err.Error()))
-		return
-	}
-	musicFolderId, _ := getQueryInt[uint](c, "musicFolderId")
+	count := getQueryIntOrDefault(c, "count", 10)
+	offset := getQueryIntOrDefault(c, "offset", 0)
 
 	db := do.MustInvoke[*gorm.DB](s.injector)
 	var songs []models.Child
 	query := db.Joins("JOIN song_genres ON song_genres.child_id = children.id").
 		Where("song_genres.genre_name = ?", genre)
 
-	if musicFolderId != 0 {
+	musicFolderId, err := getQueryInt[uint](c, "musicFolderId")
+	if err == nil {
 		query = query.Where("children.music_folder_id = ?", musicFolderId)
 	}
 
@@ -229,11 +216,12 @@ func (s *Subsonic) handleGetNowPlaying(c *gin.Context) {
 
 func getStarredItems(c *gin.Context, s *Subsonic) ([]models.ArtistID3, []models.AlbumID3, []models.Child, error) {
 	db := do.MustInvoke[*gorm.DB](s.injector)
-	musicFolderId, _ := getQueryInt[uint](c, "musicFolderId")
 
 	var artists []models.ArtistID3
 	artistQuery := db.Where("starred IS NOT NULL")
-	if musicFolderId != 0 {
+	musicFolderId, err := getQueryInt[uint](c, "musicFolderId")
+	musicFolderExists := err == nil
+	if musicFolderExists {
 		artistQuery = artistQuery.Joins("JOIN children ON children.artist_id = artist_id3s.id").
 			Where("children.music_folder_id = ?", musicFolderId).
 			Group("artist_id3s.id")
@@ -244,7 +232,7 @@ func getStarredItems(c *gin.Context, s *Subsonic) ([]models.ArtistID3, []models.
 
 	var albums []models.AlbumID3
 	albumQuery := db.Where("starred IS NOT NULL")
-	if musicFolderId != 0 {
+	if musicFolderExists {
 		albumQuery = albumQuery.Joins("JOIN children ON children.album_id = album_id3s.id").
 			Where("children.music_folder_id = ?", musicFolderId).
 			Group("album_id3s.id")
@@ -255,7 +243,7 @@ func getStarredItems(c *gin.Context, s *Subsonic) ([]models.ArtistID3, []models.
 
 	var songs []models.Child
 	songQuery := db.Where("is_dir = ? AND starred IS NOT NULL", false)
-	if musicFolderId != 0 {
+	if musicFolderExists {
 		songQuery = songQuery.Where("music_folder_id = ?", musicFolderId)
 	}
 	if err := songQuery.Find(&songs).Error; err != nil {

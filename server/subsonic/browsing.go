@@ -32,15 +32,11 @@ func (s *Subsonic) handleGetMusicFolders(c *gin.Context) {
 
 func (s *Subsonic) handleGetIndexes(c *gin.Context) {
 	db := do.MustInvoke[*gorm.DB](s.injector)
-	folderID, err := getQueryInt[uint](c, "musicFolderId")
-	if err != nil {
-		s.sendResponse(c, models.NewErrorResponse(10, err.Error()))
-		return
-	}
 
 	var children []models.Child
 	query := db.Where("is_dir = ?", true).Where("parent = ?", "")
-	if folderID != 0 {
+	folderID, err := getQueryInt[uint](c, "musicFolderId")
+	if err == nil {
 		query = query.Where("music_folder_id = ?", folderID)
 	}
 	query.Find(&children)
@@ -92,11 +88,15 @@ func (s *Subsonic) handleGetMusicDirectory(c *gin.Context) {
 	db.Where("parent = ?", dir.ID).Find(&children)
 
 	resp := models.NewResponse(models.ResponseStatusOK)
-	// TODO: nested directories??
 	resp.Directory = &models.Directory{
-		ID:    dir.ID,
-		Name:  dir.Title,
-		Child: children,
+		ID:            dir.ID,
+		Parent:        dir.Parent,
+		Name:          dir.Title,
+		Starred:       dir.Starred,
+		UserRating:    dir.UserRating,
+		AverageRating: dir.AverageRating,
+		PlayCount:     dir.PlayCount,
+		Child:         children,
 	}
 	s.sendResponse(c, resp)
 }
