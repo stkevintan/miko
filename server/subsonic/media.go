@@ -8,6 +8,9 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"regexp"
+	"strconv"
+	"strings"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -113,6 +116,97 @@ func (s *Subsonic) handleGetCoverArt(c *gin.Context) {
 
 	// Fallback to a default cover or 404
 	c.Status(http.StatusNotFound)
+}
+
+func (s *Subsonic) handleGetLyrics(c *gin.Context) {
+	artist := c.Query("artist")
+	title := c.Query("title")
+
+	if artist == "" || title == "" {
+		s.sendResponse(c, models.NewErrorResponse(10, "Artist and title are required"))
+		return
+	}
+
+	db := do.MustInvoke[*gorm.DB](s.injector)
+	var song models.Child
+	if err := db.Where("artist = ? AND title = ?", artist, title).First(&song).Error; err != nil {
+		s.sendResponse(c, models.NewErrorResponse(70, "Lyrics not found"))
+		return
+	}
+
+	resp := models.NewResponse(models.ResponseStatusOK)
+	resp.Lyrics = &models.Lyrics{
+		Artist: song.Artist,
+		Title:  song.Title,
+		Value:  song.Lyrics,
+	}
+	s.sendResponse(c, resp)
+}
+
+func (s *Subsonic) handleGetLyricsBySongId(c *gin.Context) {
+	id := c.Query("id")
+	if id == "" {
+		s.sendResponse(c, models.NewErrorResponse(10, "ID is required"))
+		return
+	}
+
+	db := do.MustInvoke[*gorm.DB](s.injector)
+	var song models.Child
+	if err := db.Where("id = ?", id).First(&song).Error; err != nil {
+		s.sendResponse(c, models.NewErrorResponse(70, "Lyrics not found"))
+		return
+	}
+
+	resp := models.NewResponse(models.ResponseStatusOK)
+
+	lrcRegex := regexp.MustCompile(`^\[(\d+):(\d+)\.(\d+)\](.*)$`)
+	rows := strings.Split(song.Lyrics, "\n")
+	lines := make([]models.LyricsLine, 0, len(rows))
+	synced := true
+	for _, row := range rows {
+		row = strings.TrimSpace(row)
+		if row == "" {
+			continue
+		}
+		matches := lrcRegex.FindStringSubmatch(row)
+		if len(matches) == 5 {
+			min, _ := strconv.Atoi(matches[1])
+			sec, _ := strconv.Atoi(matches[2])
+			msStr := matches[3]
+			ms, _ := strconv.Atoi(msStr)
+			if len(msStr) == 2 {
+				ms *= 10
+			}
+			text := strings.TrimSpace(matches[4])
+
+			startTime := (min*60+sec)*1000 + ms
+			lines = append(lines, models.LyricsLine{
+				Start: startTime,
+				Value: text,
+			})
+			log.Info("RParsed lyrics line:", row, "->", startTime, text)
+		} else {
+			// If any line is non-synced, mark whole lyrics as non-synced
+			synced = false
+			// Non-synced line
+			lines = append(lines, models.LyricsLine{
+				Value: row,
+			})
+		}
+	}
+
+	resp.LyricsList = &models.LyricsList{
+		StructuredLyrics: []models.StructuredLyrics{
+			{
+				Synced:        synced,
+				Lang:          "xxx",
+				DisplayArtist: song.Artist,
+				DisplayTitle:  song.Title,
+				Lines:         lines,
+			},
+		},
+	}
+	s.sendResponse(c, resp)
 }
 
 func (s *Subsonic) handleGetAvatar(c *gin.Context) {
