@@ -57,14 +57,20 @@ jobs:
         include:
           - platform: linux/amd64
             artifact_name: miko-linux-amd64
+            cgo_enabled: 1
           - platform: linux/arm64
             artifact_name: miko-linux-arm64
+            cgo_enabled: 1
+            cc: aarch64-linux-gnu-gcc
           - platform: darwin/amd64
             artifact_name: miko-darwin-amd64
+            cgo_enabled: 0
           - platform: darwin/arm64
             artifact_name: miko-darwin-arm64
+            cgo_enabled: 0
           - platform: windows/amd64
             artifact_name: miko-windows-amd64
+            cgo_enabled: 1
     
     steps:
     - name: Checkout repository
@@ -75,6 +81,12 @@ jobs:
       with:
         go-version: '1.21'
 
+    - name: Install ARM64 cross-compiler for linux/arm64
+      if: matrix.platform == 'linux/arm64'
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y gcc-aarch64-linux-gnu
+
     - name: Install swag
       run: go install github.com/swaggo/swag/cmd/swag@latest
 
@@ -82,6 +94,9 @@ jobs:
       run: chmod +x scripts/build.sh
 
     - name: Build for ${{ matrix.platform }}
+      env:
+        CGO_ENABLED: ${{ matrix.cgo_enabled }}
+        CC: ${{ matrix.cc }}
       run: ./scripts/build.sh --dev ${{ matrix.platform }}
 
     - name: Upload build artifacts
