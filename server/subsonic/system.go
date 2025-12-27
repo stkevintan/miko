@@ -23,3 +23,11 @@ func (s *Subsonic) handleGetLicense(c *gin.Context) {
 	}
 	s.sendResponse(c, resp)
 }
+
+func (s *Subsonic) handleGetOpenSubsonicExtensions(c *gin.Context) {
+	resp := models.NewResponse(models.ResponseStatusOK)
+	resp.OpenSubsonicExtensions = []models.OpenSubsonicExtension{
+		{Name: "songLyrics", Versions: []int{1}},
+	}
+	s.sendResponse(c, resp)
+}

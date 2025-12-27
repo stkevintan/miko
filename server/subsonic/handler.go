@@ -43,6 +43,7 @@ func (s *Subsonic) RegisterRoutes(r *gin.Engine) *gin.RouterGroup {
 	// System
 	rest.GET("/ping", s.handlePing)
 	rest.GET("/getLicense", s.handleGetLicense)
+	rest.GET("/getOpenSubsonicExtensions", s.handleGetOpenSubsonicExtensions)
 
 	// Browsing
 	rest.GET("/getMusicFolders", s.handleGetMusicFolders)
@@ -92,7 +93,8 @@ func (s *Subsonic) RegisterRoutes(r *gin.Engine) *gin.RouterGroup {
 	rest.GET("/hls.m3u8", s.handleUnsupported)
 	rest.GET("/getCaptions", s.handleUnsupported)
 	rest.GET("/getCoverArt", s.handleGetCoverArt)
-	rest.GET("/getLyrics", s.handleNotImplemented)
+	rest.GET("/getLyrics", s.handleGetLyrics)
+	rest.GET("/getLyricsBySongId", s.handleGetLyricsBySongId)
 	rest.GET("/getAvatar", s.handleGetAvatar)
 
 	// Media annotation
