@@ -89,11 +89,11 @@ func (s *Subsonic) RegisterRoutes(r *gin.Engine) *gin.RouterGroup {
 	// Media retrieval
 	rest.GET("/stream", s.handleStream)
 	rest.GET("/download", s.handleDownload)
-	rest.GET("/hls.m3u8", s.handleNotImplemented)
-	rest.GET("/getCaptions", s.handleNotImplemented)
+	rest.GET("/hls.m3u8", s.handleUnsupported)
+	rest.GET("/getCaptions", s.handleUnsupported)
 	rest.GET("/getCoverArt", s.handleGetCoverArt)
 	rest.GET("/getLyrics", s.handleNotImplemented)
-	rest.GET("/getAvatar", s.handleNotImplemented)
+	rest.GET("/getAvatar", s.handleGetAvatar)
 
 	// Media annotation
 	rest.GET("/star", s.handleNotImplemented)

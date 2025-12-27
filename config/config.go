@@ -60,6 +60,7 @@ type ServerConfig struct {
 
 type SubsonicConfig struct {
 	Folders []string `json:"folders" mapstructure:"folders"`
+	DataDir string   `json:"dataDir" mapstructure:"dataDir"`
 }
 
 type DatabaseConfig struct {
@@ -139,6 +140,7 @@ func (c *Config) expandEnv() {
 		c.Database.DSN = os.ExpandEnv(c.Database.DSN)
 	}
 	if c.Subsonic != nil {
+		c.Subsonic.DataDir = os.ExpandEnv(c.Subsonic.DataDir)
 		for i, folder := range c.Subsonic.Folders {
 			c.Subsonic.Folders[i] = os.ExpandEnv(folder)
 		}

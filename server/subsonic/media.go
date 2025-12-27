@@ -1,6 +1,7 @@
 package subsonic
 
 import (
+	"crypto/md5"
 	"fmt"
 	"hash/adler32"
 	"mime"
@@ -11,7 +12,10 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/samber/do/v2"
+	"github.com/stkevintan/miko/config"
 	"github.com/stkevintan/miko/models"
+	"github.com/stkevintan/miko/pkg/log"
+	"go.senan.xyz/taglib"
 	"gorm.io/gorm"
 )
 
@@ -62,27 +66,48 @@ func (s *Subsonic) handleGetCoverArt(c *gin.Context) {
 		return
 	}
 
+	cfg := do.MustInvoke[*config.Config](s.injector)
+	cacheDir := filepath.Join(cfg.Subsonic.DataDir, "cache", "covers")
+
+	// Try to serve from cache first
+	cachePath := filepath.Join(cacheDir, id)
+	if data, err := os.ReadFile(cachePath); err == nil && len(data) > 0 {
+		contentType := http.DetectContentType(data)
+		c.Data(http.StatusOK, contentType, data)
+		return
+	}
+
 	db := do.MustInvoke[*gorm.DB](s.injector)
 
+	var path string
 	// Try to find as song first
 	var song models.Child
 	if err := db.Where("id = ?", id).First(&song).Error; err == nil {
-		if coverPath := s.findCoverArt(filepath.Dir(song.Path)); coverPath != "" {
-			c.File(coverPath)
-			return
+		path = song.Path
+	} else {
+		// Try to find as album
+		var album models.AlbumID3
+		if err := db.Where("id = ?", id).First(&album).Error; err == nil {
+			// For albums, we need to find one song in the album to get the file
+			var firstSong models.Child
+			if err := db.Where("album_id = ?", album.ID).First(&firstSong).Error; err == nil {
+				path = firstSong.Path
+			}
 		}
 	}
 
-	// Try to find as album
-	var album models.AlbumID3
-	if err := db.Where("id = ?", id).First(&album).Error; err == nil {
-		// For albums, we need to find one song in the album to get the directory
-		var firstSong models.Child
-		if err := db.Where("album_id = ?", album.ID).First(&firstSong).Error; err == nil {
-			if coverPath := s.findCoverArt(filepath.Dir(firstSong.Path)); coverPath != "" {
-				c.File(coverPath)
-				return
+	if path != "" {
+		if data, err := taglib.ReadImage(path); err == nil && len(data) > 0 {
+			// Cache it for next time
+			if err := os.MkdirAll(cacheDir, 0755); err != nil {
+				log.Warn("Failed to create cover art cache directory %q: %v", cacheDir, err)
+			} else if err := os.WriteFile(filepath.Join(cacheDir, id), data, 0644); err != nil {
+				log.Warn("Failed to write cover art to cache for id %s: %v", id, err)
 			}
+
+			contentType := http.DetectContentType(data)
+			c.Data(http.StatusOK, contentType, data)
+			return
 		}
 	}
 
@@ -90,15 +115,32 @@ func (s *Subsonic) handleGetCoverArt(c *gin.Context) {
 	c.Status(http.StatusNotFound)
 }
 
-func (s *Subsonic) findCoverArt(dir string) string {
-	covers := []string{"cover.jpg", "cover.png", "folder.jpg", "folder.png", "front.jpg", "front.png"}
-	for _, cover := range covers {
-		coverPath := filepath.Join(dir, cover)
-		if _, err := os.Stat(coverPath); err == nil {
-			return coverPath
+func (s *Subsonic) handleGetAvatar(c *gin.Context) {
+	username := c.Query("username")
+	if username == "" {
+		s.sendResponse(c, models.NewErrorResponse(10, "Username is required"))
+		return
+	}
+
+	cfg := do.MustInvoke[*config.Config](s.injector)
+	avatarDir := filepath.Join(cfg.Subsonic.DataDir, "avatars")
+
+	hash := md5.Sum([]byte(username))
+	filename := fmt.Sprintf("%x", hash)
+
+	extensions := []string{".jpg", ".png"}
+	for _, ext := range extensions {
+		avatarPath := filepath.Join(avatarDir, filename+ext)
+		if _, err := os.Stat(avatarPath); err == nil {
+			c.File(avatarPath)
+			return
+		} else if !os.IsNotExist(err) {
+			log.Error("Error accessing avatar %s: %v", avatarPath, err)
+			c.Status(http.StatusInternalServerError)
+			return
 		}
 	}
-	return ""
+	c.Status(http.StatusNotFound)
 }
 
 func updateNowPlaying(c *gin.Context, s *Subsonic, id string) {

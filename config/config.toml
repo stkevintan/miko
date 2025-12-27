@@ -27,3 +27,4 @@ dsn = "${HOME}/.miko/miko.db"
 
 [subsonic]
 folders = ["${HOME}/Music"]
+dataDir = "${HOME}/.miko/data"

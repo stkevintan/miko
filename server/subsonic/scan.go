@@ -4,6 +4,7 @@ import (
 	"crypto/md5"
 	"fmt"
 	"io/fs"
+	"os"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -54,6 +55,12 @@ func (s *Subsonic) scan() {
 
 	db := do.MustInvoke[*gorm.DB](s.injector)
 	cfg := do.MustInvoke[*config.Config](s.injector)
+
+	cacheDir := filepath.Join(cfg.Subsonic.DataDir, "cache", "covers")
+	if err := os.MkdirAll(cacheDir, 0755); err != nil {
+		log.Error("Failed to create cache directory %q: %v", cacheDir, err)
+		return
+	}
 
 	seenArtists := make(map[string]bool)
 	seenGenres := make(map[string]bool)
@@ -115,6 +122,7 @@ func (s *Subsonic) scan() {
 					log.Warn("Failed to get file info for %q: %v", path, err)
 					return nil
 				}
+				modTime := info.ModTime()
 				child := models.Child{
 					ID:            id,
 					Parent:        parentID,
@@ -125,6 +133,7 @@ func (s *Subsonic) scan() {
 					Suffix:        ext[1:],
 					ContentType:   "audio/" + ext[1:],
 					MusicFolderID: folder.ID,
+					Created:       &modTime,
 				}
 
 				// Extract tags
@@ -145,6 +154,9 @@ func (s *Subsonic) scan() {
 					if tr, ok := tags[taglib.TrackNumber]; ok && len(tr) > 0 {
 						child.Track, _ = strconv.Atoi(tr[0])
 					}
+					if dn, ok := tags[taglib.DiscNumber]; ok && len(dn) > 0 {
+						child.DiscNumber, _ = strconv.Atoi(dn[0])
+					}
 					if y, ok := tags[taglib.Date]; ok && len(y) > 0 {
 						child.Year, _ = strconv.Atoi(y[0])
 					}
@@ -159,13 +171,19 @@ func (s *Subsonic) scan() {
 						child.BitRate = int(props.Bitrate)
 					}
 
+					// Extract image data
+					imgData, err := taglib.ReadImage(path)
+					if err != nil {
+						log.Warn("Failed to read image from %q: %v", path, err)
+					}
+
 					// Create/Update Album
 					if child.Album != "" {
 						// Try to find Album Artist
 						var albumArtists []models.ArtistID3
 						albumArtistStr := ""
 
-						aa, ok := tags["ALBUMARTIST"]
+						aa, ok := tags[taglib.AlbumArtist]
 						if !ok || len(aa) == 0 {
 							aa, ok = tags["ALBUM ARTIST"]
 						}
@@ -197,15 +215,35 @@ func (s *Subsonic) scan() {
 								ID:      albumID,
 								Name:    child.Album,
 								Artist:  displayArtist,
-								Created: time.Now(),
+								Created: modTime,
 							}
 							// Set ArtistID and Artists only if we have at least one artist
 							if len(groupArtists) > 0 {
 								album.ArtistID = groupArtists[0].ID
 								album.Artists = groupArtists
 							}
+							// Use song's cover art for album if available
+							if len(imgData) > 0 {
+								album.CoverArt = album.ID
+								if err := os.WriteFile(filepath.Join(cacheDir, album.ID), imgData, 0644); err != nil {
+									log.Warn("Failed to write album cover to cache for album %s: %v", album.ID, err)
+								}
+							}
 							db.Clauses(clause.OnConflict{UpdateAll: true}).Create(&album)
 							seenAlbums[albumID] = true
+						}
+
+						// If album has a cover (either just created or already in cache), use it for the child
+						if _, err := os.Stat(filepath.Join(cacheDir, albumID)); err == nil {
+							child.CoverArt = albumID
+						}
+					}
+
+					// If still no cover art (not in album or album has no cover), use song's own if it has one
+					if child.CoverArt == "" && len(imgData) > 0 {
+						child.CoverArt = child.ID
+						if err := os.WriteFile(filepath.Join(cacheDir, child.ID), imgData, 0644); err != nil {
+							log.Warn("Failed to write song cover to cache for song %s: %v", child.ID, err)
 						}
 					}
 				}
