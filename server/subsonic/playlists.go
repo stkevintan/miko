@@ -84,7 +84,7 @@ func (s *Subsonic) handleGetPlaylists(c *gin.Context) {
 
 func (s *Subsonic) handleGetPlaylist(c *gin.Context) {
 	db := do.MustInvoke[*gorm.DB](s.injector)
-	id, err := getQueryInt[uint64](c, "id")
+	id, err := getQueryInt[uint](c, "id")
 	if err != nil {
 		s.sendResponse(c, models.NewErrorResponse(10, err.Error()))
 		return
@@ -232,7 +232,9 @@ func (s *Subsonic) handleUpdatePlaylist(c *gin.Context) {
 		songIDsToAdd := c.QueryArray("songIdToAdd")
 		if len(songIDsToAdd) > 0 {
 			var maxPos int
-			tx.Model(&models.PlaylistSong{}).Where("playlist_id = ?", p.ID).Select("COALESCE(MAX(position), -1)").Scan(&maxPos)
+			if err := tx.Model(&models.PlaylistSong{}).Where("playlist_id = ?", p.ID).Select("COALESCE(MAX(position), -1)").Scan(&maxPos).Error; err != nil {
+				return err
+			}
 			songsToAdd := make([]models.PlaylistSong, len(songIDsToAdd))
 			for i, songID := range songIDsToAdd {
 				songsToAdd[i] = models.PlaylistSong{
