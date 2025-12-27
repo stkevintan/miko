@@ -1,6 +1,8 @@
 package models
 
 import (
+	"encoding/json"
+	"encoding/xml"
 	"time"
 
 	"gorm.io/gorm"
@@ -26,22 +28,25 @@ type User struct {
 	SubsonicSettings `gorm:"embedded" xml:",inline"`
 }
 
-func (u *User) AfterFind(tx *gorm.DB) (err error) {
-	u.FolderIDs = nil
-	for _, f := range u.MusicFolders {
-		u.FolderIDs = append(u.FolderIDs, f.ID)
+func (u *User) prepare() {
+	if size := len(u.MusicFolders); size > 0 {
+		u.FolderIDs = make([]uint, 0, size)
+		for _, f := range u.MusicFolders {
+			u.FolderIDs = append(u.FolderIDs, f.ID)
+		}
 	}
+}
 
-	if u.AdminRole {
-		u.SettingsRole = true
-		u.StreamRole = true
-		u.DownloadRole = true
-		u.PlaylistRole = true
-		u.CoverArtRole = true
-		u.CommentRole = true
-		u.ShareRole = true
-	}
-	return nil
+func (u *User) MarshalJSON() ([]byte, error) {
+	u.prepare()
+	type Alias User
+	return json.Marshal((*Alias)(u))
+}
+
+func (u *User) MarshalXML(e *xml.Encoder, start xml.StartElement) error {
+	u.prepare()
+	type Alias User
+	return e.EncodeElement((*Alias)(u), start)
 }
 
 type SubsonicSettings struct {

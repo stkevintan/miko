@@ -484,7 +484,7 @@ type ScanStatus struct {
 }
 
 type Users struct {
-	User []User `xml:"user" json:"user"`
+	User []*User `xml:"user" json:"user"`
 }
 
 func NewResponse(status ResponseStatus) *SubsonicResponse {

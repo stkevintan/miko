@@ -181,10 +181,7 @@ func (s *Subsonic) subsonicAuth() gin.HandlerFunc {
 			return
 		}
 
-		var user struct {
-			Username string
-			Password string
-		}
+		user := models.LoginRequest{}
 		db := do.MustInvoke[*gorm.DB](s.injector)
 		if err := db.Model(&models.User{}).Select("username", "password").Where("username = ?", username).First(&user).Error; err != nil {
 			s.sendResponse(c, models.NewErrorResponse(10, "User not found"))

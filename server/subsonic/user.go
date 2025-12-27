@@ -34,7 +34,7 @@ func (s *Subsonic) handleGetUser(c *gin.Context) {
 
 func (s *Subsonic) handleGetUsers(c *gin.Context) {
 	db := do.MustInvoke[*gorm.DB](s.injector)
-	var users []models.User
+	var users []*models.User
 	if err := db.Preload("MusicFolders").Find(&users).Error; err != nil {
 		s.sendResponse(c, models.NewErrorResponse(0, "An internal error occurred"))
 		return
