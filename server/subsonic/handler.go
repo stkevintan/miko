@@ -4,7 +4,6 @@ import (
 	"crypto/md5"
 	"fmt"
 	"net/http"
-	"strconv"
 	"strings"
 	"sync"
 
@@ -71,11 +70,11 @@ func (s *Subsonic) RegisterRoutes(r *gin.Engine) *gin.RouterGroup {
 	rest.GET("/search3", s.handleSearch3)
 
 	// Playlists
-	rest.GET("/getPlaylists", s.handleNotImplemented)
-	rest.GET("/getPlaylist", s.handleNotImplemented)
-	rest.GET("/createPlaylist", s.handleNotImplemented)
-	rest.GET("/updatePlaylist", s.handleNotImplemented)
-	rest.GET("/deletePlaylist", s.handleNotImplemented)
+	rest.GET("/getPlaylists", s.handleGetPlaylists)
+	rest.GET("/getPlaylist", s.handleGetPlaylist)
+	rest.GET("/createPlaylist", s.handleCreatePlaylist)
+	rest.GET("/updatePlaylist", s.handleUpdatePlaylist)
+	rest.GET("/deletePlaylist", s.handleDeletePlaylist)
 
 	// Media retrieval
 	rest.GET("/stream", s.handleStream)
@@ -159,27 +158,6 @@ func (s *Subsonic) handleNotImplemented(c *gin.Context) {
 	s.sendResponse(c, models.NewErrorResponse(0, "Not implemented"))
 }
 
-func (s *Subsonic) getQueryInt(c *gin.Context, key string, defaultValue int) (int, error) {
-	valStr := c.Query(key)
-	if valStr == "" {
-		return defaultValue, nil
-	}
-	val, err := strconv.Atoi(valStr)
-	if err != nil {
-		return 0, fmt.Errorf("invalid value for parameter '%s': %s", key, valStr)
-	}
-	return val, nil
-}
-
-func (s *Subsonic) getQueryIntOrDefault(c *gin.Context, key string, defaultValue int, err *error) int {
-	if *err != nil {
-		return 0
-	}
-	var val int
-	val, *err = s.getQueryInt(c, key, defaultValue)
-	return val
-}
-
 func (s *Subsonic) stripViewSuffix() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		path := c.Request.URL.Path
@@ -231,7 +209,7 @@ func (s *Subsonic) subsonicAuth() gin.HandlerFunc {
 			return
 		}
 
-		c.Set("user", user)
+		c.Set("user", &user)
 		c.Next()
 	}
 }

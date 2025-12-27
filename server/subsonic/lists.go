@@ -12,11 +12,11 @@ import (
 func getAlbums(c *gin.Context, s *Subsonic) ([]models.AlbumID3, error) {
 	listType := c.DefaultQuery("type", "newest")
 	var err error
-	size := s.getQueryIntOrDefault(c, "size", 10, &err)
-	offset := s.getQueryIntOrDefault(c, "offset", 0, &err)
+	size := getQueryIntOrDefault(c, "size", 10, &err)
+	offset := getQueryIntOrDefault(c, "offset", 0, &err)
 	genre := c.Query("genre")
-	fromYear := s.getQueryIntOrDefault(c, "fromYear", 0, &err)
-	toYear := s.getQueryIntOrDefault(c, "toYear", 3000, &err)
+	fromYear := getQueryIntOrDefault(c, "fromYear", 0, &err)
+	toYear := getQueryIntOrDefault(c, "toYear", 3000, &err)
 	if err != nil {
 		return nil, err
 	}
@@ -108,10 +108,10 @@ func (s *Subsonic) handleGetAlbumList(c *gin.Context) {
 
 func (s *Subsonic) handleGetRandomSongs(c *gin.Context) {
 	var err error
-	size := s.getQueryIntOrDefault(c, "size", 10, &err)
+	size := getQueryIntOrDefault(c, "size", 10, &err)
 	genre := c.Query("genre")
-	fromYear := s.getQueryIntOrDefault(c, "fromYear", 0, &err)
-	toYear := s.getQueryIntOrDefault(c, "toYear", 3000, &err)
+	fromYear := getQueryIntOrDefault(c, "fromYear", 0, &err)
+	toYear := getQueryIntOrDefault(c, "toYear", 3000, &err)
 	if err != nil {
 		s.sendResponse(c, models.NewErrorResponse(0, err.Error()))
 		return
@@ -158,8 +158,8 @@ func (s *Subsonic) handleGetSongsByGenre(c *gin.Context) {
 	}
 
 	var err error
-	count := s.getQueryIntOrDefault(c, "count", 10, &err)
-	offset := s.getQueryIntOrDefault(c, "offset", 0, &err)
+	count := getQueryIntOrDefault(c, "count", 10, &err)
+	offset := getQueryIntOrDefault(c, "offset", 0, &err)
 	if err != nil {
 		s.sendResponse(c, models.NewErrorResponse(0, err.Error()))
 		return
