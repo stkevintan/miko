@@ -14,6 +14,7 @@ import (
 	"github.com/samber/do/v2"
 	"github.com/stkevintan/miko/config"
 	"github.com/stkevintan/miko/models"
+	"github.com/stkevintan/miko/pkg/log"
 	"go.senan.xyz/taglib"
 	"gorm.io/gorm"
 )
@@ -124,16 +125,19 @@ func (s *Subsonic) handleGetAvatar(c *gin.Context) {
 	hash := md5.Sum([]byte(username))
 	filename := fmt.Sprintf("%x", hash)
 
-	avatarPath := filepath.Join(avatarDir, filename+".jpg")
-	if _, err := os.Stat(avatarPath); err != nil {
-		avatarPath = filepath.Join(avatarDir, filename+".png")
-		if _, err := os.Stat(avatarPath); err != nil {
-			c.Status(http.StatusNotFound)
+	extensions := []string{".jpg", ".png"}
+	for _, ext := range extensions {
+		avatarPath := filepath.Join(avatarDir, filename+ext)
+		if _, err := os.Stat(avatarPath); err == nil {
+			c.File(avatarPath)
+			return
+		} else if !os.IsNotExist(err) {
+			log.Error("Error accessing avatar %s: %v", avatarPath, err)
+			c.Status(http.StatusInternalServerError)
 			return
 		}
 	}
-
-	c.File(avatarPath)
+	c.Status(http.StatusNotFound)
 }
 
 func updateNowPlaying(c *gin.Context, s *Subsonic, id string) {
