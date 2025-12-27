@@ -50,13 +50,13 @@ if [ "$BUILD_MODE" = "release" ]; then
     # Release mode: aggressive optimizations
     LDFLAGS="-s -w -X main.version=${VERSION} -X main.buildTime=${BUILD_TIME} -X main.gitCommit=${GIT_COMMIT}"
     BUILD_FLAGS="-a -installsuffix cgo -trimpath"
-    CGO_ENABLED=0
+    CGO_ENABLED=1
     echo "🚀 Release build mode: Full optimizations enabled"
 else
     # Development mode: faster builds, debugging symbols
     LDFLAGS="-X main.version=${VERSION} -X main.buildTime=${BUILD_TIME} -X main.gitCommit=${GIT_COMMIT}"
     BUILD_FLAGS="-trimpath"
-    CGO_ENABLED=0
+    CGO_ENABLED=1
     echo "🔧 Development build mode: Debug symbols preserved"
 fi
 
