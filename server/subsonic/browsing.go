@@ -76,14 +76,14 @@ func (s *Subsonic) handleGetIndexes(c *gin.Context) {
 }
 
 func (s *Subsonic) handleGetMusicDirectory(c *gin.Context) {
-	id, err := getQueryInt[uint](c, "id")
-	if err != nil {
-		s.sendResponse(c, models.NewErrorResponse(10, err.Error()))
+	id := c.Query("id")
+	if id == "" {
+		s.sendResponse(c, models.NewErrorResponse(10, "ID is required"))
 		return
 	}
 	db := do.MustInvoke[*gorm.DB](s.injector)
 	var dir models.Child
-	if err := db.Where("music_folder_id = ? AND is_dir = ?", id, true).First(&dir).Error; err != nil {
+	if err := db.Where("id = ? AND is_dir = ?", id, true).First(&dir).Error; err != nil {
 		s.sendResponse(c, models.NewErrorResponse(70, "Directory not found"))
 		return
 	}
@@ -92,6 +92,7 @@ func (s *Subsonic) handleGetMusicDirectory(c *gin.Context) {
 	db.Where("parent = ?", dir.ID).Find(&children)
 
 	resp := models.NewResponse(models.ResponseStatusOK)
+	// TODO: nested directories??
 	resp.Directory = &models.Directory{
 		ID:    dir.ID,
 		Name:  dir.Title,
