@@ -92,18 +92,14 @@ jobs:
     - name: Make build script executable
       run: chmod +x scripts/build.sh
 
-    - name: Build for linux/arm64
-      if: matrix.platform == 'linux/arm64'
-      env:
-        CGO_ENABLED: ${{ matrix.cgo_enabled }}
-        CC: aarch64-linux-gnu-gcc
-      run: ./scripts/build.sh --dev ${{ matrix.platform }}
-
     - name: Build for ${{ matrix.platform }}
-      if: matrix.platform != 'linux/arm64'
       env:
         CGO_ENABLED: ${{ matrix.cgo_enabled }}
-      run: ./scripts/build.sh --dev ${{ matrix.platform }}
+      run: |
+        if [ "${{ matrix.platform }}" = "linux/arm64" ]; then
+          export CC=aarch64-linux-gnu-gcc
+        fi
+        ./scripts/build.sh --dev ${{ matrix.platform }}
 
     - name: Upload build artifacts
       uses: actions/upload-artifact@v6
