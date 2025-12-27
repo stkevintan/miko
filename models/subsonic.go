@@ -78,7 +78,7 @@ type MusicFolders struct {
 }
 
 type MusicFolder struct {
-	ID   int    `gorm:"primaryKey" xml:"id,attr" json:"id"`
+	ID   uint   `gorm:"primaryKey" xml:"id,attr" json:"id"`
 	Name string `xml:"name,attr,omitempty" json:"name,omitempty"`
 	Path string `gorm:"uniqueIndex" xml:"-" json:"path"`
 }
@@ -231,7 +231,7 @@ type Child struct {
 	Starred               *time.Time  `xml:"starred,attr,omitempty" json:"starred,omitempty"`
 	AlbumID               string      `gorm:"index" xml:"albumId,attr,omitempty" json:"albumId,omitempty"`
 	ArtistID              string      `gorm:"index" xml:"artistId,attr,omitempty" json:"artistId,omitempty"`
-	MusicFolderID         int         `gorm:"index" xml:"-" json:"musicFolderId,omitempty"`
+	MusicFolderID         uint        `gorm:"index" xml:"-" json:"musicFolderId,omitempty"`
 	Type                  string      `xml:"type,attr,omitempty" json:"type,omitempty"`
 	BookmarkPosition      int64       `xml:"bookmarkPosition,attr,omitempty" json:"bookmarkPosition,omitempty"`
 	OriginalWidth         int         `xml:"originalWidth,attr,omitempty" json:"originalWidth,omitempty"`

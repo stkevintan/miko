@@ -54,7 +54,10 @@ func (s *Subsonic) searchCommon(c *gin.Context) ([]models.ArtistID3, []models.Al
 	if err != nil {
 		return nil, nil, nil, err
 	}
-	musicFolderId := c.Query("musicFolderId")
+	musicFolderId, err := getQueryInt[uint](c, "musicFolderId")
+	if err != nil {
+		return nil, nil, nil, err
+	}
 
 	db := do.MustInvoke[*gorm.DB](s.injector)
 
@@ -68,7 +71,7 @@ func (s *Subsonic) searchCommon(c *gin.Context) ([]models.ArtistID3, []models.Al
 	albumQuery := db.Where("name LIKE ?", searchQuery).Limit(albumCount).Offset(albumOffset)
 	songQuery := db.Where("title LIKE ?", searchQuery).Limit(songCount).Offset(songOffset)
 
-	if musicFolderId != "" {
+	if musicFolderId != 0 {
 		// For artists and albums, we filter by checking if they have songs in the folder
 		artistQuery = artistQuery.Joins("JOIN song_artists ON song_artists.artist_id3_id = artist_id3s.id").
 			Joins("JOIN children ON children.id = song_artists.child_id").

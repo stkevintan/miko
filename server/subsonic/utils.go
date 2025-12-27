@@ -5,7 +5,6 @@ import (
 	"strconv"
 
 	"github.com/gin-gonic/gin"
-	"github.com/stkevintan/miko/models"
 )
 
 type Integer interface {
@@ -53,14 +52,14 @@ func getQueryIntOrDefault[T Integer](c *gin.Context, key string, defaultValue T,
 	return val
 }
 
-func getAuthUser(c *gin.Context) (*models.User, error) {
-	user, exists := c.Get("user")
+func getAuthUsername(c *gin.Context) (string, error) {
+	username, exists := c.Get("Username")
 	if !exists {
-		return nil, fmt.Errorf("user not found in context")
+		return "", fmt.Errorf("username not found in context")
 	}
-	userModel, ok := user.(*models.User)
+	usernameStr, ok := username.(string)
 	if !ok {
-		return nil, fmt.Errorf("invalid user type in context")
+		return "", fmt.Errorf("invalid username type in context")
 	}
-	return userModel, nil
+	return usernameStr, nil
 }

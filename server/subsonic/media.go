@@ -102,7 +102,7 @@ func (s *Subsonic) findCoverArt(dir string) string {
 }
 
 func updateNowPlaying(c *gin.Context, s *Subsonic, id string) {
-	u, err := getAuthUser(c)
+	username, err := getAuthUsername(c)
 	if err != nil {
 		s.sendResponse(c, models.NewErrorResponse(20, "Authentication required"))
 		return
@@ -111,9 +111,9 @@ func updateNowPlaying(c *gin.Context, s *Subsonic, id string) {
 	playerId := int(adler32.Checksum([]byte(clientName)))
 
 	// Update in-memory now playing record
-	key := fmt.Sprintf("%s:%s", u.Username, clientName)
+	key := fmt.Sprintf("%s:%s", username, clientName)
 	s.nowPlaying.Store(key, models.NowPlayingRecord{
-		Username:   u.Username,
+		Username:   username,
 		ChildID:    id,
 		PlayerID:   playerId,
 		PlayerName: clientName,
@@ -144,13 +144,13 @@ func (s *Subsonic) handleScrobble(c *gin.Context) {
 	}
 
 	// Remove now playing record since it's now scrobbled (finished)
-	u, err := getAuthUser(c)
+	username, err := getAuthUsername(c)
 	if err != nil {
 		s.sendResponse(c, models.NewErrorResponse(0, "Internal server error"))
 		return
 	}
 	clientName := c.DefaultQuery("c", "Unknown")
-	key := fmt.Sprintf("%s:%s", u.Username, clientName)
+	key := fmt.Sprintf("%s:%s", username, clientName)
 	s.nowPlaying.Delete(key)
 
 	s.sendResponse(c, models.NewResponse(models.ResponseStatusOK))

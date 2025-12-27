@@ -12,17 +12,17 @@ import (
 
 func (s *Subsonic) handleGetPlaylists(c *gin.Context) {
 	db := do.MustInvoke[*gorm.DB](s.injector)
-	currentUser, err := getAuthUser(c)
+	username, err := getAuthUsername(c)
 	if err != nil {
 		s.sendResponse(c, models.NewErrorResponse(0, "Internal server error"))
 		return
 	}
 
-	targetUsername := c.DefaultQuery("username", currentUser.Username)
+	targetUsername := c.DefaultQuery("username", username)
 	var playlists []models.PlaylistRecord
 	query := db.Model(&models.PlaylistRecord{})
 	query = query.Where("owner = ?", targetUsername)
-	if targetUsername != currentUser.Username {
+	if targetUsername != username {
 		query = query.Where("public = ?", true)
 	}
 	if err := query.Find(&playlists).Error; err != nil {
@@ -96,12 +96,12 @@ func (s *Subsonic) handleGetPlaylist(c *gin.Context) {
 		return
 	}
 
-	currentUser, err := getAuthUser(c)
+	username, err := getAuthUsername(c)
 	if err != nil {
 		s.sendResponse(c, models.NewErrorResponse(0, "Internal server error"))
 		return
 	}
-	if !p.Public && p.Owner != currentUser.Username {
+	if !p.Public && p.Owner != username {
 		s.sendResponse(c, models.NewErrorResponse(70, "Playlist not found"))
 		return
 	}
@@ -147,7 +147,7 @@ func (s *Subsonic) handleCreatePlaylist(c *gin.Context) {
 		return
 	}
 
-	currentUser, err := getAuthUser(c)
+	username, err := getAuthUsername(c)
 	if err != nil {
 		s.sendResponse(c, models.NewErrorResponse(0, "Internal server error"))
 		return
@@ -155,7 +155,7 @@ func (s *Subsonic) handleCreatePlaylist(c *gin.Context) {
 
 	p := models.PlaylistRecord{
 		Name:  name,
-		Owner: currentUser.Username,
+		Owner: username,
 	}
 
 	err = db.Transaction(func(tx *gorm.DB) error {
@@ -203,12 +203,12 @@ func (s *Subsonic) handleUpdatePlaylist(c *gin.Context) {
 		return
 	}
 
-	currentUser, err := getAuthUser(c)
+	username, err := getAuthUsername(c)
 	if err != nil {
 		s.sendResponse(c, models.NewErrorResponse(0, "Internal server error"))
 		return
 	}
-	if p.Owner != currentUser.Username {
+	if p.Owner != username {
 		s.sendResponse(c, models.NewErrorResponse(0, "Permission denied"))
 		return
 	}
@@ -323,12 +323,12 @@ func (s *Subsonic) handleDeletePlaylist(c *gin.Context) {
 		return
 	}
 
-	currentUser, err := getAuthUser(c)
+	username, err := getAuthUsername(c)
 	if err != nil {
 		s.sendResponse(c, models.NewErrorResponse(0, "Internal server error"))
 		return
 	}
-	if p.Owner != currentUser.Username {
+	if p.Owner != username {
 		s.sendResponse(c, models.NewErrorResponse(0, "Permission denied"))
 		return
 	}

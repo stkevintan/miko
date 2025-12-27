@@ -32,11 +32,15 @@ func (s *Subsonic) handleGetMusicFolders(c *gin.Context) {
 
 func (s *Subsonic) handleGetIndexes(c *gin.Context) {
 	db := do.MustInvoke[*gorm.DB](s.injector)
-	folderID := c.Query("musicFolderId")
+	folderID, err := getQueryInt[uint](c, "musicFolderId")
+	if err != nil {
+		s.sendResponse(c, models.NewErrorResponse(10, err.Error()))
+		return
+	}
 
 	var children []models.Child
 	query := db.Where("is_dir = ?", true).Where("parent = ?", "")
-	if folderID != "" {
+	if folderID != 0 {
 		query = query.Where("music_folder_id = ?", folderID)
 	}
 	query.Find(&children)
@@ -72,21 +76,20 @@ func (s *Subsonic) handleGetIndexes(c *gin.Context) {
 }
 
 func (s *Subsonic) handleGetMusicDirectory(c *gin.Context) {
-	id := c.Query("id")
-	if id == "" {
-		s.sendResponse(c, models.NewErrorResponse(10, "ID is required"))
+	id, err := getQueryInt[uint](c, "id")
+	if err != nil {
+		s.sendResponse(c, models.NewErrorResponse(10, err.Error()))
 		return
 	}
-
 	db := do.MustInvoke[*gorm.DB](s.injector)
 	var dir models.Child
-	if err := db.Where("id = ? AND is_dir = ?", id, true).First(&dir).Error; err != nil {
+	if err := db.Where("music_folder_id = ? AND is_dir = ?", id, true).First(&dir).Error; err != nil {
 		s.sendResponse(c, models.NewErrorResponse(70, "Directory not found"))
 		return
 	}
 
 	var children []models.Child
-	db.Where("parent = ?", id).Find(&children)
+	db.Where("parent = ?", dir.ID).Find(&children)
 
 	resp := models.NewResponse(models.ResponseStatusOK)
 	resp.Directory = &models.Directory{

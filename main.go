@@ -77,7 +77,6 @@ func main() {
 	// Auto-migrate models
 	err = db.AutoMigrate(
 		&models.User{},
-		&models.SubsonicSettings{},
 		&cookiecloud.Identity{},
 		&models.MusicFolder{},
 		&models.ArtistID3{},
@@ -96,9 +95,9 @@ func main() {
 	db.Model(&models.User{}).Count(&count)
 	if count == 0 {
 		defaultUser := models.User{
-			Username: "admin",
-			Password: "adminpassword",
-			IsAdmin:  true,
+			Username:  "admin",
+			Password:  "adminpassword",
+			AdminRole: true,
 		}
 		if err := db.Create(&defaultUser).Error; err != nil {
 			log.Error("Failed to create default user: %v", err)

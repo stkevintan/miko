@@ -78,15 +78,16 @@ func (s *Subsonic) scan() {
 			}
 
 			relPath, _ := filepath.Rel(rootPath, path)
-			if relPath == "." {
-				return nil
-			}
 
 			// Use rootPath + relPath to avoid collisions between different music folders
 			id := fmt.Sprintf("%x", md5.Sum([]byte(rootPath+relPath)))
 			parentID := ""
-			if parent := filepath.Dir(relPath); parent != "." {
-				parentID = fmt.Sprintf("%x", md5.Sum([]byte(rootPath+parent)))
+			if relPath != "." {
+				if parent := filepath.Dir(relPath); parent != "." {
+					parentID = fmt.Sprintf("%x", md5.Sum([]byte(rootPath+parent)))
+				} else {
+					parentID = fmt.Sprintf("%x", md5.Sum([]byte(rootPath+".")))
+				}
 			}
 
 			if d.IsDir() {
