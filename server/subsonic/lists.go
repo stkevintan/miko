@@ -24,29 +24,29 @@ func getAlbums(c *gin.Context, s *Subsonic) ([]models.AlbumID3, error) {
 
 	musicFolderId, err := getQueryInt[uint](c, "musicFolderId")
 	if err == nil {
-		query = query.Joins("JOIN children ON children.album_id = album_id3s.id").
+		query = query.Joins("JOIN children ON children.album_id = album_id3.id").
 			Where("children.music_folder_id = ?", musicFolderId).
-			Group("album_id3s.id")
+			Group("album_id3.id")
 	}
 
 	switch listType {
 	case "random":
 		query = query.Order("RANDOM()")
 	case "newest":
-		query = query.Order("created DESC")
+		query = query.Order("album_id3.created DESC")
 	case "alphabeticalByName":
-		query = query.Order("name ASC")
+		query = query.Order("album_id3.name ASC")
 	case "alphabeticalByArtist":
-		query = query.Order("artist ASC")
+		query = query.Order("album_id3.artist ASC")
 	case "byYear":
-		query = query.Where("year >= ? AND year <= ?", fromYear, toYear).Order("year DESC")
+		query = query.Where("album_id3.year >= ? AND album_id3.year <= ?", fromYear, toYear).Order("album_id3.year DESC")
 	case "byGenre":
 		if genre != "" {
-			query = query.Joins("JOIN album_genres ON album_genres.album_id3_id = album_id3s.id").
+			query = query.Joins("JOIN album_genres ON album_genres.album_id3_id = album_id3.id").
 				Where("album_genres.genre_name = ?", genre)
 		}
 	default:
-		query = query.Order("created DESC")
+		query = query.Order("album_id3.created DESC")
 	}
 
 	err = query.Find(&albums).Error
@@ -124,10 +124,10 @@ func (s *Subsonic) handleGetRandomSongs(c *gin.Context) {
 			Where("song_genres.genre_name = ?", genre)
 	}
 	if fromYear > 0 {
-		query = query.Where("year >= ?", fromYear)
+		query = query.Where("children.year >= ?", fromYear)
 	}
 	if toYear < 3000 {
-		query = query.Where("year <= ?", toYear)
+		query = query.Where("children.year <= ?", toYear)
 	}
 
 	if err := query.Find(&songs).Error; err != nil {
@@ -222,9 +222,9 @@ func getStarredItems(c *gin.Context, s *Subsonic) ([]models.ArtistID3, []models.
 	musicFolderId, err := getQueryInt[uint](c, "musicFolderId")
 	musicFolderExists := err == nil
 	if musicFolderExists {
-		artistQuery = artistQuery.Joins("JOIN children ON children.artist_id = artist_id3s.id").
+		artistQuery = artistQuery.Joins("JOIN children ON children.artist_id = artist_id3.id").
 			Where("children.music_folder_id = ?", musicFolderId).
-			Group("artist_id3s.id")
+			Group("artist_id3.id")
 	}
 	if err := artistQuery.Find(&artists).Error; err != nil {
 		return nil, nil, nil, err
@@ -233,9 +233,9 @@ func getStarredItems(c *gin.Context, s *Subsonic) ([]models.ArtistID3, []models.
 	var albums []models.AlbumID3
 	albumQuery := db.Where("starred IS NOT NULL")
 	if musicFolderExists {
-		albumQuery = albumQuery.Joins("JOIN children ON children.album_id = album_id3s.id").
+		albumQuery = albumQuery.Joins("JOIN children ON children.album_id = album_id3.id").
 			Where("children.music_folder_id = ?", musicFolderId).
-			Group("album_id3s.id")
+			Group("album_id3.id")
 	}
 	if err := albumQuery.Find(&albums).Error; err != nil {
 		return nil, nil, nil, err

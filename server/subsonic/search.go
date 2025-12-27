@@ -62,14 +62,14 @@ func (s *Subsonic) searchCommon(c *gin.Context) ([]models.ArtistID3, []models.Al
 	musicFolderId, err := getQueryInt[uint](c, "musicFolderId")
 	if err == nil {
 		// For artists and albums, we filter by checking if they have songs in the folder
-		artistQuery = artistQuery.Joins("JOIN song_artists ON song_artists.artist_id3_id = artist_id3s.id").
+		artistQuery = artistQuery.Joins("JOIN song_artists ON song_artists.artist_id3_id = artist_id3.id").
 			Joins("JOIN children ON children.id = song_artists.child_id").
 			Where("children.music_folder_id = ?", musicFolderId).
-			Group("artist_id3s.id")
+			Group("artist_id3.id")
 
-		albumQuery = albumQuery.Joins("JOIN children ON children.album_id = album_id3s.id").
+		albumQuery = albumQuery.Joins("JOIN children ON children.album_id = album_id3.id").
 			Where("children.music_folder_id = ?", musicFolderId).
-			Group("album_id3s.id")
+			Group("album_id3.id")
 
 		songQuery = songQuery.Where("music_folder_id = ?", musicFolderId)
 	}
