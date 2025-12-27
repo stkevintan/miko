@@ -162,13 +162,6 @@ func (s *Subsonic) scan() {
 						child.Genres = s.getGenresFromNames(db, g, seenGenres)
 					}
 
-					// Extract lyrics
-					if l, ok := tags[taglib.Lyrics]; ok && len(l) > 0 {
-						child.Lyrics = l[0]
-					} else if l, ok := tags["UNSYNCEDLYRICS"]; ok && len(l) > 0 {
-						child.Lyrics = l[0]
-					}
-
 					// Extract properties
 					if props, err := taglib.ReadProperties(path); err == nil {
 						child.Duration = int(props.Length.Seconds())

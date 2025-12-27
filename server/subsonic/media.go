@@ -110,31 +110,6 @@ func (s *Subsonic) handleGetCoverArt(c *gin.Context) {
 	c.Status(http.StatusNotFound)
 }
 
-func (s *Subsonic) handleGetLyrics(c *gin.Context) {
-	artist := c.Query("artist")
-	title := c.Query("title")
-
-	if artist == "" || title == "" {
-		s.sendResponse(c, models.NewErrorResponse(10, "Artist and title are required"))
-		return
-	}
-
-	db := do.MustInvoke[*gorm.DB](s.injector)
-	var song models.Child
-	if err := db.Where("artist = ? AND title = ?", artist, title).First(&song).Error; err != nil {
-		s.sendResponse(c, models.NewErrorResponse(70, "Lyrics not found"))
-		return
-	}
-
-	resp := models.NewResponse(models.ResponseStatusOK)
-	resp.Lyrics = &models.Lyrics{
-		Artist: song.Artist,
-		Title:  song.Title,
-		Value:  song.Lyrics,
-	}
-	s.sendResponse(c, resp)
-}
-
 func (s *Subsonic) handleGetAvatar(c *gin.Context) {
 	username := c.Query("username")
 	if username == "" {
