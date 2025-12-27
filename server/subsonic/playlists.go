@@ -43,12 +43,16 @@ func (s *Subsonic) handleGetPlaylists(c *gin.Context) {
 			Duration   int
 		}
 		var stats []PlaylistStats
-		db.Table("playlist_songs").
+		err := db.Table("playlist_songs").
 			Select("playlist_id, COUNT(playlist_songs.id) as song_count, COALESCE(SUM(children.duration), 0) as duration").
 			Joins("LEFT JOIN children ON children.id = playlist_songs.song_id").
 			Where("playlist_id IN ?", playlistIDs).
 			Group("playlist_id").
-			Scan(&stats)
+			Scan(&stats).Error
+		if err != nil {
+			s.sendResponse(c, models.NewErrorResponse(0, "Failed to retrieve playlist stats"))
+			return
+		}
 
 		statsMap := make(map[uint]PlaylistStats)
 		for _, s := range stats {
