@@ -31,7 +31,10 @@ func New(i do.Injector) *Handler {
 }
 
 func (h *Handler) getRequestInjector(r *http.Request) (do.Injector, error) {
-	username := models.GetUsername(r)
+	username, err := models.GetUsername(r)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get username from request: %w", err)
+	}
 
 	var identity cookiecloud.Identity
 	if err := h.db.Where("username = ?", username).First(&identity).Error; err != nil {

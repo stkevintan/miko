@@ -1,6 +1,7 @@
 package models
 
 import (
+	"fmt"
 	"net/http"
 )
 
@@ -10,10 +11,10 @@ const (
 	UsernameKey ContextKey = "username"
 )
 
-func GetUsername(r *http.Request) string {
+func GetUsername(r *http.Request) (string, error) {
 	username, ok := r.Context().Value(UsernameKey).(string)
-	if !ok {
-		panic("username not found in context")
+	if ok {
+		return username, nil
 	}
-	return username
+	return "", fmt.Errorf("username not found in context, request may not be authenticated")
 }

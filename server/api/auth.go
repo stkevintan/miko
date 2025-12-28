@@ -19,7 +19,7 @@ type Claims struct {
 	jwt.RegisteredClaims
 }
 
-func (h *Handler) getJWTSecret() []byte {
+func (h *Handler) resolveJWTSecret() []byte {
 	if h.jwtSecret != nil {
 		return h.jwtSecret
 	}
@@ -63,7 +63,7 @@ func (h *Handler) GenerateToken(username string) (string, error) {
 	}
 
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
-	return token.SignedString(h.getJWTSecret())
+	return token.SignedString(h.resolveJWTSecret())
 }
 
 func (h *Handler) jwtAuth(next http.Handler) http.Handler {
@@ -84,7 +84,7 @@ func (h *Handler) jwtAuth(next http.Handler) http.Handler {
 		claims := &Claims{}
 
 		token, err := jwt.ParseWithClaims(tokenString, claims, func(token *jwt.Token) (interface{}, error) {
-			return h.getJWTSecret(), nil
+			return h.resolveJWTSecret(), nil
 		})
 
 		if err != nil {

@@ -19,7 +19,12 @@ func (h *Handler) handleCookiecloudIdentity(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
-	username := models.GetUsername(r)
+	username, err := models.GetUsername(r)
+	if err != nil {
+		errorResp := models.ErrorResponse{Error: "Failed to get username from context: " + err.Error()}
+		JSON(w, http.StatusInternalServerError, errorResp)
+		return
+	}
 
 	// Save the identity to database associated with current account
 	identity := cookiecloud.Identity{
