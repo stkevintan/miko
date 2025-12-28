@@ -1,62 +1,66 @@
 package subsonic
 
 import (
+	"net/http"
 	"time"
 
-	"github.com/gin-gonic/gin"
 	"github.com/samber/do/v2"
 	"github.com/stkevintan/miko/models"
 	"gorm.io/gorm"
 )
 
-func getAlbums(c *gin.Context, s *Subsonic) ([]models.AlbumID3, error) {
-	listType := c.DefaultQuery("type", "newest")
-	size := getQueryIntOrDefault(c, "size", 10)
-	offset := getQueryIntOrDefault(c, "offset", 0)
-	genre := c.Query("genre")
-	fromYear := getQueryIntOrDefault(c, "fromYear", 0)
-	toYear := getQueryIntOrDefault(c, "toYear", 3000)
+func getAlbums(r *http.Request, s *Subsonic) ([]models.AlbumID3, error) {
+	query := r.URL.Query()
+	listType := query.Get("type")
+	if listType == "" {
+		listType = "newest"
+	}
+	size := getQueryIntOrDefault(r, "size", 10)
+	offset := getQueryIntOrDefault(r, "offset", 0)
+	genre := query.Get("genre")
+	fromYear := getQueryIntOrDefault(r, "fromYear", 0)
+	toYear := getQueryIntOrDefault(r, "toYear", 3000)
 
 	db := do.MustInvoke[*gorm.DB](s.injector)
 	var albums []models.AlbumID3
 
-	query := db.Limit(size).Offset(offset)
+	dbQuery := db.Limit(size).Offset(offset)
 
-	musicFolderId, err := getQueryInt[uint](c, "musicFolderId")
+	musicFolderId, err := getQueryInt[uint](r, "musicFolderId")
 	if err == nil {
-		query = query.Joins("JOIN children ON children.album_id = album_id3.id").
+		dbQuery = dbQuery.Joins("JOIN children ON children.album_id = album_id3.id").
 			Where("children.music_folder_id = ?", musicFolderId).
 			Group("album_id3.id")
 	}
 
 	switch listType {
 	case "random":
-		query = query.Order("RANDOM()")
+		dbQuery = dbQuery.Order("RANDOM()")
 	case "newest":
-		query = query.Order("album_id3.created DESC")
+		dbQuery = dbQuery.Order("album_id3.created DESC")
 	case "alphabeticalByName":
-		query = query.Order("album_id3.name ASC")
+		dbQuery = dbQuery.Order("album_id3.name ASC")
 	case "alphabeticalByArtist":
-		query = query.Order("album_id3.artist ASC")
+		dbQuery = dbQuery.Order("album_id3.artist ASC")
 	case "byYear":
-		query = query.Where("album_id3.year >= ? AND album_id3.year <= ?", fromYear, toYear).Order("album_id3.year DESC")
+		dbQuery = dbQuery.Where("album_id3.year >= ? AND album_id3.year <= ?", fromYear, toYear).Order("album_id3.year DESC")
 	case "byGenre":
 		if genre != "" {
-			query = query.Joins("JOIN album_genres ON album_genres.album_id3_id = album_id3.id").
+			dbQuery = dbQuery.Joins("JOIN album_genres ON album_genres.album_id3_id = album_id3.id").
 				Where("album_genres.genre_name = ?", genre)
 		}
 	default:
-		query = query.Order("album_id3.created DESC")
+		dbQuery = dbQuery.Order("album_id3.created DESC")
 	}
 
-	err = query.Find(&albums).Error
+	err = dbQuery.Find(&albums).Error
 	return albums, err
 }
 
-func (s *Subsonic) handleGetAlbumList2(c *gin.Context) {
-	albums, err := getAlbums(c, s)
+func (s *Subsonic) handleGetAlbumList2(w http.ResponseWriter, r *http.Request) {
+	albums, err := getAlbums(r, s)
 	if err != nil {
-		s.sendResponse(c, models.NewErrorResponse(0, err.Error()))
+		s.sendResponse(w, r, models.NewErrorResponse(0, err.Error()))
 		return
 	}
 
@@ -64,18 +68,18 @@ func (s *Subsonic) handleGetAlbumList2(c *gin.Context) {
 	resp.AlbumList2 = &models.AlbumList2{
 		Album: albums,
 	}
-	s.sendResponse(c, resp)
+	s.sendResponse(w, r, resp)
 }
 
-func (s *Subsonic) handleGetAlbumList(c *gin.Context) {
+func (s *Subsonic) handleGetAlbumList(w http.ResponseWriter, r *http.Request) {
 	// getAlbumList is the older version, we can just wrap handleGetAlbumList2
 	// but it returns SearchResult instead of AlbumList2 in some versions?
 	// Actually it returns <albumList> which is same as <albumList2> but with different element names.
 	// For simplicity, let's just use the same logic but return AlbumList.
 
-	albums, err := getAlbums(c, s)
+	albums, err := getAlbums(r, s)
 	if err != nil {
-		s.sendResponse(c, models.NewErrorResponse(0, err.Error()))
+		s.sendResponse(w, r, models.NewErrorResponse(0, err.Error()))
 		return
 	}
 
@@ -99,39 +103,40 @@ func (s *Subsonic) handleGetAlbumList(c *gin.Context) {
 	resp.AlbumList = &models.AlbumList{
 		Album: children,
 	}
-	s.sendResponse(c, resp)
+	s.sendResponse(w, r, resp)
 }
 
-func (s *Subsonic) handleGetRandomSongs(c *gin.Context) {
-	size := getQueryIntOrDefault(c, "size", 10)
-	genre := c.Query("genre")
-	fromYear := getQueryIntOrDefault(c, "fromYear", 0)
-	toYear := getQueryIntOrDefault(c, "toYear", 3000)
+func (s *Subsonic) handleGetRandomSongs(w http.ResponseWriter, r *http.Request) {
+	query := r.URL.Query()
+	size := getQueryIntOrDefault(r, "size", 10)
+	genre := query.Get("genre")
+	fromYear := getQueryIntOrDefault(r, "fromYear", 0)
+	toYear := getQueryIntOrDefault(r, "toYear", 3000)
 
 	db := do.MustInvoke[*gorm.DB](s.injector)
 	var songs []models.Child
 
-	query := db.Where("is_dir = ?", false).Limit(size).Order("RANDOM()")
+	dbQuery := db.Where("is_dir = ?", false).Limit(size).Order("RANDOM()")
 
 	// Optional musicFolderId filter
-	musicFolderId, err := getQueryInt[uint](c, "musicFolderId")
+	musicFolderId, err := getQueryInt[uint](r, "musicFolderId")
 	if err == nil {
-		query = query.Where("music_folder_id = ?", musicFolderId)
+		dbQuery = dbQuery.Where("music_folder_id = ?", musicFolderId)
 	}
 
 	if genre != "" {
-		query = query.Joins("JOIN song_genres ON song_genres.child_id = children.id").
+		dbQuery = dbQuery.Joins("JOIN song_genres ON song_genres.child_id = children.id").
 			Where("song_genres.genre_name = ?", genre)
 	}
 	if fromYear > 0 {
-		query = query.Where("children.year >= ?", fromYear)
+		dbQuery = dbQuery.Where("children.year >= ?", fromYear)
 	}
 	if toYear < 3000 {
-		query = query.Where("children.year <= ?", toYear)
+		dbQuery = dbQuery.Where("children.year <= ?", toYear)
 	}
 
-	if err := query.Find(&songs).Error; err != nil {
-		s.sendResponse(c, models.NewErrorResponse(0, "Failed to fetch songs"))
+	if err := dbQuery.Find(&songs).Error; err != nil {
+		s.sendResponse(w, r, models.NewErrorResponse(0, "Failed to fetch songs"))
 		return
 	}
 
@@ -139,33 +144,33 @@ func (s *Subsonic) handleGetRandomSongs(c *gin.Context) {
 	resp.RandomSongs = &models.Songs{
 		Song: songs,
 	}
-	s.sendResponse(c, resp)
+	s.sendResponse(w, r, resp)
 }
 
-func (s *Subsonic) handleGetSongsByGenre(c *gin.Context) {
-	genre := c.Query("genre")
+func (s *Subsonic) handleGetSongsByGenre(w http.ResponseWriter, r *http.Request) {
+	genre := r.URL.Query().Get("genre")
 	if genre == "" {
-		s.sendResponse(c, models.NewErrorResponse(10, "Genre is required"))
+		s.sendResponse(w, r, models.NewErrorResponse(10, "Genre is required"))
 		return
 	}
 
-	count := getQueryIntOrDefault(c, "count", 10)
-	offset := getQueryIntOrDefault(c, "offset", 0)
+	count := getQueryIntOrDefault(r, "count", 10)
+	offset := getQueryIntOrDefault(r, "offset", 0)
 
 	db := do.MustInvoke[*gorm.DB](s.injector)
 	var songs []models.Child
-	query := db.Joins("JOIN song_genres ON song_genres.child_id = children.id").
+	dbQuery := db.Joins("JOIN song_genres ON song_genres.child_id = children.id").
 		Where("song_genres.genre_name = ?", genre)
 
-	musicFolderId, err := getQueryInt[uint](c, "musicFolderId")
+	musicFolderId, err := getQueryInt[uint](r, "musicFolderId")
 	if err == nil {
-		query = query.Where("children.music_folder_id = ?", musicFolderId)
+		dbQuery = dbQuery.Where("children.music_folder_id = ?", musicFolderId)
 	}
 
-	err = query.Limit(count).Offset(offset).Find(&songs).Error
+	err = dbQuery.Limit(count).Offset(offset).Find(&songs).Error
 
 	if err != nil {
-		s.sendResponse(c, models.NewErrorResponse(0, err.Error()))
+		s.sendResponse(w, r, models.NewErrorResponse(0, err.Error()))
 		return
 	}
 
@@ -173,10 +178,10 @@ func (s *Subsonic) handleGetSongsByGenre(c *gin.Context) {
 	resp.SongsByGenre = &models.Songs{
 		Song: songs,
 	}
-	s.sendResponse(c, resp)
+	s.sendResponse(w, r, resp)
 }
 
-func (s *Subsonic) handleGetNowPlaying(c *gin.Context) {
+func (s *Subsonic) handleGetNowPlaying(w http.ResponseWriter, r *http.Request) {
 	db := do.MustInvoke[*gorm.DB](s.injector)
 
 	tenMinutesAgo := time.Now().Add(-10 * time.Minute)
@@ -211,15 +216,15 @@ func (s *Subsonic) handleGetNowPlaying(c *gin.Context) {
 	resp.NowPlaying = &models.NowPlaying{
 		Entry: entries,
 	}
-	s.sendResponse(c, resp)
+	s.sendResponse(w, r, resp)
 }
 
-func getStarredItems(c *gin.Context, s *Subsonic) ([]models.ArtistID3, []models.AlbumID3, []models.Child, error) {
+func getStarredItems(r *http.Request, s *Subsonic) ([]models.ArtistID3, []models.AlbumID3, []models.Child, error) {
 	db := do.MustInvoke[*gorm.DB](s.injector)
 
 	var artists []models.ArtistID3
 	artistQuery := db.Where("starred IS NOT NULL")
-	musicFolderId, err := getQueryInt[uint](c, "musicFolderId")
+	musicFolderId, err := getQueryInt[uint](r, "musicFolderId")
 	musicFolderExists := err == nil
 	if musicFolderExists {
 		artistQuery = artistQuery.Joins("JOIN children ON children.artist_id = artist_id3.id").
@@ -253,10 +258,10 @@ func getStarredItems(c *gin.Context, s *Subsonic) ([]models.ArtistID3, []models.
 	return artists, albums, songs, nil
 }
 
-func (s *Subsonic) handleGetStarred(c *gin.Context) {
-	artists, albums, songs, err := getStarredItems(c, s)
+func (s *Subsonic) handleGetStarred(w http.ResponseWriter, r *http.Request) {
+	artists, albums, songs, err := getStarredItems(r, s)
 	if err != nil {
-		s.sendResponse(c, models.NewErrorResponse(0, err.Error()))
+		s.sendResponse(w, r, models.NewErrorResponse(0, err.Error()))
 		return
 	}
 
@@ -294,13 +299,13 @@ func (s *Subsonic) handleGetStarred(c *gin.Context) {
 		Album:  starredAlbums,
 		Song:   songs,
 	}
-	s.sendResponse(c, resp)
+	s.sendResponse(w, r, resp)
 }
 
-func (s *Subsonic) handleGetStarred2(c *gin.Context) {
-	artists, albums, songs, err := getStarredItems(c, s)
+func (s *Subsonic) handleGetStarred2(w http.ResponseWriter, r *http.Request) {
+	artists, albums, songs, err := getStarredItems(r, s)
 	if err != nil {
-		s.sendResponse(c, models.NewErrorResponse(0, err.Error()))
+		s.sendResponse(w, r, models.NewErrorResponse(0, err.Error()))
 		return
 	}
 
@@ -310,5 +315,5 @@ func (s *Subsonic) handleGetStarred2(c *gin.Context) {
 		Album:  albums,
 		Song:   songs,
 	}
-	s.sendResponse(c, resp)
+	s.sendResponse(w, r, resp)
 }

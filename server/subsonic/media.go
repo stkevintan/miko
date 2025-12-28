@@ -13,7 +13,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/gin-gonic/gin"
 	"github.com/samber/do/v2"
 	"github.com/stkevintan/miko/config"
 	"github.com/stkevintan/miko/models"
@@ -22,50 +21,61 @@ import (
 	"gorm.io/gorm"
 )
 
-func (s *Subsonic) handleStream(c *gin.Context) {
-	id := c.Query("id")
+func (s *Subsonic) handleStream(w http.ResponseWriter, r *http.Request) {
+	id := r.URL.Query().Get("id")
 	if id == "" {
-		s.sendResponse(c, models.NewErrorResponse(10, "ID is required"))
+		s.sendResponse(w, r, models.NewErrorResponse(10, "ID is required"))
 		return
 	}
 
 	db := do.MustInvoke[*gorm.DB](s.injector)
 	var song models.Child
 	if err := db.Where("id = ?", id).First(&song).Error; err != nil {
-		s.sendResponse(c, models.NewErrorResponse(70, "Song not found"))
+		s.sendResponse(w, r, models.NewErrorResponse(70, "Song not found"))
 		return
 	}
 
 	if song.IsDir {
-		s.sendResponse(c, models.NewErrorResponse(70, "ID is a directory"))
+		s.sendResponse(w, r, models.NewErrorResponse(70, "ID is a directory"))
 		return
 	}
 
-	c.File(song.Path)
+	if _, err := os.Stat(song.Path); err != nil {
+		s.sendResponse(w, r, models.NewErrorResponse(70, "File not found on disk"))
+		return
+	}
+
+	log.Debug("Streaming file: %s (size: %d)", song.Path, song.Size)
+	safeServeFile(w, r, song.Path)
 }
 
-func (s *Subsonic) handleDownload(c *gin.Context) {
-	id := c.Query("id")
+func (s *Subsonic) handleDownload(w http.ResponseWriter, r *http.Request) {
+	id := r.URL.Query().Get("id")
 	if id == "" {
-		s.sendResponse(c, models.NewErrorResponse(10, "ID is required"))
+		s.sendResponse(w, r, models.NewErrorResponse(10, "ID is required"))
 		return
 	}
 
 	db := do.MustInvoke[*gorm.DB](s.injector)
 	var song models.Child
 	if err := db.Where("id = ?", id).First(&song).Error; err != nil {
-		s.sendResponse(c, models.NewErrorResponse(70, "Song not found"))
+		s.sendResponse(w, r, models.NewErrorResponse(70, "Song not found"))
 		return
 	}
 
-	c.Header("Content-Disposition", mime.FormatMediaType("attachment", map[string]string{"filename": filepath.Base(song.Path)}))
-	c.File(song.Path)
+	if _, err := os.Stat(song.Path); err != nil {
+		s.sendResponse(w, r, models.NewErrorResponse(70, "File not found on disk"))
+		return
+	}
+
+	w.Header().Set("Content-Disposition", mime.FormatMediaType("attachment", map[string]string{"filename": filepath.Base(song.Path)}))
+	safeServeFile(w, r, song.Path)
 }
 
-func (s *Subsonic) handleGetCoverArt(c *gin.Context) {
-	id := c.Query("id")
+func (s *Subsonic) handleGetCoverArt(w http.ResponseWriter, r *http.Request) {
+	id := r.URL.Query().Get("id")
 	if id == "" {
-		s.sendResponse(c, models.NewErrorResponse(10, "ID is required"))
+		s.sendResponse(w, r, models.NewErrorResponse(10, "ID is required"))
 		return
 	}
 
@@ -76,7 +86,9 @@ func (s *Subsonic) handleGetCoverArt(c *gin.Context) {
 	cachePath := filepath.Join(cacheDir, id)
 	if data, err := os.ReadFile(cachePath); err == nil && len(data) > 0 {
 		contentType := http.DetectContentType(data)
-		c.Data(http.StatusOK, contentType, data)
+		w.Header().Set("Content-Type", contentType)
+		w.WriteHeader(http.StatusOK)
+		w.Write(data)
 		return
 	}
 
@@ -109,28 +121,31 @@ func (s *Subsonic) handleGetCoverArt(c *gin.Context) {
 			}
 
 			contentType := http.DetectContentType(data)
-			c.Data(http.StatusOK, contentType, data)
+			w.Header().Set("Content-Type", contentType)
+			w.WriteHeader(http.StatusOK)
+			w.Write(data)
 			return
 		}
 	}
 
 	// Fallback to a default cover or 404
-	c.Status(http.StatusNotFound)
+	w.WriteHeader(http.StatusNotFound)
 }
 
-func (s *Subsonic) handleGetLyrics(c *gin.Context) {
-	artist := c.Query("artist")
-	title := c.Query("title")
+func (s *Subsonic) handleGetLyrics(w http.ResponseWriter, r *http.Request) {
+	query := r.URL.Query()
+	artist := query.Get("artist")
+	title := query.Get("title")
 
 	if artist == "" || title == "" {
-		s.sendResponse(c, models.NewErrorResponse(10, "Artist and title are required"))
+		s.sendResponse(w, r, models.NewErrorResponse(10, "Artist and title are required"))
 		return
 	}
 
 	db := do.MustInvoke[*gorm.DB](s.injector)
 	var song models.Child
 	if err := db.Where("artist = ? AND title = ?", artist, title).First(&song).Error; err != nil {
-		s.sendResponse(c, models.NewErrorResponse(70, "Lyrics not found"))
+		s.sendResponse(w, r, models.NewErrorResponse(70, "Lyrics not found"))
 		return
 	}
 
@@ -140,20 +155,20 @@ func (s *Subsonic) handleGetLyrics(c *gin.Context) {
 		Title:  song.Title,
 		Value:  song.Lyrics,
 	}
-	s.sendResponse(c, resp)
+	s.sendResponse(w, r, resp)
 }
 
-func (s *Subsonic) handleGetLyricsBySongId(c *gin.Context) {
-	id := c.Query("id")
+func (s *Subsonic) handleGetLyricsBySongId(w http.ResponseWriter, r *http.Request) {
+	id := r.URL.Query().Get("id")
 	if id == "" {
-		s.sendResponse(c, models.NewErrorResponse(10, "ID is required"))
+		s.sendResponse(w, r, models.NewErrorResponse(10, "ID is required"))
 		return
 	}
 
 	db := do.MustInvoke[*gorm.DB](s.injector)
 	var song models.Child
 	if err := db.Where("id = ?", id).First(&song).Error; err != nil {
-		s.sendResponse(c, models.NewErrorResponse(70, "Lyrics not found"))
+		s.sendResponse(w, r, models.NewErrorResponse(70, "Lyrics not found"))
 		return
 	}
 
@@ -206,13 +221,13 @@ func (s *Subsonic) handleGetLyricsBySongId(c *gin.Context) {
 			},
 		},
 	}
-	s.sendResponse(c, resp)
+	s.sendResponse(w, r, resp)
 }
 
-func (s *Subsonic) handleGetAvatar(c *gin.Context) {
-	username := c.Query("username")
+func (s *Subsonic) handleGetAvatar(w http.ResponseWriter, r *http.Request) {
+	username := r.URL.Query().Get("username")
 	if username == "" {
-		s.sendResponse(c, models.NewErrorResponse(10, "Username is required"))
+		s.sendResponse(w, r, models.NewErrorResponse(10, "Username is required"))
 		return
 	}
 
@@ -226,24 +241,27 @@ func (s *Subsonic) handleGetAvatar(c *gin.Context) {
 	for _, ext := range extensions {
 		avatarPath := filepath.Join(avatarDir, filename+ext)
 		if _, err := os.Stat(avatarPath); err == nil {
-			c.File(avatarPath)
+			http.ServeFile(w, r, avatarPath)
 			return
 		} else if !os.IsNotExist(err) {
 			log.Error("Error accessing avatar %s: %v", avatarPath, err)
-			c.Status(http.StatusInternalServerError)
+			w.WriteHeader(http.StatusInternalServerError)
 			return
 		}
 	}
-	c.Status(http.StatusNotFound)
+	w.WriteHeader(http.StatusNotFound)
 }
 
-func updateNowPlaying(c *gin.Context, s *Subsonic, id string) {
-	username, err := getAuthUsername(c)
+func updateNowPlaying(w http.ResponseWriter, r *http.Request, s *Subsonic, id string) {
+	username, err := models.GetUsername(r)
 	if err != nil {
-		s.sendResponse(c, models.NewErrorResponse(20, "Authentication required"))
+		s.sendResponse(w, r, models.NewErrorResponse(20, "Authentication required"))
 		return
 	}
-	clientName := c.DefaultQuery("c", "Unknown")
+	clientName := r.URL.Query().Get("c")
+	if clientName == "" {
+		clientName = "Unknown"
+	}
 	playerId := int(adler32.Checksum([]byte(clientName)))
 
 	// Update in-memory now playing record
@@ -256,38 +274,42 @@ func updateNowPlaying(c *gin.Context, s *Subsonic, id string) {
 		UpdatedAt:  time.Now(),
 	})
 
-	s.sendResponse(c, models.NewResponse(models.ResponseStatusOK))
+	s.sendResponse(w, r, models.NewResponse(models.ResponseStatusOK))
 }
 
-func (s *Subsonic) handleScrobble(c *gin.Context) {
-	id := c.Query("id")
+func (s *Subsonic) handleScrobble(w http.ResponseWriter, r *http.Request) {
+	query := r.URL.Query()
+	id := query.Get("id")
 	if id == "" {
-		s.sendResponse(c, models.NewErrorResponse(10, "ID is required"))
+		s.sendResponse(w, r, models.NewErrorResponse(10, "ID is required"))
 		return
 	}
 
-	submission := c.Query("submission")
+	submission := query.Get("submission")
 	if submission == "false" {
 		// If submission is false, it's just an update now playing call
-		updateNowPlaying(c, s, id)
+		updateNowPlaying(w, r, s, id)
 		return
 	}
 
 	db := do.MustInvoke[*gorm.DB](s.injector)
 	if err := db.Model(&models.Child{}).Where("id = ?", id).UpdateColumn("play_count", gorm.Expr("play_count + 1")).Error; err != nil {
-		s.sendResponse(c, models.NewErrorResponse(0, "Failed to update play count"))
+		s.sendResponse(w, r, models.NewErrorResponse(0, "Failed to update play count"))
 		return
 	}
 
 	// Remove now playing record since it's now scrobbled (finished)
-	username, err := getAuthUsername(c)
+	username, err := models.GetUsername(r)
 	if err != nil {
-		s.sendResponse(c, models.NewErrorResponse(0, "Internal server error"))
+		s.sendResponse(w, r, models.NewErrorResponse(0, "Internal server error"))
 		return
 	}
-	clientName := c.DefaultQuery("c", "Unknown")
+	clientName := query.Get("c")
+	if clientName == "" {
+		clientName = "Unknown"
+	}
 	key := fmt.Sprintf("%s:%s", username, clientName)
 	s.nowPlaying.Delete(key)
 
-	s.sendResponse(c, models.NewResponse(models.ResponseStatusOK))
+	s.sendResponse(w, r, models.NewResponse(models.ResponseStatusOK))
 }

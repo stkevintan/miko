@@ -10,7 +10,7 @@ Miko is a lightweight, high-performance music service that combines a **Subsonic
 - **CookieCloud Integration**: Seamlessly sync authentication cookies from your browser to the server.
 - **CGO-Free & Portable**: Built with a pure-Go SQLite driver, making it easy to run in lightweight Docker containers (Alpine).
 - **Multi-Arch Support**: Native binaries and Docker images for `amd64` and `arm64` (Apple Silicon/Raspberry Pi).
-- **Clean Architecture**: Built with Gin, GORM, and Dependency Injection (`samber/do`).
+- **Clean Architecture**: Built with Chi, GORM, and Dependency Injection (`samber/do`).
 - **Centralized Data Management**: All database, cache, and user data are stored in a single, configurable `dataDir`.
 
 ## Project Structure

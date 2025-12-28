@@ -1,14 +1,17 @@
 package api
 
 import (
+	"context"
+	"crypto/rand"
+	"encoding/hex"
 	"errors"
 	"net/http"
 	"strings"
 	"time"
 
-	"github.com/gin-gonic/gin"
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/stkevintan/miko/models"
+	"github.com/stkevintan/miko/pkg/log"
 )
 
 type Claims struct {
@@ -16,11 +19,38 @@ type Claims struct {
 	jwt.RegisteredClaims
 }
 
-func (h *Handler) getJWTSecret() []byte {
-	if h.cfg.Server.JWTSecret != "" {
-		return []byte(h.cfg.Server.JWTSecret)
+func (h *Handler) resolveJWTSecret() []byte {
+	if h.jwtSecret != nil {
+		return h.jwtSecret
 	}
-	return []byte("miko-secret-key")
+
+	// 1. Check config
+	if h.cfg.Server.JWTSecret != "" {
+		h.jwtSecret = []byte(h.cfg.Server.JWTSecret)
+		return h.jwtSecret
+	}
+
+	// 2. Check database
+	var setting models.SystemSetting
+	if err := h.db.Where("key = ?", "jwt_secret").First(&setting).Error; err == nil {
+		h.jwtSecret = []byte(setting.Value)
+		return h.jwtSecret
+	}
+
+	// 3. Generate and store
+	log.Info("No JWT secret found in config or database, generating a new one...")
+	b := make([]byte, 32)
+	if _, err := rand.Read(b); err != nil {
+		log.Fatalf("Critical failure: failed to generate random JWT secret: %v", err)
+	}
+	secret := hex.EncodeToString(b)
+	h.db.Create(&models.SystemSetting{
+		Key:   "jwt_secret",
+		Value: secret,
+	})
+
+	h.jwtSecret = []byte(secret)
+	return h.jwtSecret
 }
 
 func (h *Handler) GenerateToken(username string) (string, error) {
@@ -33,22 +63,20 @@ func (h *Handler) GenerateToken(username string) (string, error) {
 	}
 
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
-	return token.SignedString(h.getJWTSecret())
+	return token.SignedString(h.resolveJWTSecret())
 }
 
-func (h *Handler) authMiddleware() gin.HandlerFunc {
-	return func(c *gin.Context) {
-		authHeader := c.GetHeader("Authorization")
+func (h *Handler) jwtAuth(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		authHeader := r.Header.Get("Authorization")
 		if authHeader == "" {
-			c.JSON(http.StatusUnauthorized, models.ErrorResponse{Error: "Authorization header is required"})
-			c.Abort()
+			JSON(w, http.StatusUnauthorized, models.ErrorResponse{Error: "Authorization header is required"})
 			return
 		}
 
 		parts := strings.SplitN(authHeader, " ", 2)
 		if !(len(parts) == 2 && parts[0] == "Bearer") {
-			c.JSON(http.StatusUnauthorized, models.ErrorResponse{Error: "Authorization header format must be Bearer {token}"})
-			c.Abort()
+			JSON(w, http.StatusUnauthorized, models.ErrorResponse{Error: "Authorization header format must be Bearer {token}"})
 			return
 		}
 
@@ -56,26 +84,24 @@ func (h *Handler) authMiddleware() gin.HandlerFunc {
 		claims := &Claims{}
 
 		token, err := jwt.ParseWithClaims(tokenString, claims, func(token *jwt.Token) (interface{}, error) {
-			return h.getJWTSecret(), nil
+			return h.resolveJWTSecret(), nil
 		})
 
 		if err != nil {
 			if errors.Is(err, jwt.ErrTokenExpired) {
-				c.JSON(http.StatusUnauthorized, models.ErrorResponse{Error: "Token is expired"})
+				JSON(w, http.StatusUnauthorized, models.ErrorResponse{Error: "Token is expired"})
 			} else {
-				c.JSON(http.StatusUnauthorized, models.ErrorResponse{Error: "Invalid token"})
+				JSON(w, http.StatusUnauthorized, models.ErrorResponse{Error: "Invalid token"})
 			}
-			c.Abort()
 			return
 		}
 
 		if !token.Valid {
-			c.JSON(http.StatusUnauthorized, models.ErrorResponse{Error: "Invalid token"})
-			c.Abort()
+			JSON(w, http.StatusUnauthorized, models.ErrorResponse{Error: "Invalid token"})
 			return
 		}
 
-		c.Set("username", claims.Username)
-		c.Next()
-	}
+		ctx := context.WithValue(r.Context(), models.UsernameKey, claims.Username)
+		next.ServeHTTP(w, r.WithContext(ctx))
+	})
 }

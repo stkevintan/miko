@@ -1,32 +1,36 @@
 package subsonic
 
 import (
+	"net/http"
 	"strconv"
 
-	"github.com/gin-gonic/gin"
 	"github.com/samber/do/v2"
 	"github.com/stkevintan/miko/models"
 	"github.com/stkevintan/miko/pkg/log"
 	"gorm.io/gorm"
 )
 
-func (s *Subsonic) handleGetPlaylists(c *gin.Context) {
+func (s *Subsonic) handleGetPlaylists(w http.ResponseWriter, r *http.Request) {
 	db := do.MustInvoke[*gorm.DB](s.injector)
-	username, err := getAuthUsername(c)
+	username, err := models.GetUsername(r)
 	if err != nil {
-		s.sendResponse(c, models.NewErrorResponse(0, "Internal server error"))
+		s.sendResponse(w, r, models.NewErrorResponse(0, "Internal server error"))
 		return
 	}
 
-	targetUsername := c.DefaultQuery("username", username)
-	var playlists []models.PlaylistRecord
-	query := db.Model(&models.PlaylistRecord{})
-	query = query.Where("owner = ?", targetUsername)
-	if targetUsername != username {
-		query = query.Where("public = ?", true)
+	query := r.URL.Query()
+	targetUsername := query.Get("username")
+	if targetUsername == "" {
+		targetUsername = username
 	}
-	if err := query.Find(&playlists).Error; err != nil {
-		s.sendResponse(c, models.NewErrorResponse(0, "Failed to retrieve playlists"))
+	var playlists []models.PlaylistRecord
+	dbQuery := db.Model(&models.PlaylistRecord{})
+	dbQuery = dbQuery.Where("owner = ?", targetUsername)
+	if targetUsername != username {
+		dbQuery = dbQuery.Where("public = ?", true)
+	}
+	if err := dbQuery.Find(&playlists).Error; err != nil {
+		s.sendResponse(w, r, models.NewErrorResponse(0, "Failed to retrieve playlists"))
 		return
 	}
 
@@ -50,7 +54,7 @@ func (s *Subsonic) handleGetPlaylists(c *gin.Context) {
 			Group("playlist_id").
 			Scan(&stats).Error
 		if err != nil {
-			s.sendResponse(c, models.NewErrorResponse(0, "Failed to retrieve playlist stats"))
+			s.sendResponse(w, r, models.NewErrorResponse(0, "Failed to retrieve playlist stats"))
 			return
 		}
 
@@ -79,30 +83,30 @@ func (s *Subsonic) handleGetPlaylists(c *gin.Context) {
 	resp.Playlists = &models.Playlists{
 		Playlist: subsonicPlaylists,
 	}
-	s.sendResponse(c, resp)
+	s.sendResponse(w, r, resp)
 }
 
-func (s *Subsonic) handleGetPlaylist(c *gin.Context) {
+func (s *Subsonic) handleGetPlaylist(w http.ResponseWriter, r *http.Request) {
 	db := do.MustInvoke[*gorm.DB](s.injector)
-	id, err := getQueryInt[uint](c, "id")
+	id, err := getQueryInt[uint](r, "id")
 	if err != nil {
-		s.sendResponse(c, models.NewErrorResponse(10, err.Error()))
+		s.sendResponse(w, r, models.NewErrorResponse(10, err.Error()))
 		return
 	}
 
 	var p models.PlaylistRecord
 	if err := db.First(&p, id).Error; err != nil {
-		s.sendResponse(c, models.NewErrorResponse(70, "Playlist not found"))
+		s.sendResponse(w, r, models.NewErrorResponse(70, "Playlist not found"))
 		return
 	}
 
-	username, err := getAuthUsername(c)
+	username, err := models.GetUsername(r)
 	if err != nil {
-		s.sendResponse(c, models.NewErrorResponse(0, "Internal server error"))
+		s.sendResponse(w, r, models.NewErrorResponse(0, "Internal server error"))
 		return
 	}
 	if !p.Public && p.Owner != username {
-		s.sendResponse(c, models.NewErrorResponse(70, "Playlist not found"))
+		s.sendResponse(w, r, models.NewErrorResponse(70, "Playlist not found"))
 		return
 	}
 
@@ -112,7 +116,7 @@ func (s *Subsonic) handleGetPlaylist(c *gin.Context) {
 		Where("playlist_songs.playlist_id = ?", p.ID).
 		Order("playlist_songs.position ASC").
 		Find(&songs).Error; err != nil {
-		s.sendResponse(c, models.NewErrorResponse(0, "Failed to retrieve songs"))
+		s.sendResponse(w, r, models.NewErrorResponse(0, "Failed to retrieve songs"))
 		return
 	}
 
@@ -136,20 +140,21 @@ func (s *Subsonic) handleGetPlaylist(c *gin.Context) {
 		},
 		Entry: songs,
 	}
-	s.sendResponse(c, resp)
+	s.sendResponse(w, r, resp)
 }
 
-func (s *Subsonic) handleCreatePlaylist(c *gin.Context) {
+func (s *Subsonic) handleCreatePlaylist(w http.ResponseWriter, r *http.Request) {
 	db := do.MustInvoke[*gorm.DB](s.injector)
-	name := c.Query("name")
+	query := r.URL.Query()
+	name := query.Get("name")
 	if name == "" {
-		s.sendResponse(c, models.NewErrorResponse(10, "Playlist name not specified"))
+		s.sendResponse(w, r, models.NewErrorResponse(10, "Playlist name not specified"))
 		return
 	}
 
-	username, err := getAuthUsername(c)
+	username, err := models.GetUsername(r)
 	if err != nil {
-		s.sendResponse(c, models.NewErrorResponse(0, "Internal server error"))
+		s.sendResponse(w, r, models.NewErrorResponse(0, "Internal server error"))
 		return
 	}
 
@@ -163,7 +168,7 @@ func (s *Subsonic) handleCreatePlaylist(c *gin.Context) {
 			return err
 		}
 
-		songIDs := c.QueryArray("songId")
+		songIDs := query["songId"]
 		if len(songIDs) > 0 {
 			songs := make([]models.PlaylistSong, len(songIDs))
 			for i, songID := range songIDs {
@@ -181,46 +186,47 @@ func (s *Subsonic) handleCreatePlaylist(c *gin.Context) {
 	})
 
 	if err != nil {
-		s.sendResponse(c, models.NewErrorResponse(0, "Failed to create playlist"))
+		s.sendResponse(w, r, models.NewErrorResponse(0, "Failed to create playlist"))
 		return
 	}
 
 	resp := models.NewResponse(models.ResponseStatusOK)
-	s.sendResponse(c, resp)
+	s.sendResponse(w, r, resp)
 }
 
-func (s *Subsonic) handleUpdatePlaylist(c *gin.Context) {
+func (s *Subsonic) handleUpdatePlaylist(w http.ResponseWriter, r *http.Request) {
 	db := do.MustInvoke[*gorm.DB](s.injector)
-	id, err := getQueryInt[uint](c, "playlistId")
+	id, err := getQueryInt[uint](r, "playlistId")
 	if err != nil {
-		s.sendResponse(c, models.NewErrorResponse(10, err.Error()))
+		s.sendResponse(w, r, models.NewErrorResponse(10, err.Error()))
 		return
 	}
 
 	var p models.PlaylistRecord
 	if err := db.First(&p, id).Error; err != nil {
-		s.sendResponse(c, models.NewErrorResponse(70, "Playlist not found"))
+		s.sendResponse(w, r, models.NewErrorResponse(70, "Playlist not found"))
 		return
 	}
 
-	username, err := getAuthUsername(c)
+	username, err := models.GetUsername(r)
 	if err != nil {
-		s.sendResponse(c, models.NewErrorResponse(0, "Internal server error"))
+		s.sendResponse(w, r, models.NewErrorResponse(0, "Internal server error"))
 		return
 	}
 	if p.Owner != username {
-		s.sendResponse(c, models.NewErrorResponse(0, "Permission denied"))
+		s.sendResponse(w, r, models.NewErrorResponse(0, "Permission denied"))
 		return
 	}
 
+	query := r.URL.Query()
 	err = db.Transaction(func(tx *gorm.DB) error {
-		if name, ok := c.GetQuery("name"); ok {
+		if name := query.Get("name"); name != "" {
 			p.Name = name
 		}
-		if comment, ok := c.GetQuery("comment"); ok {
+		if comment := query.Get("comment"); comment != "" {
 			p.Comment = comment
 		}
-		if public, ok := c.GetQuery("public"); ok {
+		if public := query.Get("public"); public != "" {
 			p.Public = public == "true"
 		}
 
@@ -229,7 +235,7 @@ func (s *Subsonic) handleUpdatePlaylist(c *gin.Context) {
 		}
 
 		// Handle song additions
-		songIDsToAdd := c.QueryArray("songIdToAdd")
+		songIDsToAdd := query["songIdToAdd"]
 		if len(songIDsToAdd) > 0 {
 			var maxPos int
 			if err := tx.Model(&models.PlaylistSong{}).Where("playlist_id = ?", p.ID).Select("COALESCE(MAX(position), -1)").Scan(&maxPos).Error; err != nil {
@@ -249,7 +255,7 @@ func (s *Subsonic) handleUpdatePlaylist(c *gin.Context) {
 		}
 
 		// Handle song removals
-		indicesToRemove := c.QueryArray("songIndexToRemove")
+		indicesToRemove := query["songIndexToRemove"]
 		if len(indicesToRemove) > 0 {
 			var posList []int
 			for _, idxStr := range indicesToRemove {
@@ -264,23 +270,6 @@ func (s *Subsonic) handleUpdatePlaylist(c *gin.Context) {
 				if err := tx.Where("playlist_id = ? AND position IN ?", p.ID, posList).Delete(&models.PlaylistSong{}).Error; err != nil {
 					return err
 				}
-				// Re-index using a single UPDATE with ROW_NUMBER()
-				// if err := tx.Exec(`
-				// 	UPDATE playlist_songs
-				// 	SET position = (
-				// 		SELECT new_pos
-				// 		FROM (
-				// 			SELECT id, (ROW_NUMBER() OVER (ORDER BY position)) - 1 AS new_pos
-				// 			FROM playlist_songs
-				// 			WHERE playlist_id = ?
-				// 		) AS cte
-				// 		WHERE cte.id = playlist_songs.id
-				// 	)
-				// 	WHERE playlist_id = ?
-				// `, p.ID, p.ID).Error; err != nil {
-				// 	return err
-				// }
-
 				// Re-index using a single UPDATE with a CTE
 				if err := tx.Exec(`
 					WITH new_positions AS (
@@ -301,43 +290,43 @@ func (s *Subsonic) handleUpdatePlaylist(c *gin.Context) {
 	})
 
 	if err != nil {
-		s.sendResponse(c, models.NewErrorResponse(0, "Failed to update playlist: "+err.Error()))
+		s.sendResponse(w, r, models.NewErrorResponse(0, "Failed to update playlist: "+err.Error()))
 		return
 	}
 
 	resp := models.NewResponse(models.ResponseStatusOK)
-	s.sendResponse(c, resp)
+	s.sendResponse(w, r, resp)
 }
 
-func (s *Subsonic) handleDeletePlaylist(c *gin.Context) {
+func (s *Subsonic) handleDeletePlaylist(w http.ResponseWriter, r *http.Request) {
 	db := do.MustInvoke[*gorm.DB](s.injector)
-	id, err := getQueryInt[uint](c, "id")
+	id, err := getQueryInt[uint](r, "id")
 	if err != nil {
-		s.sendResponse(c, models.NewErrorResponse(10, err.Error()))
+		s.sendResponse(w, r, models.NewErrorResponse(10, err.Error()))
 		return
 	}
 
 	var p models.PlaylistRecord
 	if err := db.First(&p, id).Error; err != nil {
-		s.sendResponse(c, models.NewErrorResponse(70, "Playlist not found"))
+		s.sendResponse(w, r, models.NewErrorResponse(70, "Playlist not found"))
 		return
 	}
 
-	username, err := getAuthUsername(c)
+	username, err := models.GetUsername(r)
 	if err != nil {
-		s.sendResponse(c, models.NewErrorResponse(0, "Internal server error"))
+		s.sendResponse(w, r, models.NewErrorResponse(0, "Internal server error"))
 		return
 	}
 	if p.Owner != username {
-		s.sendResponse(c, models.NewErrorResponse(0, "Permission denied"))
+		s.sendResponse(w, r, models.NewErrorResponse(0, "Permission denied"))
 		return
 	}
 
 	if err := db.Delete(&p).Error; err != nil {
-		s.sendResponse(c, models.NewErrorResponse(0, "Failed to delete playlist"))
+		s.sendResponse(w, r, models.NewErrorResponse(0, "Failed to delete playlist"))
 		return
 	}
 
 	resp := models.NewResponse(models.ResponseStatusOK)
-	s.sendResponse(c, resp)
+	s.sendResponse(w, r, resp)
 }

@@ -1,17 +1,17 @@
 package subsonic
 
 import (
+	"net/http"
 	"path/filepath"
 	"strings"
 
-	"github.com/gin-gonic/gin"
 	"github.com/samber/do/v2"
 	"github.com/stkevintan/miko/config"
 	"github.com/stkevintan/miko/models"
 	"gorm.io/gorm"
 )
 
-func (s *Subsonic) handleGetMusicFolders(c *gin.Context) {
+func (s *Subsonic) handleGetMusicFolders(w http.ResponseWriter, r *http.Request) {
 	db := do.MustInvoke[*gorm.DB](s.injector)
 	cfg := do.MustInvoke[*config.Config](s.injector)
 
@@ -27,15 +27,15 @@ func (s *Subsonic) handleGetMusicFolders(c *gin.Context) {
 	resp.MusicFolders = &models.MusicFolders{
 		MusicFolder: folders,
 	}
-	s.sendResponse(c, resp)
+	s.sendResponse(w, r, resp)
 }
 
-func (s *Subsonic) handleGetIndexes(c *gin.Context) {
+func (s *Subsonic) handleGetIndexes(w http.ResponseWriter, r *http.Request) {
 	db := do.MustInvoke[*gorm.DB](s.injector)
 
 	var children []models.Child
 	query := db.Where("is_dir = ?", true).Where("parent = ?", "")
-	folderID, err := getQueryInt[uint](c, "musicFolderId")
+	folderID, err := getQueryInt[uint](r, "musicFolderId")
 	if err == nil {
 		query = query.Where("music_folder_id = ?", folderID)
 	}
@@ -68,19 +68,19 @@ func (s *Subsonic) handleGetIndexes(c *gin.Context) {
 		LastModified: lastScanTime.Load(),
 		Index:        indexes,
 	}
-	s.sendResponse(c, resp)
+	s.sendResponse(w, r, resp)
 }
 
-func (s *Subsonic) handleGetMusicDirectory(c *gin.Context) {
-	id := c.Query("id")
+func (s *Subsonic) handleGetMusicDirectory(w http.ResponseWriter, r *http.Request) {
+	id := r.URL.Query().Get("id")
 	if id == "" {
-		s.sendResponse(c, models.NewErrorResponse(10, "ID is required"))
+		s.sendResponse(w, r, models.NewErrorResponse(10, "ID is required"))
 		return
 	}
 	db := do.MustInvoke[*gorm.DB](s.injector)
 	var dir models.Child
 	if err := db.Where("id = ? AND is_dir = ?", id, true).First(&dir).Error; err != nil {
-		s.sendResponse(c, models.NewErrorResponse(70, "Directory not found"))
+		s.sendResponse(w, r, models.NewErrorResponse(70, "Directory not found"))
 		return
 	}
 
@@ -98,10 +98,10 @@ func (s *Subsonic) handleGetMusicDirectory(c *gin.Context) {
 		PlayCount:     dir.PlayCount,
 		Child:         children,
 	}
-	s.sendResponse(c, resp)
+	s.sendResponse(w, r, resp)
 }
 
-func (s *Subsonic) handleGetGenres(c *gin.Context) {
+func (s *Subsonic) handleGetGenres(w http.ResponseWriter, r *http.Request) {
 	db := do.MustInvoke[*gorm.DB](s.injector)
 	var genres []models.Genre
 
@@ -112,7 +112,7 @@ func (s *Subsonic) handleGetGenres(c *gin.Context) {
 		       (SELECT COUNT(*) FROM album_genres WHERE genre_name = g.name) as album_count
 		FROM genres g
 	`).Scan(&genres).Error; err != nil {
-		s.sendResponse(c, models.NewErrorResponse(0, "Failed to query genres"))
+		s.sendResponse(w, r, models.NewErrorResponse(0, "Failed to query genres"))
 		return
 	}
 
@@ -120,10 +120,10 @@ func (s *Subsonic) handleGetGenres(c *gin.Context) {
 	resp.Genres = &models.Genres{
 		Genre: genres,
 	}
-	s.sendResponse(c, resp)
+	s.sendResponse(w, r, resp)
 }
 
-func (s *Subsonic) handleGetArtists(c *gin.Context) {
+func (s *Subsonic) handleGetArtists(w http.ResponseWriter, r *http.Request) {
 	db := do.MustInvoke[*gorm.DB](s.injector)
 	var artists []models.ArtistID3
 
@@ -132,7 +132,7 @@ func (s *Subsonic) handleGetArtists(c *gin.Context) {
 		       (SELECT COUNT(*) FROM album_artists WHERE artist_id3_id = a.id) as album_count
 		FROM artist_id3 a
 	`).Scan(&artists).Error; err != nil {
-		s.sendResponse(c, models.NewErrorResponse(0, "Failed to query artists"))
+		s.sendResponse(w, r, models.NewErrorResponse(0, "Failed to query artists"))
 		return
 	}
 
@@ -158,16 +158,16 @@ func (s *Subsonic) handleGetArtists(c *gin.Context) {
 	resp.Artists = &models.ArtistsID3{
 		Index: indexes,
 	}
-	s.sendResponse(c, resp)
+	s.sendResponse(w, r, resp)
 }
 
-func (s *Subsonic) handleGetArtist(c *gin.Context) {
-	id := c.Query("id")
+func (s *Subsonic) handleGetArtist(w http.ResponseWriter, r *http.Request) {
+	id := r.URL.Query().Get("id")
 	db := do.MustInvoke[*gorm.DB](s.injector)
 
 	var artist models.ArtistID3
 	if err := db.Where("id = ?", id).First(&artist).Error; err != nil {
-		s.sendResponse(c, models.NewErrorResponse(70, "Artist not found"))
+		s.sendResponse(w, r, models.NewErrorResponse(70, "Artist not found"))
 		return
 	}
 
@@ -179,16 +179,16 @@ func (s *Subsonic) handleGetArtist(c *gin.Context) {
 		ArtistID3: artist,
 		Album:     albums,
 	}
-	s.sendResponse(c, resp)
+	s.sendResponse(w, r, resp)
 }
 
-func (s *Subsonic) handleGetAlbum(c *gin.Context) {
-	id := c.Query("id")
+func (s *Subsonic) handleGetAlbum(w http.ResponseWriter, r *http.Request) {
+	id := r.URL.Query().Get("id")
 	db := do.MustInvoke[*gorm.DB](s.injector)
 
 	var album models.AlbumID3
 	if err := db.Where("id = ?", id).First(&album).Error; err != nil {
-		s.sendResponse(c, models.NewErrorResponse(70, "Album not found"))
+		s.sendResponse(w, r, models.NewErrorResponse(70, "Album not found"))
 		return
 	}
 
@@ -200,57 +200,57 @@ func (s *Subsonic) handleGetAlbum(c *gin.Context) {
 		AlbumID3: album,
 		Song:     songs,
 	}
-	s.sendResponse(c, resp)
+	s.sendResponse(w, r, resp)
 }
 
-func (s *Subsonic) handleGetSong(c *gin.Context) {
-	id := c.Query("id")
+func (s *Subsonic) handleGetSong(w http.ResponseWriter, r *http.Request) {
+	id := r.URL.Query().Get("id")
 	db := do.MustInvoke[*gorm.DB](s.injector)
 
 	var song models.Child
 	if err := db.Where("id = ? AND is_dir = ?", id, false).First(&song).Error; err != nil {
-		s.sendResponse(c, models.NewErrorResponse(70, "Song not found"))
+		s.sendResponse(w, r, models.NewErrorResponse(70, "Song not found"))
 		return
 	}
 
 	resp := models.NewResponse(models.ResponseStatusOK)
 	resp.Song = &song
-	s.sendResponse(c, resp)
+	s.sendResponse(w, r, resp)
 }
 
 // TODO: Use music provider to get real data
-func (s *Subsonic) handleGetArtistInfo2(c *gin.Context) {
-	id := c.Query("id")
+func (s *Subsonic) handleGetArtistInfo2(w http.ResponseWriter, r *http.Request) {
+	id := r.URL.Query().Get("id")
 	if id == "" {
-		s.sendResponse(c, models.NewErrorResponse(10, "ID is required"))
+		s.sendResponse(w, r, models.NewErrorResponse(10, "ID is required"))
 		return
 	}
 
 	// For now, we don't have external metadata provider, so return empty info
 	resp := models.NewResponse(models.ResponseStatusOK)
 	resp.ArtistInfo2 = &models.ArtistInfo2{}
-	s.sendResponse(c, resp)
+	s.sendResponse(w, r, resp)
 }
 
 // TODO: Use music provider to get real data
-func (s *Subsonic) handleGetAlbumInfo2(c *gin.Context) {
-	id := c.Query("id")
+func (s *Subsonic) handleGetAlbumInfo2(w http.ResponseWriter, r *http.Request) {
+	id := r.URL.Query().Get("id")
 	if id == "" {
-		s.sendResponse(c, models.NewErrorResponse(10, "ID is required"))
+		s.sendResponse(w, r, models.NewErrorResponse(10, "ID is required"))
 		return
 	}
 
 	// For now, we don't have external metadata provider, so return empty info
 	resp := models.NewResponse(models.ResponseStatusOK)
 	resp.AlbumInfo = &models.AlbumInfo{}
-	s.sendResponse(c, resp)
+	s.sendResponse(w, r, resp)
 }
 
 // TODO: Use music provider to get real data
-func (s *Subsonic) handleGetSimilarSongs2(c *gin.Context) {
-	id := c.Query("id")
+func (s *Subsonic) handleGetSimilarSongs2(w http.ResponseWriter, r *http.Request) {
+	id := r.URL.Query().Get("id")
 	if id == "" {
-		s.sendResponse(c, models.NewErrorResponse(10, "ID is required"))
+		s.sendResponse(w, r, models.NewErrorResponse(10, "ID is required"))
 		return
 	}
 
@@ -259,30 +259,30 @@ func (s *Subsonic) handleGetSimilarSongs2(c *gin.Context) {
 	resp.SimilarSongs2 = &models.SimilarSongs2{
 		Song: []models.Child{},
 	}
-	s.sendResponse(c, resp)
+	s.sendResponse(w, r, resp)
 }
 
-func (s *Subsonic) handleGetAlbumInfo(c *gin.Context) {
-	s.handleGetAlbumInfo2(c)
+func (s *Subsonic) handleGetAlbumInfo(w http.ResponseWriter, r *http.Request) {
+	s.handleGetAlbumInfo2(w, r)
 }
 
-func (s *Subsonic) handleGetArtistInfo(c *gin.Context) {
-	id := c.Query("id")
+func (s *Subsonic) handleGetArtistInfo(w http.ResponseWriter, r *http.Request) {
+	id := r.URL.Query().Get("id")
 	if id == "" {
-		s.sendResponse(c, models.NewErrorResponse(10, "ID is required"))
+		s.sendResponse(w, r, models.NewErrorResponse(10, "ID is required"))
 		return
 	}
 
 	// For now, we don't have external metadata provider, so return empty info
 	resp := models.NewResponse(models.ResponseStatusOK)
 	resp.ArtistInfo = &models.ArtistInfo{}
-	s.sendResponse(c, resp)
+	s.sendResponse(w, r, resp)
 }
 
-func (s *Subsonic) handleGetSimilarSongs(c *gin.Context) {
-	id := c.Query("id")
+func (s *Subsonic) handleGetSimilarSongs(w http.ResponseWriter, r *http.Request) {
+	id := r.URL.Query().Get("id")
 	if id == "" {
-		s.sendResponse(c, models.NewErrorResponse(10, "ID is required"))
+		s.sendResponse(w, r, models.NewErrorResponse(10, "ID is required"))
 		return
 	}
 
@@ -291,13 +291,13 @@ func (s *Subsonic) handleGetSimilarSongs(c *gin.Context) {
 	resp.SimilarSongs = &models.SimilarSongs{
 		Song: []models.Child{},
 	}
-	s.sendResponse(c, resp)
+	s.sendResponse(w, r, resp)
 }
 
-func (s *Subsonic) handleGetTopSongs(c *gin.Context) {
-	artist := c.Query("artist")
+func (s *Subsonic) handleGetTopSongs(w http.ResponseWriter, r *http.Request) {
+	artist := r.URL.Query().Get("artist")
 	if artist == "" {
-		s.sendResponse(c, models.NewErrorResponse(10, "Artist is required"))
+		s.sendResponse(w, r, models.NewErrorResponse(10, "Artist is required"))
 		return
 	}
 
@@ -306,5 +306,5 @@ func (s *Subsonic) handleGetTopSongs(c *gin.Context) {
 	resp.TopSongs = &models.TopSongs{
 		Song: []models.Child{},
 	}
-	s.sendResponse(c, resp)
+	s.sendResponse(w, r, resp)
 }

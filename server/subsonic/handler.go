@@ -1,16 +1,17 @@
 package subsonic
 
 import (
+	"context"
 	"crypto/md5"
+	"encoding/json"
+	"encoding/xml"
 	"fmt"
 	"net/http"
-	"strings"
 	"sync"
 
-	"github.com/gin-gonic/gin"
+	"github.com/go-chi/chi/v5"
 	"github.com/samber/do/v2"
 	"github.com/stkevintan/miko/models"
-	"github.com/stkevintan/miko/pkg/log"
 	"gorm.io/gorm"
 )
 
@@ -26,168 +27,166 @@ func New(injector do.Injector) *Subsonic {
 	}
 }
 
-func (s *Subsonic) RegisterRoutes(r *gin.Engine) *gin.RouterGroup {
-	rest := r.Group("/rest")
-	// Handle Subsonic .view suffix by rewriting and re-routing
-	r.NoRoute(func(c *gin.Context) {
-		path := c.Request.URL.Path
-		if strings.HasPrefix(path, "/rest") && strings.HasSuffix(path, ".view") {
-			c.Request.URL.Path = strings.TrimSuffix(path, ".view")
-			log.Info("Rewriting Subsonic path (NoRoute): %s -> %s", path, c.Request.URL.Path)
-			r.HandleContext(c)
-			return
-		}
+func (s *Subsonic) RegisterRoutes(r chi.Router) {
+	r.Route("/rest", func(r chi.Router) {
+		r.Use(s.subsonicAuth)
+
+		// System
+		r.Get("/ping", s.handlePing)
+		r.Get("/getLicense", s.handleGetLicense)
+		r.Get("/getOpenSubsonicExtensions", s.handleGetOpenSubsonicExtensions)
+
+		// Browsing
+		r.Get("/getMusicFolders", s.handleGetMusicFolders)
+		r.Get("/getIndexes", s.handleGetIndexes)
+		r.Get("/getMusicDirectory", s.handleGetMusicDirectory)
+		r.Get("/getGenres", s.handleGetGenres)
+		r.Get("/getArtists", s.handleGetArtists)
+		r.Get("/getArtist", s.handleGetArtist)
+		r.Get("/getAlbum", s.handleGetAlbum)
+		r.Get("/getSong", s.handleGetSong)
+
+		r.Get("/getVideos", s.handleUnsupported)
+		r.Get("/getVideoInfo", s.handleUnsupported)
+		r.Get("/getArtistInfo", s.handleGetArtistInfo)
+
+		r.Get("/getArtistInfo2", s.handleGetArtistInfo2)
+		r.Get("/getAlbumInfo", s.handleGetAlbumInfo)
+		r.Get("/getAlbumInfo2", s.handleGetAlbumInfo2)
+		r.Get("/getSimilarSongs", s.handleGetSimilarSongs)
+		r.Get("/getSimilarSongs2", s.handleGetSimilarSongs2)
+		r.Get("/getTopSongs", s.handleGetTopSongs)
+
+		// Album/song lists
+		r.Get("/getAlbumList", s.handleGetAlbumList)
+		r.Get("/getAlbumList2", s.handleGetAlbumList2)
+		r.Get("/getRandomSongs", s.handleGetRandomSongs)
+		r.Get("/getSongsByGenre", s.handleGetSongsByGenre)
+		r.Get("/getNowPlaying", s.handleGetNowPlaying)
+		r.Get("/getStarred", s.handleGetStarred)
+		r.Get("/getStarred2", s.handleGetStarred2)
+
+		// Searching
+		r.Get("/search", s.handleSearch)
+		r.Get("/search2", s.handleSearch2)
+		r.Get("/search3", s.handleSearch3)
+
+		// Playlists
+		r.Get("/getPlaylists", s.handleGetPlaylists)
+		r.Get("/getPlaylist", s.handleGetPlaylist)
+		r.Get("/createPlaylist", s.handleCreatePlaylist)
+		r.Get("/updatePlaylist", s.handleUpdatePlaylist)
+		r.Get("/deletePlaylist", s.handleDeletePlaylist)
+
+		// Media retrieval
+		r.Get("/stream", s.handleStream)
+		r.Get("/download", s.handleDownload)
+		r.Get("/hls.m3u8", s.handleUnsupported)
+		r.Get("/getCaptions", s.handleUnsupported)
+		r.Get("/getCoverArt", s.handleGetCoverArt)
+		r.Get("/getLyrics", s.handleGetLyrics)
+		r.Get("/getLyricsBySongId", s.handleGetLyricsBySongId)
+		r.Get("/getAvatar", s.handleGetAvatar)
+		r.Head("/getAvatar", s.handleGetAvatar)
+
+		// Media annotation
+		r.Get("/star", s.handleNotImplemented)
+		r.Get("/unstar", s.handleNotImplemented)
+		r.Get("/setRating", s.handleNotImplemented)
+		r.Get("/scrobble", s.handleScrobble)
+
+		// Sharing
+		r.Get("/getShares", s.handleNotImplemented)
+		r.Get("/createShare", s.handleNotImplemented)
+		r.Get("/updateShare", s.handleNotImplemented)
+		r.Get("/deleteShare", s.handleNotImplemented)
+
+		// Podcast
+		r.Get("/getPodcasts", s.handleNotImplemented)
+		r.Get("/getNewestPodcasts", s.handleNotImplemented)
+		r.Get("/refreshPodcasts", s.handleNotImplemented)
+		r.Get("/createPodcastChannel", s.handleNotImplemented)
+		r.Get("/deletePodcastChannel", s.handleNotImplemented)
+		r.Get("/deletePodcastEpisode", s.handleNotImplemented)
+		r.Get("/downloadPodcastEpisode", s.handleNotImplemented)
+
+		// Jukebox
+		r.Get("/jukeboxControl", s.handleNotImplemented)
+
+		// Internet radio
+		r.Get("/getInternetRadioStations", s.handleNotImplemented)
+		r.Get("/createInternetRadioStation", s.handleNotImplemented)
+		r.Get("/updateInternetRadioStation", s.handleNotImplemented)
+		r.Get("/deleteInternetRadioStation", s.handleNotImplemented)
+
+		// Chat
+		r.Get("/getChatMessages", s.handleNotImplemented)
+		r.Get("/addChatMessage", s.handleNotImplemented)
+
+		// User management
+		r.Get("/getUser", s.handleGetUser)
+		r.Get("/getUsers", s.handleGetUsers)
+		r.Get("/createUser", s.handleNotImplemented)
+		r.Get("/updateUser", s.handleNotImplemented)
+		r.Get("/deleteUser", s.handleNotImplemented)
+		r.Get("/changePassword", s.handleNotImplemented)
+
+		// Bookmarks
+		r.Get("/getBookmarks", s.handleNotImplemented)
+		r.Get("/createBookmark", s.handleNotImplemented)
+		r.Get("/deleteBookmark", s.handleNotImplemented)
+		r.Get("/getPlayQueue", s.handleNotImplemented)
+		r.Get("/savePlayQueue", s.handleNotImplemented)
+
+		// Media library scanning
+		r.Get("/getScanStatus", s.handleGetScanStatus)
+		r.Get("/startScan", s.handleStartScan)
 	})
-	rest.Use(s.subsonicAuth())
-
-	// System
-	rest.GET("/ping", s.handlePing)
-	rest.GET("/getLicense", s.handleGetLicense)
-	rest.GET("/getOpenSubsonicExtensions", s.handleGetOpenSubsonicExtensions)
-
-	// Browsing
-	rest.GET("/getMusicFolders", s.handleGetMusicFolders)
-	rest.GET("/getIndexes", s.handleGetIndexes)
-	rest.GET("/getMusicDirectory", s.handleGetMusicDirectory)
-	rest.GET("/getGenres", s.handleGetGenres)
-	rest.GET("/getArtists", s.handleGetArtists)
-	rest.GET("/getArtist", s.handleGetArtist)
-	rest.GET("/getAlbum", s.handleGetAlbum)
-	rest.GET("/getSong", s.handleGetSong)
-
-	rest.GET("/getVideos", s.handleUnsupported)
-	rest.GET("/getVideoInfo", s.handleUnsupported)
-	rest.GET("/getArtistInfo", s.handleGetArtistInfo)
-
-	rest.GET("/getArtistInfo2", s.handleGetArtistInfo2)
-	rest.GET("/getAlbumInfo", s.handleGetAlbumInfo)
-	rest.GET("/getAlbumInfo2", s.handleGetAlbumInfo2)
-	rest.GET("/getSimilarSongs", s.handleGetSimilarSongs)
-	rest.GET("/getSimilarSongs2", s.handleGetSimilarSongs2)
-	rest.GET("/getTopSongs", s.handleGetTopSongs)
-
-	// Album/song lists
-	rest.GET("/getAlbumList", s.handleGetAlbumList)
-	rest.GET("/getAlbumList2", s.handleGetAlbumList2)
-	rest.GET("/getRandomSongs", s.handleGetRandomSongs)
-	rest.GET("/getSongsByGenre", s.handleGetSongsByGenre)
-	rest.GET("/getNowPlaying", s.handleGetNowPlaying)
-	rest.GET("/getStarred", s.handleGetStarred)
-	rest.GET("/getStarred2", s.handleGetStarred2)
-
-	// Searching
-	rest.GET("/search", s.handleSearch)
-	rest.GET("/search2", s.handleSearch2)
-	rest.GET("/search3", s.handleSearch3)
-
-	// Playlists
-	rest.GET("/getPlaylists", s.handleGetPlaylists)
-	rest.GET("/getPlaylist", s.handleGetPlaylist)
-	rest.GET("/createPlaylist", s.handleCreatePlaylist)
-	rest.GET("/updatePlaylist", s.handleUpdatePlaylist)
-	rest.GET("/deletePlaylist", s.handleDeletePlaylist)
-
-	// Media retrieval
-	rest.GET("/stream", s.handleStream)
-	rest.GET("/download", s.handleDownload)
-	rest.GET("/hls.m3u8", s.handleUnsupported)
-	rest.GET("/getCaptions", s.handleUnsupported)
-	rest.GET("/getCoverArt", s.handleGetCoverArt)
-	rest.GET("/getLyrics", s.handleGetLyrics)
-	rest.GET("/getLyricsBySongId", s.handleGetLyricsBySongId)
-	rest.GET("/getAvatar", s.handleGetAvatar)
-
-	// Media annotation
-	rest.GET("/star", s.handleNotImplemented)
-	rest.GET("/unstar", s.handleNotImplemented)
-	rest.GET("/setRating", s.handleNotImplemented)
-	rest.GET("/scrobble", s.handleScrobble)
-
-	// Sharing
-	rest.GET("/getShares", s.handleNotImplemented)
-	rest.GET("/createShare", s.handleNotImplemented)
-	rest.GET("/updateShare", s.handleNotImplemented)
-	rest.GET("/deleteShare", s.handleNotImplemented)
-
-	// Podcast
-	rest.GET("/getPodcasts", s.handleNotImplemented)
-	rest.GET("/getNewestPodcasts", s.handleNotImplemented)
-	rest.GET("/refreshPodcasts", s.handleNotImplemented)
-	rest.GET("/createPodcastChannel", s.handleNotImplemented)
-	rest.GET("/deletePodcastChannel", s.handleNotImplemented)
-	rest.GET("/deletePodcastEpisode", s.handleNotImplemented)
-	rest.GET("/downloadPodcastEpisode", s.handleNotImplemented)
-
-	// Jukebox
-	rest.GET("/jukeboxControl", s.handleNotImplemented)
-
-	// Internet radio
-	rest.GET("/getInternetRadioStations", s.handleNotImplemented)
-	rest.GET("/createInternetRadioStation", s.handleNotImplemented)
-	rest.GET("/updateInternetRadioStation", s.handleNotImplemented)
-	rest.GET("/deleteInternetRadioStation", s.handleNotImplemented)
-
-	// Chat
-	rest.GET("/getChatMessages", s.handleNotImplemented)
-	rest.GET("/addChatMessage", s.handleNotImplemented)
-
-	// User management
-	rest.GET("/getUser", s.handleGetUser)
-	rest.GET("/getUsers", s.handleGetUsers)
-	rest.GET("/createUser", s.handleNotImplemented)
-	rest.GET("/updateUser", s.handleNotImplemented)
-	rest.GET("/deleteUser", s.handleNotImplemented)
-	rest.GET("/changePassword", s.handleNotImplemented)
-
-	// Bookmarks
-	rest.GET("/getBookmarks", s.handleNotImplemented)
-	rest.GET("/createBookmark", s.handleNotImplemented)
-	rest.GET("/deleteBookmark", s.handleNotImplemented)
-	rest.GET("/getPlayQueue", s.handleNotImplemented)
-	rest.GET("/savePlayQueue", s.handleNotImplemented)
-
-	// Media library scanning
-	rest.GET("/getScanStatus", s.handleGetScanStatus)
-	rest.GET("/startScan", s.handleStartScan)
-
-	return rest
 }
 
-func (s *Subsonic) sendResponse(c *gin.Context, resp *models.SubsonicResponse) {
-	format := c.DefaultQuery("f", "xml")
+func (s *Subsonic) sendResponse(w http.ResponseWriter, r *http.Request, resp *models.SubsonicResponse) {
+	format := r.URL.Query().Get("f")
+	if format == "" {
+		format = "xml"
+	}
+
 	if format == "json" {
-		c.JSON(http.StatusOK, gin.H{"subsonic-response": resp})
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		json.NewEncoder(w).Encode(map[string]interface{}{"subsonic-response": resp})
 	} else {
-		c.XML(http.StatusOK, resp)
+		w.Header().Set("Content-Type", "application/xml")
+		w.WriteHeader(http.StatusOK)
+		fmt.Fprint(w, xml.Header)
+		xml.NewEncoder(w).Encode(resp)
 	}
 }
 
-func (s *Subsonic) handleUnsupported(c *gin.Context) {
-	s.sendResponse(c, models.NewErrorResponse(0, "Not supported"))
+func (s *Subsonic) handleUnsupported(w http.ResponseWriter, r *http.Request) {
+	s.sendResponse(w, r, models.NewErrorResponse(0, "Not supported"))
 }
 
-func (s *Subsonic) handleNotImplemented(c *gin.Context) {
-	s.sendResponse(c, models.NewErrorResponse(0, "Not implemented"))
+func (s *Subsonic) handleNotImplemented(w http.ResponseWriter, r *http.Request) {
+	s.sendResponse(w, r, models.NewErrorResponse(0, "Not implemented"))
 }
 
-func (s *Subsonic) subsonicAuth() gin.HandlerFunc {
-	return func(c *gin.Context) {
-		username := c.Query("u")
-		password := c.Query("p")
-		token := c.Query("t")
-		salt := c.Query("s")
+func (s *Subsonic) subsonicAuth(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		query := r.URL.Query()
+		username := query.Get("u")
+		password := query.Get("p")
+		token := query.Get("t")
+		salt := query.Get("s")
 
 		if username == "" {
-			s.sendResponse(c, models.NewErrorResponse(10, "User not found"))
-			c.Abort()
+			s.sendResponse(w, r, models.NewErrorResponse(10, "User not found"))
 			return
 		}
 
 		user := models.LoginRequest{}
 		db := do.MustInvoke[*gorm.DB](s.injector)
 		if err := db.Model(&models.User{}).Select("username", "password").Where("username = ?", username).First(&user).Error; err != nil {
-			s.sendResponse(c, models.NewErrorResponse(10, "User not found"))
-			c.Abort()
+			s.sendResponse(w, r, models.NewErrorResponse(10, "User not found"))
 			return
 		}
 
@@ -206,12 +205,11 @@ func (s *Subsonic) subsonicAuth() gin.HandlerFunc {
 		}
 
 		if !authenticated {
-			s.sendResponse(c, models.NewErrorResponse(40, "Wrong username or password"))
-			c.Abort()
+			s.sendResponse(w, r, models.NewErrorResponse(40, "Wrong username or password"))
 			return
 		}
 
-		c.Set("Username", user.Username)
-		c.Next()
-	}
+		ctx := context.WithValue(r.Context(), models.UsernameKey, username)
+		next.ServeHTTP(w, r.WithContext(ctx))
+	})
 }

@@ -4,6 +4,8 @@ import (
 	"crypto/md5"
 	"fmt"
 	"io/fs"
+	"mime"
+	"net/http"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -11,7 +13,6 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/gin-gonic/gin"
 	"github.com/samber/do/v2"
 	"github.com/stkevintan/miko/config"
 	"github.com/stkevintan/miko/models"
@@ -27,22 +28,22 @@ var (
 	lastScanTime atomic.Int64
 )
 
-func (s *Subsonic) handleGetScanStatus(c *gin.Context) {
+func (s *Subsonic) handleGetScanStatus(w http.ResponseWriter, r *http.Request) {
 	resp := models.NewResponse(models.ResponseStatusOK)
 	resp.ScanStatus = &models.ScanStatus{
 		Scanning: isScanning.Load(),
 		Count:    scanCount.Load(),
 	}
-	s.sendResponse(c, resp)
+	s.sendResponse(w, r, resp)
 }
 
-func (s *Subsonic) handleStartScan(c *gin.Context) {
+func (s *Subsonic) handleStartScan(w http.ResponseWriter, r *http.Request) {
 	go s.scan()
 	resp := models.NewResponse(models.ResponseStatusOK)
 	resp.ScanStatus = &models.ScanStatus{
 		Scanning: true,
 	}
-	s.sendResponse(c, resp)
+	s.sendResponse(w, r, resp)
 }
 
 func (s *Subsonic) scan() {
@@ -123,6 +124,10 @@ func (s *Subsonic) scan() {
 					return nil
 				}
 				modTime := info.ModTime()
+				contentType := mime.TypeByExtension(ext)
+				if contentType == "" {
+					contentType = "audio/" + ext[1:]
+				}
 				child := models.Child{
 					ID:            id,
 					Parent:        parentID,
@@ -131,7 +136,7 @@ func (s *Subsonic) scan() {
 					Path:          path,
 					Size:          info.Size(),
 					Suffix:        ext[1:],
-					ContentType:   "audio/" + ext[1:],
+					ContentType:   contentType,
 					MusicFolderID: folder.ID,
 					Created:       &modTime,
 				}
