@@ -10,46 +10,48 @@ import (
 	"gorm.io/gorm"
 )
 
-func (s *Subsonic) handleStar(w http.ResponseWriter, r *http.Request) {
+func (s *Subsonic) updateStarredStatus(r *http.Request, value interface{}) error {
 	query := r.URL.Query()
 	ids := query["id"]
 	albumIds := query["albumId"]
 	artistIds := query["artistId"]
 
 	db := do.MustInvoke[*gorm.DB](s.injector)
+
+	return db.Transaction(func(tx *gorm.DB) error {
+		if len(ids) > 0 {
+			if err := tx.Model(&models.Child{}).Where("id IN ?", ids).Update("starred", value).Error; err != nil {
+				return err
+			}
+		}
+		if len(albumIds) > 0 {
+			if err := tx.Model(&models.AlbumID3{}).Where("id IN ?", albumIds).Update("starred", value).Error; err != nil {
+				return err
+			}
+		}
+		if len(artistIds) > 0 {
+			if err := tx.Model(&models.ArtistID3{}).Where("id IN ?", artistIds).Update("starred", value).Error; err != nil {
+				return err
+			}
+		}
+		return nil
+	})
+}
+
+func (s *Subsonic) handleStar(w http.ResponseWriter, r *http.Request) {
 	now := time.Now()
-
-	if len(ids) > 0 {
-		db.Model(&models.Child{}).Where("id IN ?", ids).Update("starred", &now)
+	if err := s.updateStarredStatus(r, &now); err != nil {
+		s.sendResponse(w, r, models.NewErrorResponse(0, "Failed to star items: "+err.Error()))
+		return
 	}
-	if len(albumIds) > 0 {
-		db.Model(&models.AlbumID3{}).Where("id IN ?", albumIds).Update("starred", &now)
-	}
-	if len(artistIds) > 0 {
-		db.Model(&models.ArtistID3{}).Where("id IN ?", artistIds).Update("starred", &now)
-	}
-
 	s.sendResponse(w, r, models.NewResponse(models.ResponseStatusOK))
 }
 
 func (s *Subsonic) handleUnstar(w http.ResponseWriter, r *http.Request) {
-	query := r.URL.Query()
-	ids := query["id"]
-	albumIds := query["albumId"]
-	artistIds := query["artistId"]
-
-	db := do.MustInvoke[*gorm.DB](s.injector)
-
-	if len(ids) > 0 {
-		db.Model(&models.Child{}).Where("id IN ?", ids).Update("starred", nil)
+	if err := s.updateStarredStatus(r, nil); err != nil {
+		s.sendResponse(w, r, models.NewErrorResponse(0, "Failed to unstar items: "+err.Error()))
+		return
 	}
-	if len(albumIds) > 0 {
-		db.Model(&models.AlbumID3{}).Where("id IN ?", albumIds).Update("starred", nil)
-	}
-	if len(artistIds) > 0 {
-		db.Model(&models.ArtistID3{}).Where("id IN ?", artistIds).Update("starred", nil)
-	}
-
 	s.sendResponse(w, r, models.NewResponse(models.ResponseStatusOK))
 }
 
@@ -71,12 +73,24 @@ func (s *Subsonic) handleSetRating(w http.ResponseWriter, r *http.Request) {
 
 	// Try to update as song/directory first
 	result := db.Model(&models.Child{}).Where("id = ?", id).Update("user_rating", rating)
+	if result.Error != nil {
+		s.sendResponse(w, r, models.NewErrorResponse(0, "Failed to set rating: "+result.Error.Error()))
+		return
+	}
 	if result.RowsAffected == 0 {
 		// Try to update as album
 		result = db.Model(&models.AlbumID3{}).Where("id = ?", id).Update("user_rating", rating)
+		if result.Error != nil {
+			s.sendResponse(w, r, models.NewErrorResponse(0, "Failed to set rating: "+result.Error.Error()))
+			return
+		}
 		if result.RowsAffected == 0 {
 			// Try to update as artist
-			db.Model(&models.ArtistID3{}).Where("id = ?", id).Update("user_rating", rating)
+			result = db.Model(&models.ArtistID3{}).Where("id = ?", id).Update("user_rating", rating)
+			if result.Error != nil {
+				s.sendResponse(w, r, models.NewErrorResponse(0, "Failed to set rating: "+result.Error.Error()))
+				return
+			}
 		}
 	}
 
