@@ -41,8 +41,7 @@ func (h *Handler) getJWTSecret() []byte {
 	log.Info("No JWT secret found in config or database, generating a new one...")
 	b := make([]byte, 32)
 	if _, err := rand.Read(b); err != nil {
-		log.Error("Failed to generate random JWT secret: %v", err)
-		return []byte("miko-fallback-secret-key")
+		log.Fatalf("Critical failure: failed to generate random JWT secret: %v", err)
 	}
 	secret := hex.EncodeToString(b)
 	h.db.Create(&models.SystemSetting{
