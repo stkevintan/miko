@@ -75,7 +75,7 @@ type DatabaseConfig struct {
 // - config file (optional): ./config.{yaml,yml,json,toml}, ./config/config.{...}, $HOME/.miko/config.{...}
 // - environment variables: MIKO_* (e.g. MIKO_PORT, MIKO_NMAPI_COOKIE_FILEPATH)
 // - legacy environment variables: PORT, ENVIRONMENT, LOG_LEVEL (kept for backward compatibility)
-func Load() (*Config, error) {
+func Load(version string) (*Config, error) {
 	v := viper.New()
 	v.SetTypeByDefaultValue(true)
 	v.AllowEmptyEnv(true)
@@ -120,6 +120,8 @@ func Load() (*Config, error) {
 	if err := v.Unmarshal(&cfg); err != nil {
 		return nil, fmt.Errorf("v.Unmarshal: %w", err)
 	}
+
+	cfg.Version = strings.TrimSpace(version)
 
 	if err := cfg.Validate(); err != nil {
 		return nil, fmt.Errorf("cfg.Validate: %w", err)

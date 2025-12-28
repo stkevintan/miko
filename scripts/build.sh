@@ -41,7 +41,9 @@ done
 
 # Build configuration
 APP_NAME="miko"
-VERSION=${VERSION:-"dev"}
+SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
+ROOT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
+VERSION=$(cat "${ROOT_DIR}/VERSION" 2>/dev/null || echo "dev")
 BUILD_TIME=$(date -u '+%Y-%m-%d_%H:%M:%S')
 GIT_COMMIT=$(git rev-parse --short HEAD 2>/dev/null || echo "unknown")
 
@@ -50,13 +52,13 @@ if [ "$BUILD_MODE" = "release" ]; then
     # Release mode: aggressive optimizations
     LDFLAGS="-s -w -X main.version=${VERSION} -X main.buildTime=${BUILD_TIME} -X main.gitCommit=${GIT_COMMIT}"
     BUILD_FLAGS="-a -installsuffix cgo -trimpath"
-    CGO_ENABLED=1
+    CGO_ENABLED=0
     echo "🚀 Release build mode: Full optimizations enabled"
 else
     # Development mode: faster builds, debugging symbols
     LDFLAGS="-X main.version=${VERSION} -X main.buildTime=${BUILD_TIME} -X main.gitCommit=${GIT_COMMIT}"
     BUILD_FLAGS="-trimpath"
-    CGO_ENABLED=1
+    CGO_ENABLED=0
     echo "🔧 Development build mode: Debug symbols preserved"
 fi
 
@@ -113,6 +115,12 @@ build_platform() {
         if [ "$os" != "windows" ]; then
             chmod +x "${output_path}"
         fi
+
+        # Compress with UPX if available in release mode
+        if [ "$BUILD_MODE" = "release" ] && command -v upx >/dev/null 2>&1; then
+            echo "   📦 Compressing with UPX..."
+            upx --best --lzma "${output_path}" >/dev/null 2>&1 || echo "   ⚠️ UPX compression failed for ${output_path}"
+        fi
         
         # Show file size
         local size=$(ls -lh "${output_path}" | awk '{print $5}')
@@ -147,12 +155,7 @@ else
 fi
 
 echo "Build complete! Binaries are in the bin/ directory:"
-ls -la bin/
-
-SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
-
-# call swagger.sh in the same directory as build.sh
-bash "$SCRIPT_DIR/swagger.sh"
+ls -lh bin/
 
 echo ""
 echo "Usage examples:"

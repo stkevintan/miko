@@ -1,21 +1,17 @@
 # Miko 
-- A music downloader (mainly for Chinese users)
-- A subsonic 1.16.1 server implementation
+
+Miko is a lightweight, high-performance music service that combines a **Subsonic-compatible server** with a powerful **music downloader**. It is designed to be self-hosted, CGO-free, and highly portable.
 
 ## Features
 
-- **Gin HTTP framework** for high-performance routing and middleware
-- **Dependency Injection** using `samber/do/v2` for clean architecture
-- **Request-scoped isolation** for user-specific resources (e.g., CookieJars)
-- **CookieCloud Integration** for seamless authentication across devices
-- **OpenAPI 3.0 documentation with Swagger UI**
-- **All API endpoints under `/api/` path**
-- **CORS support** for cross-origin requests
-- **JSON validation** with automatic error handling
-- Configuration management via environment variables and TOML
-- Graceful shutdown handling
-- Comprehensive testing
-- Docker support
+- **Subsonic API (v1.16.1)**: Compatible with most Subsonic clients (DSub, Play:Sub, Symfonium, etc.).
+- **OpenSubsonic Extensions**: Supports modern extensions like `songLyrics` (synced/unsynced LRC).
+- **Music Downloader**: Integrated downloader for music platforms (primarily NetEase Cloud Music).
+- **CookieCloud Integration**: Seamlessly sync authentication cookies from your browser to the server.
+- **CGO-Free & Portable**: Built with a pure-Go SQLite driver, making it easy to run in lightweight Docker containers (Alpine).
+- **Multi-Arch Support**: Native binaries and Docker images for `amd64` and `arm64` (Apple Silicon/Raspberry Pi).
+- **Clean Architecture**: Built with Gin, GORM, and Dependency Injection (`samber/do`).
+- **Centralized Data Management**: All database, cache, and user data are stored in a single, configurable `dataDir`.
 
 ## Project Structure
 
@@ -71,9 +67,7 @@
    # Download music (requires token)
    curl -X GET "http://localhost:8082/api/download?uri=https://music.163.com/song?id=2161154646&output=./songs" \
         -H "Authorization: Bearer <token>"
-   
-   # View OpenAPI documentation
-   open http://localhost:8082/swagger/index.html
+
    ```
 
 ## Configuration
@@ -99,26 +93,35 @@ Paths in the config file (like database DSN or log file) support environment var
 
 ### Environment variables
 
-All config keys can be set via environment variables using the `MIKO_` prefix.
-Nested keys use `_` separators.
+All config keys can be set via environment variables using the `MIKO_` prefix. Nested keys use `_` separators.
 
-Examples:
+| Variable | Description | Default |
+| :--- | :--- | :--- |
+| `MIKO_PORT` | Server port | `8082` |
+| `MIKO_SUBSONIC_DATADIR` | Directory for DB, cache, and avatars | `./data` |
+| `MIKO_SUBSONIC_FOLDERS` | Comma-separated list of music folders | |
+| `MIKO_LOG_LEVEL` | Log level (debug, info, warn, error) | `info` |
 
-- `MIKO_PORT=8082`
-- `MIKO_ENVIRONMENT=development`
-- `MIKO_LOG_LEVEL=info`
-- `MIKO_NMAPI_DEBUG=false`
-- `MIKO_NMAPI_COOKIE_FILEPATH=$HOME/.miko/cookie.json`
+## Subsonic Integration
 
-Legacy env vars are still supported for backward compatibility:
+Miko implements the Subsonic REST API, allowing you to use your favorite music clients.
 
-- `PORT`, `ENVIRONMENT`, `LOG_LEVEL`
+- **Endpoint**: `http://your-ip:8082/rest`
+- **Supported Clients**: DSub, Play:Sub, Symfonium, Amperfy, Substreamer, etc.
+- **Features**: Browsing, Streaming, Starred, Playlists, Search, and Lyrics.
 
-The service can be configured using environment variables:
+## API Endpoints (Internal)
 
-- `PORT`: Server port (default: 8080)
-- `ENVIRONMENT`: Environment name (default: development)
-- `LOG_LEVEL`: Log level (default: info)
+In addition to the Subsonic API, Miko provides internal endpoints for management.
+
+### Authentication  
+- **POST** `/api/login` - User authentication
+- **POST** `/api/cookiecloud/identity` - Update CookieCloud credentials
+- **POST** `/api/cookiecloud/pull` - Force sync cookies from CookieCloud
+
+### Music Management
+- **GET** `/api/download` - Download music via URI (NetEase, etc.)
+- **GET** `/api/platform/:platform/user` - Get platform-specific user info
 
 ## Development
 
@@ -130,61 +133,34 @@ go test ./...
 
 ### Building
 
-```bash
-go build -o bin/miko main.go
-```
-
-### Generate OpenAPI Documentation
+Miko includes a cross-platform build script that handles optimizations and multi-arch builds.
 
 ```bash
-# Install swag if not already installed
-go install github.com/swaggo/swag/cmd/swag@latest
+# Build for current platform (development)
+./scripts/build.sh
 
-# Generate docs
-~/go/bin/swag init
+# Build for all platforms (release mode with optimizations)
+./scripts/build.sh --release
+
+# Build for a specific platform
+./scripts/build.sh --release linux/amd64
 ```
 
 ### Using Docker
 
+Miko provides multi-arch Docker images. You can build your own or use the pre-built ones.
+
 ```bash
-# Build image
+# Build image locally
 docker build -f docker/Dockerfile -t miko .
 
 # Run container
-docker run -p 8080:8080 miko
+# Map a local directory to /data for persistent storage
+docker run -p 8082:8082 \
+  -v $(pwd)/data:/data \
+  -e MIKO_SUBSONIC_DATADIR=/data \
+  miko
 ```
-
-## API Endpoints
-
-All API endpoints are under the `/api/` path as per OpenAPI best practices.
-
-### Authentication  
-- **POST** `/api/login` - User authentication
-  - Request body: `{"username": "admin", "password": "password"}`
-  - Response: `{"token": "jwt-token"}`
-
-### CookieCloud
-- **GET** `/api/cookiecloud/server` - Get CookieCloud server URL
-- **POST** `/api/cookiecloud/identity` - Update CookieCloud identity (key and password)
-  - Request body: `{"key": "your-uuid", "password": "your-password"}`
-- **POST** `/api/cookiecloud/pull` - Force pull cookies from CookieCloud
-
-### Music Download
-- **GET** `/api/download` - Download music tracks
-  - Query parameters:
-    - `uri`: Resource URIs (song ID, album URL, etc.)
-    - `level`: Audio quality (standard, lossless, hires, etc.)
-    - `output`: Output directory
-    - `platform`: Music platform (e.g., netease)
-  - Response: `{"summary": "..."}`
-
-### Platform
-- **GET** `/api/platform/:platform/user` - Get user information for a specific platform
-
-### Documentation
-- **GET** `/swagger/index.html` - OpenAPI/Swagger UI documentation
-- **GET** `/docs/swagger.json` - OpenAPI JSON specification
-- **GET** `/docs/swagger.yaml` - OpenAPI YAML specification
 
 ## License
 
