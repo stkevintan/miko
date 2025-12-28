@@ -15,9 +15,10 @@ import (
 )
 
 type Handler struct {
-	db       *gorm.DB
-	cfg      *config.Config
-	injector do.Injector
+	db        *gorm.DB
+	cfg       *config.Config
+	injector  do.Injector
+	jwtSecret []byte
 }
 
 func New(i do.Injector) *Handler {

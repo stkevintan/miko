@@ -2,6 +2,8 @@ package api
 
 import (
 	"context"
+	"crypto/rand"
+	"encoding/hex"
 	"errors"
 	"net/http"
 	"strings"
@@ -9,6 +11,7 @@ import (
 
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/stkevintan/miko/models"
+	"github.com/stkevintan/miko/pkg/log"
 )
 
 type Claims struct {
@@ -17,10 +20,38 @@ type Claims struct {
 }
 
 func (h *Handler) getJWTSecret() []byte {
-	if h.cfg.Server.JWTSecret != "" {
-		return []byte(h.cfg.Server.JWTSecret)
+	if h.jwtSecret != nil {
+		return h.jwtSecret
 	}
-	return []byte("miko-secret-key")
+
+	// 1. Check config
+	if h.cfg.Server.JWTSecret != "" {
+		h.jwtSecret = []byte(h.cfg.Server.JWTSecret)
+		return h.jwtSecret
+	}
+
+	// 2. Check database
+	var setting models.SystemSetting
+	if err := h.db.Where("key = ?", "jwt_secret").First(&setting).Error; err == nil {
+		h.jwtSecret = []byte(setting.Value)
+		return h.jwtSecret
+	}
+
+	// 3. Generate and store
+	log.Info("No JWT secret found in config or database, generating a new one...")
+	b := make([]byte, 32)
+	if _, err := rand.Read(b); err != nil {
+		log.Error("Failed to generate random JWT secret: %v", err)
+		return []byte("miko-fallback-secret-key")
+	}
+	secret := hex.EncodeToString(b)
+	h.db.Create(&models.SystemSetting{
+		Key:   "jwt_secret",
+		Value: secret,
+	})
+
+	h.jwtSecret = []byte(secret)
+	return h.jwtSecret
 }
 
 func (h *Handler) GenerateToken(username string) (string, error) {

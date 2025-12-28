@@ -59,6 +59,7 @@ func main() {
 	// Auto-migrate models
 	err = db.AutoMigrate(
 		&models.User{},
+		&models.SystemSetting{},
 		&cookiecloud.Identity{},
 		&models.MusicFolder{},
 		&models.ArtistID3{},
