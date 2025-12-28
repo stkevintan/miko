@@ -34,21 +34,8 @@ jobs:
 
     - name: Build release binaries
       run: |
-        platforms=(
-          "linux/amd64"
-          "linux/arm64" 
-          "windows/amd64"
-        )
-        
-        for platform in "${platforms[@]}"; do
-          echo "Building for $platform"
-          if [ "$platform" = "linux/arm64" ]; then
-            CC=aarch64-linux-gnu-gcc ./scripts/build.sh --release "$platform"
-          else
-            ./scripts/build.sh --release "$platform"
-          fi
-        done
-
+        ./scripts/build.sh --release linux/amd64 linux/arm64 windows/amd64 darwin/amd64 darwin/arm64
+      
     - name: Create checksums
       run: |
         cd bin
