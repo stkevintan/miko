@@ -1,26 +1,5 @@
 package main
 
-// @title           Miko Service API
-// @version         1.0
-// @description     A Go service library with HTTP API endpoints
-// @termsOfService  http://swagger.io/terms/
-
-// @contact.name   API Support
-// @contact.url    http://www.swagger.io/support
-// @contact.email  support@swagger.io
-
-// @license.name  MIT
-// @license.url   http://opensource.org/licenses/MIT
-
-// @host
-// @BasePath  /api
-
-// @securityDefinitions.apikey ApiKeyAuth
-// @in header
-// @name Authorization
-
-// @schemes http https
-
 import (
 	"context"
 	_ "embed"
@@ -36,7 +15,6 @@ import (
 	"github.com/glebarez/sqlite"
 	"github.com/samber/do/v2"
 	"github.com/stkevintan/miko/config"
-	_ "github.com/stkevintan/miko/docs" // This line is important for swagger docs
 	"github.com/stkevintan/miko/models"
 	"github.com/stkevintan/miko/pkg/cookiecloud"
 	"github.com/stkevintan/miko/pkg/log"

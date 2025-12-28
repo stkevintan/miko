@@ -115,6 +115,12 @@ build_platform() {
         if [ "$os" != "windows" ]; then
             chmod +x "${output_path}"
         fi
+
+        # Compress with UPX if available in release mode
+        if [ "$BUILD_MODE" = "release" ] && command -v upx >/dev/null 2>&1; then
+            echo "   📦 Compressing with UPX..."
+            upx --best --lzma "${output_path}" >/dev/null 2>&1 || echo "   ⚠️ UPX compression failed for ${output_path}"
+        fi
         
         # Show file size
         local size=$(ls -lh "${output_path}" | awk '{print $5}')
@@ -149,10 +155,7 @@ else
 fi
 
 echo "Build complete! Binaries are in the bin/ directory:"
-ls -la bin/
-
-# call swagger.sh in the same directory as build.sh
-bash "$SCRIPT_DIR/swagger.sh"
+ls -lh bin/
 
 echo ""
 echo "Usage examples:"

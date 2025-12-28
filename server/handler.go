@@ -5,8 +5,6 @@ import (
 	"github.com/samber/do/v2"
 	"github.com/stkevintan/miko/server/api"
 	"github.com/stkevintan/miko/server/subsonic"
-	swaggerFiles "github.com/swaggo/files"
-	ginSwagger "github.com/swaggo/gin-swagger"
 )
 
 // Handler contains HTTP handlers for our service
@@ -38,13 +36,6 @@ func (h *Handler) Routes() *gin.Engine {
 			return
 		}
 		c.Next()
-	})
-
-	// Swagger UI endpoint
-	r.GET("/docs/*any", ginSwagger.WrapHandler(swaggerFiles.Handler))
-	// Redirect /docs to /docs/index.html for convenience
-	r.GET("/docs", func(c *gin.Context) {
-		c.Redirect(301, "/docs/index.html")
 	})
 
 	// subsonic v1.16.1 API group
