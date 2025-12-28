@@ -253,7 +253,7 @@ func (s *Subsonic) handleGetAvatar(w http.ResponseWriter, r *http.Request) {
 }
 
 func updateNowPlaying(w http.ResponseWriter, r *http.Request, s *Subsonic, id string) {
-	username, err := getAuthUsername(r)
+	username, err := models.GetUsername(r)
 	if err != nil {
 		s.sendResponse(w, r, models.NewErrorResponse(20, "Authentication required"))
 		return
@@ -299,7 +299,7 @@ func (s *Subsonic) handleScrobble(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Remove now playing record since it's now scrobbled (finished)
-	username, err := getAuthUsername(r)
+	username, err := models.GetUsername(r)
 	if err != nil {
 		s.sendResponse(w, r, models.NewErrorResponse(0, "Internal server error"))
 		return
