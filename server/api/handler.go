@@ -9,6 +9,7 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/samber/do/v2"
 	"github.com/stkevintan/miko/config"
+	"github.com/stkevintan/miko/models"
 	"github.com/stkevintan/miko/pkg/cookiecloud"
 	"github.com/stkevintan/miko/pkg/netease"
 	"gorm.io/gorm"
@@ -29,14 +30,8 @@ func New(i do.Injector) *Handler {
 	}
 }
 
-type contextKey string
-
-const (
-	usernameKey contextKey = "username"
-)
-
 func (h *Handler) getRequestInjector(r *http.Request) (do.Injector, error) {
-	username, ok := r.Context().Value(usernameKey).(string)
+	username, ok := r.Context().Value(models.UsernameKey).(string)
 	if !ok {
 		return nil, fmt.Errorf("username not found in context")
 	}
@@ -69,7 +64,7 @@ func (h *Handler) RegisterRoutes(r chi.Router) {
 
 		// Protected routes
 		r.Group(func(r chi.Router) {
-			r.Use(h.jwtAuthMiddleware())
+			r.Use(h.jwtAuth)
 			r.Get("/cookiecloud/server", h.getCookiecloudServer)
 			r.Post("/cookiecloud/identity", h.handleCookiecloudIdentity)
 			r.Post("/cookiecloud/pull", h.handleCookiecloudPull)

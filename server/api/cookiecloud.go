@@ -19,7 +19,7 @@ func (h *Handler) handleCookiecloudIdentity(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
-	username := r.Context().Value(usernameKey).(string)
+	username := r.Context().Value(models.UsernameKey).(string)
 
 	// Save the identity to database associated with current account
 	identity := cookiecloud.Identity{

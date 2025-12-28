@@ -5,6 +5,8 @@ import (
 	"net/http"
 	"runtime"
 	"strconv"
+
+	"github.com/stkevintan/miko/models"
 )
 
 type Integer interface {
@@ -48,7 +50,7 @@ func getQueryIntOrDefault[T Integer](r *http.Request, key string, defaultValue T
 }
 
 func getAuthUsername(r *http.Request) (string, error) {
-	username, ok := r.Context().Value(usernameKey).(string)
+	username, ok := r.Context().Value(models.UsernameKey).(string)
 	if !ok {
 		// Fallback to query parameter for cases where middleware might not have run
 		username = r.URL.Query().Get("u")

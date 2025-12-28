@@ -19,11 +19,6 @@ type Subsonic struct {
 	injector   do.Injector
 	nowPlaying sync.Map // key: string (username:clientName), value: models.NowPlayingRecord
 }
-type contextKey string
-
-const (
-	usernameKey contextKey = "username"
-)
 
 func New(injector do.Injector) *Subsonic {
 	return &Subsonic{
@@ -214,7 +209,7 @@ func (s *Subsonic) subsonicAuth(next http.Handler) http.Handler {
 			return
 		}
 
-		ctx := context.WithValue(r.Context(), usernameKey, username)
+		ctx := context.WithValue(r.Context(), models.UsernameKey, username)
 		next.ServeHTTP(w, r.WithContext(ctx))
 	})
 }
