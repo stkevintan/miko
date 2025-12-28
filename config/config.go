@@ -121,7 +121,7 @@ func Load(version string) (*Config, error) {
 		return nil, fmt.Errorf("v.Unmarshal: %w", err)
 	}
 
-cfg.Version = strings.TrimSpace(version)
+	cfg.Version = strings.TrimSpace(version)
 
 	if err := cfg.Validate(); err != nil {
 		return nil, fmt.Errorf("cfg.Validate: %w", err)
