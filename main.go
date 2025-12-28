@@ -23,6 +23,7 @@ package main
 
 import (
 	"context"
+	_ "embed"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -32,6 +33,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/glebarez/sqlite"
 	"github.com/samber/do/v2"
 	"github.com/stkevintan/miko/config"
 	_ "github.com/stkevintan/miko/docs" // This line is important for swagger docs
@@ -39,13 +41,15 @@ import (
 	"github.com/stkevintan/miko/pkg/cookiecloud"
 	"github.com/stkevintan/miko/pkg/log"
 	"github.com/stkevintan/miko/server"
-	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
 )
 
+//go:embed VERSION
+var version string
+
 func main() {
 	// Load configuration
-	cfg, err := config.Load()
+	cfg, err := config.Load(version)
 	if err != nil {
 		log.Fatalf("Failed to load config: %v", err)
 	}

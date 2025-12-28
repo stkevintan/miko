@@ -27,15 +27,11 @@ jobs:
     - name: Install swag
       run: go install github.com/swaggo/swag/cmd/swag@latest
 
-    - name: Install ARM64 cross-compiler
-      run: sudo apt-get update && sudo apt-get install -y gcc-aarch64-linux-gnu
-
     - name: Make build script executable
       run: chmod +x scripts/build.sh
 
     - name: Build application
       run: |
-        CC=aarch64-linux-gnu-gcc ./scripts/build.sh --release linux/arm64
         ./scripts/build.sh --release linux/amd64
 
     - name: Set up Docker Buildx

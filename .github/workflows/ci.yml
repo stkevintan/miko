@@ -59,10 +59,10 @@ jobs:
             artifact_name: miko-linux-amd64
           - platform: linux/arm64
             artifact_name: miko-linux-arm64
-          #- platform: darwin/amd64
-           # artifact_name: miko-darwin-amd64
-          #- platform: darwin/arm64
-         #   artifact_name: miko-darwin-arm64
+          - platform: darwin/amd64
+            artifact_name: miko-darwin-amd64
+          - platform: darwin/arm64
+            artifact_name: miko-darwin-arm64
           - platform: windows/amd64
             artifact_name: miko-windows-amd64
     
@@ -77,20 +77,10 @@ jobs:
 
     - name: Install swag
       run: go install github.com/swaggo/swag/cmd/swag@latest
-
-    - name: Install ARM64 cross-compiler
-      if: matrix.platform == 'linux/arm64'
-      run: sudo apt-get update && sudo apt-get install -y gcc-aarch64-linux-gnu
-    - name: Install MinGW for Windows cross-compilation
-      if: matrix.platform == 'windows/amd64'
-      run: sudo apt-get update && sudo apt-get install -y mingw-w64
-
     - name: Make build script executable
       run: chmod +x scripts/build.sh
 
     - name: Build for ${{ matrix.platform }}
-      env:
-        CC: ${{ matrix.platform == 'linux/arm64' && 'aarch64-linux-gnu-gcc' || (matrix.platform == 'windows/amd64' && 'x86_64-w64-mingw32-gcc' || '') }}
       run: ./scripts/build.sh --dev ${{ matrix.platform }}
 
     - name: Upload build artifacts
