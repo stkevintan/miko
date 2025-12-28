@@ -144,6 +144,8 @@ type ArtistID3 struct {
 	ArtistImageUrl string     `xml:"artistImageUrl,attr,omitempty" json:"artistImageUrl,omitempty"`
 	AlbumCount     int        `xml:"albumCount,attr" json:"albumCount"`
 	Starred        *time.Time `xml:"starred,attr,omitempty" json:"starred,omitempty"`
+	UserRating     int        `xml:"userRating,attr,omitempty" json:"userRating,omitempty"`
+	AverageRating  float64    `xml:"averageRating,attr,omitempty" json:"averageRating,omitempty"`
 	Albums         []AlbumID3 `gorm:"many2many:album_artists;" xml:"-" json:"-"`
 	Songs          []Child    `gorm:"many2many:song_artists;" xml:"-" json:"-"`
 }
@@ -154,19 +156,21 @@ type ArtistWithAlbumsID3 struct {
 }
 
 type AlbumID3 struct {
-	ID        string      `gorm:"primaryKey" xml:"id,attr" json:"id"`
-	Name      string      `gorm:"index" xml:"name,attr" json:"name"`
-	Artist    string      `gorm:"index" xml:"artist,attr,omitempty" json:"artist,omitempty"`
-	ArtistID  string      `gorm:"index" xml:"artistId,attr,omitempty" json:"artistId,omitempty"`
-	CoverArt  string      `xml:"coverArt,attr,omitempty" json:"coverArt,omitempty"`
-	SongCount int         `xml:"songCount,attr" json:"songCount"`
-	Duration  int         `xml:"duration,attr" json:"duration"`
-	PlayCount int64       `xml:"playCount,attr,omitempty" json:"playCount,omitempty"`
-	Created   time.Time   `xml:"created,attr" json:"created"`
-	Starred   *time.Time  `xml:"starred,attr,omitempty" json:"starred,omitempty"`
-	Year      int         `xml:"year,attr,omitempty" json:"year,omitempty"`
-	Genre     string      `xml:"genre,attr,omitempty" json:"genre,omitempty"`
-	Artists   []ArtistID3 `gorm:"many2many:album_artists;" xml:"-" json:"-"`
+	ID            string      `gorm:"primaryKey" xml:"id,attr" json:"id"`
+	Name          string      `gorm:"index" xml:"name,attr" json:"name"`
+	Artist        string      `gorm:"index" xml:"artist,attr,omitempty" json:"artist,omitempty"`
+	ArtistID      string      `gorm:"index" xml:"artistId,attr,omitempty" json:"artistId,omitempty"`
+	CoverArt      string      `xml:"coverArt,attr,omitempty" json:"coverArt,omitempty"`
+	SongCount     int         `xml:"songCount,attr" json:"songCount"`
+	Duration      int         `xml:"duration,attr" json:"duration"`
+	PlayCount     int64       `xml:"playCount,attr,omitempty" json:"playCount,omitempty"`
+	Created       time.Time   `xml:"created,attr" json:"created"`
+	Starred       *time.Time  `xml:"starred,attr,omitempty" json:"starred,omitempty"`
+	UserRating    int         `xml:"userRating,attr,omitempty" json:"userRating,omitempty"`
+	AverageRating float64     `xml:"averageRating,attr,omitempty" json:"averageRating,omitempty"`
+	Year          int         `xml:"year,attr,omitempty" json:"year,omitempty"`
+	Genre         string      `xml:"genre,attr,omitempty" json:"genre,omitempty"`
+	Artists       []ArtistID3 `gorm:"many2many:album_artists;" xml:"-" json:"-"`
 }
 
 type AlbumWithSongsID3 struct {

@@ -90,9 +90,9 @@ func (s *Subsonic) RegisterRoutes(r chi.Router) {
 		r.Head("/getAvatar", s.handleGetAvatar)
 
 		// Media annotation
-		r.Get("/star", s.handleNotImplemented)
-		r.Get("/unstar", s.handleNotImplemented)
-		r.Get("/setRating", s.handleNotImplemented)
+		r.Get("/star", s.handleStar)
+		r.Get("/unstar", s.handleUnstar)
+		r.Get("/setRating", s.handleSetRating)
 		r.Get("/scrobble", s.handleScrobble)
 
 		// Sharing
