@@ -91,6 +91,10 @@ func (s *Subsonic) handleSetRating(w http.ResponseWriter, r *http.Request) {
 				s.sendResponse(w, r, models.NewErrorResponse(0, "Failed to set rating: "+result.Error.Error()))
 				return
 			}
+			if result.RowsAffected == 0 {
+				s.sendResponse(w, r, models.NewErrorResponse(70, "Item not found"))
+				return
+			}
 		}
 	}
 
