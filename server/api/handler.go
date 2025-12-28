@@ -1,10 +1,12 @@
 package api
 
 import (
+	"encoding/json"
 	"fmt"
+	"net/http"
 	"time"
 
-	"github.com/gin-gonic/gin"
+	"github.com/go-chi/chi/v5"
 	"github.com/samber/do/v2"
 	"github.com/stkevintan/miko/config"
 	"github.com/stkevintan/miko/pkg/cookiecloud"
@@ -26,8 +28,14 @@ func New(i do.Injector) *Handler {
 	}
 }
 
-func (h *Handler) getRequestInjector(c *gin.Context) (do.Injector, error) {
-	username, ok := c.Get("username")
+type contextKey string
+
+const (
+	usernameKey contextKey = "username"
+)
+
+func (h *Handler) getRequestInjector(r *http.Request) (do.Injector, error) {
+	username, ok := r.Context().Value(usernameKey).(string)
 	if !ok {
 		return nil, fmt.Errorf("username not found in context")
 	}
@@ -37,13 +45,13 @@ func (h *Handler) getRequestInjector(c *gin.Context) (do.Injector, error) {
 		return nil, fmt.Errorf("failed to find identity for user %s: %w", username, err)
 	}
 
-	jar, err := cookiecloud.NewCookieCloudJar(c.Request.Context(), h.cfg.CookieCloud, &identity)
+	jar, err := cookiecloud.NewCookieCloudJar(r.Context(), h.cfg.CookieCloud, &identity)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create cookie jar: %w", err)
 	}
 
 	// Create a request-scoped injector
-	scope := h.injector.Scope(fmt.Sprintf("request-%s-%d", username.(string), time.Now().UnixNano()))
+	scope := h.injector.Scope(fmt.Sprintf("request-%s-%d", username, time.Now().UnixNano()))
 	do.Provide(scope, func(i do.Injector) (cookiecloud.CookieJar, error) {
 		return jar, nil
 	})
@@ -53,22 +61,31 @@ func (h *Handler) getRequestInjector(c *gin.Context) (do.Injector, error) {
 
 	return scope, nil
 }
-func (h *Handler) RegisterRoutes(r *gin.Engine) *gin.RouterGroup {
-	// api
-	api := r.Group("/api")
-	{
-		api.POST("/login", h.handleLogin)
+
+func (h *Handler) RegisterRoutes(r chi.Router) {
+	r.Route("/api", func(r chi.Router) {
+		r.Post("/login", h.handleLogin)
 
 		// Protected routes
-		protected := api.Group("/")
-		protected.Use(h.authMiddleware())
-		{
-			protected.GET("/cookiecloud/server", h.getCookiecloudServer)
-			protected.POST("/cookiecloud/identity", h.handleCookiecloudIdentity)
-			protected.POST("/cookiecloud/pull", h.handleCookiecloudPull)
-			protected.GET("/download", h.handleDownload)
-			protected.GET("/platform/:platform/user", h.handlePlatformUser)
-		}
-	}
-	return api
+		r.Group(func(r chi.Router) {
+			r.Use(h.jwtAuthMiddleware())
+			r.Get("/cookiecloud/server", h.getCookiecloudServer)
+			r.Post("/cookiecloud/identity", h.handleCookiecloudIdentity)
+			r.Post("/cookiecloud/pull", h.handleCookiecloudPull)
+			r.Get("/download", h.handleDownload)
+			r.Get("/platform/{platform}/user", h.handlePlatformUser)
+		})
+	})
+}
+
+// JSON writes a JSON response with the given status code and data
+func JSON(w http.ResponseWriter, code int, data interface{}) {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(code)
+	json.NewEncoder(w).Encode(data)
+}
+
+// Error writes a plain text error response
+func Error(w http.ResponseWriter, code int, message string) {
+	http.Error(w, message, code)
 }

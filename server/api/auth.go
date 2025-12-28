@@ -1,12 +1,12 @@
 package api
 
 import (
+	"context"
 	"errors"
 	"net/http"
 	"strings"
 	"time"
 
-	"github.com/gin-gonic/gin"
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/stkevintan/miko/models"
 )
@@ -36,46 +36,44 @@ func (h *Handler) GenerateToken(username string) (string, error) {
 	return token.SignedString(h.getJWTSecret())
 }
 
-func (h *Handler) authMiddleware() gin.HandlerFunc {
-	return func(c *gin.Context) {
-		authHeader := c.GetHeader("Authorization")
-		if authHeader == "" {
-			c.JSON(http.StatusUnauthorized, models.ErrorResponse{Error: "Authorization header is required"})
-			c.Abort()
-			return
-		}
-
-		parts := strings.SplitN(authHeader, " ", 2)
-		if !(len(parts) == 2 && parts[0] == "Bearer") {
-			c.JSON(http.StatusUnauthorized, models.ErrorResponse{Error: "Authorization header format must be Bearer {token}"})
-			c.Abort()
-			return
-		}
-
-		tokenString := parts[1]
-		claims := &Claims{}
-
-		token, err := jwt.ParseWithClaims(tokenString, claims, func(token *jwt.Token) (interface{}, error) {
-			return h.getJWTSecret(), nil
-		})
-
-		if err != nil {
-			if errors.Is(err, jwt.ErrTokenExpired) {
-				c.JSON(http.StatusUnauthorized, models.ErrorResponse{Error: "Token is expired"})
-			} else {
-				c.JSON(http.StatusUnauthorized, models.ErrorResponse{Error: "Invalid token"})
+func (h *Handler) jwtAuthMiddleware() func(http.Handler) http.Handler {
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			authHeader := r.Header.Get("Authorization")
+			if authHeader == "" {
+				JSON(w, http.StatusUnauthorized, models.ErrorResponse{Error: "Authorization header is required"})
+				return
 			}
-			c.Abort()
-			return
-		}
 
-		if !token.Valid {
-			c.JSON(http.StatusUnauthorized, models.ErrorResponse{Error: "Invalid token"})
-			c.Abort()
-			return
-		}
+			parts := strings.SplitN(authHeader, " ", 2)
+			if !(len(parts) == 2 && parts[0] == "Bearer") {
+				JSON(w, http.StatusUnauthorized, models.ErrorResponse{Error: "Authorization header format must be Bearer {token}"})
+				return
+			}
 
-		c.Set("username", claims.Username)
-		c.Next()
+			tokenString := parts[1]
+			claims := &Claims{}
+
+			token, err := jwt.ParseWithClaims(tokenString, claims, func(token *jwt.Token) (interface{}, error) {
+				return h.getJWTSecret(), nil
+			})
+
+			if err != nil {
+				if errors.Is(err, jwt.ErrTokenExpired) {
+					JSON(w, http.StatusUnauthorized, models.ErrorResponse{Error: "Token is expired"})
+				} else {
+					JSON(w, http.StatusUnauthorized, models.ErrorResponse{Error: "Invalid token"})
+				}
+				return
+			}
+
+			if !token.Valid {
+				JSON(w, http.StatusUnauthorized, models.ErrorResponse{Error: "Invalid token"})
+				return
+			}
+
+			ctx := context.WithValue(r.Context(), usernameKey, claims.Username)
+			next.ServeHTTP(w, r.WithContext(ctx))
+		})
 	}
 }

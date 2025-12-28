@@ -1,32 +1,21 @@
 package api
 
 import (
-	"context"
 	"net/http"
 
-	"github.com/gin-gonic/gin"
+	"github.com/go-chi/chi/v5"
 	"github.com/samber/do/v2"
 	"github.com/stkevintan/miko/models"
 	"github.com/stkevintan/miko/pkg/provider"
 )
 
 // handleUser retrieves user information from a music platform
-// @Summary      Get user information
-// @Description  Retrieves the authenticated user's information from the specified music platform
-// @Tags         user
-// @Produce      json
-// @Param        platform path string true "Music platform name" example("netease")
-// @Success      200 {object} types.User "User information retrieved successfully"
-// @Failure      500 {object} models.ErrorResponse "Internal server error - authentication failed or invalid platform"
-// @Failure      400 {object} models.ErrorResponse "Bad request - provider creation failed"
-// @Security     ApiKeyAuth
-// @Router       /platform/{platform}/user [get]
-func (h *Handler) handlePlatformUser(c *gin.Context) {
-	platform := c.Param("platform")
+func (h *Handler) handlePlatformUser(w http.ResponseWriter, r *http.Request) {
+	platform := chi.URLParam(r, "platform")
 
-	injector, err := h.getRequestInjector(c)
+	injector, err := h.getRequestInjector(r)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, &models.ErrorResponse{Error: err.Error()})
+		JSON(w, http.StatusInternalServerError, &models.ErrorResponse{Error: err.Error()})
 		return
 	}
 	defer injector.Shutdown()
@@ -34,13 +23,13 @@ func (h *Handler) handlePlatformUser(c *gin.Context) {
 	provider, err := do.InvokeNamed[provider.Provider](injector, platform)
 
 	if err != nil {
-		c.JSON(http.StatusBadRequest, &models.ErrorResponse{Error: err.Error()})
+		JSON(w, http.StatusBadRequest, &models.ErrorResponse{Error: err.Error()})
 		return
 	}
-	user, err := provider.User(context.Background())
+	user, err := provider.User(r.Context())
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, &models.ErrorResponse{Error: err.Error()})
+		JSON(w, http.StatusInternalServerError, &models.ErrorResponse{Error: err.Error()})
 		return
 	}
-	c.JSON(http.StatusOK, user)
+	JSON(w, http.StatusOK, user)
 }

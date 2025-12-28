@@ -1,16 +1,17 @@
 package subsonic
 
 import (
-	"github.com/gin-gonic/gin"
+	"net/http"
+
 	"github.com/samber/do/v2"
 	"github.com/stkevintan/miko/models"
 	"gorm.io/gorm"
 )
 
-func (s *Subsonic) handleSearch(c *gin.Context) {
-	query := c.Query("query")
-	count := getQueryIntOrDefault(c, "count", 20)
-	offset := getQueryIntOrDefault(c, "offset", 0)
+func (s *Subsonic) handleSearch(w http.ResponseWriter, r *http.Request) {
+	query := r.URL.Query().Get("query")
+	count := getQueryIntOrDefault(r, "count", 20)
+	offset := getQueryIntOrDefault(r, "offset", 0)
 
 	db := do.MustInvoke[*gorm.DB](s.injector)
 
@@ -22,11 +23,11 @@ func (s *Subsonic) handleSearch(c *gin.Context) {
 
 	if err := db.Where("title LIKE ? OR album LIKE ? OR artist LIKE ?", searchQuery, searchQuery, searchQuery).
 		Limit(count).Offset(offset).Find(&songs).Error; err != nil {
-		s.sendResponse(c, models.NewErrorResponse(0, "Failed to search for songs"))
+		s.sendResponse(w, r, models.NewErrorResponse(0, "Failed to search for songs"))
 		return
 	}
 
-	s.sendResponse(c, &models.SubsonicResponse{
+	s.sendResponse(w, r, &models.SubsonicResponse{
 		Status:  models.ResponseStatusOK,
 		Version: "1.16.1",
 		SearchResult: &models.SearchResult{
@@ -37,15 +38,15 @@ func (s *Subsonic) handleSearch(c *gin.Context) {
 	})
 }
 
-func (s *Subsonic) searchCommon(c *gin.Context) ([]models.ArtistID3, []models.AlbumID3, []models.Child, error) {
-	query := c.Query("query")
+func (s *Subsonic) searchCommon(r *http.Request) ([]models.ArtistID3, []models.AlbumID3, []models.Child, error) {
+	query := r.URL.Query().Get("query")
 
-	artistCount := getQueryIntOrDefault(c, "artistCount", 20)
-	artistOffset := getQueryIntOrDefault(c, "artistOffset", 0)
-	albumCount := getQueryIntOrDefault(c, "albumCount", 20)
-	albumOffset := getQueryIntOrDefault(c, "albumOffset", 0)
-	songCount := getQueryIntOrDefault(c, "songCount", 20)
-	songOffset := getQueryIntOrDefault(c, "songOffset", 0)
+	artistCount := getQueryIntOrDefault(r, "artistCount", 20)
+	artistOffset := getQueryIntOrDefault(r, "artistOffset", 0)
+	albumCount := getQueryIntOrDefault(r, "albumCount", 20)
+	albumOffset := getQueryIntOrDefault(r, "albumOffset", 0)
+	songCount := getQueryIntOrDefault(r, "songCount", 20)
+	songOffset := getQueryIntOrDefault(r, "songOffset", 0)
 
 	db := do.MustInvoke[*gorm.DB](s.injector)
 
@@ -59,7 +60,7 @@ func (s *Subsonic) searchCommon(c *gin.Context) ([]models.ArtistID3, []models.Al
 	albumQuery := db.Where("name LIKE ?", searchQuery).Limit(albumCount).Offset(albumOffset)
 	songQuery := db.Where("title LIKE ?", searchQuery).Limit(songCount).Offset(songOffset)
 	// Optional musicFolderId filter
-	musicFolderId, err := getQueryInt[uint](c, "musicFolderId")
+	musicFolderId, err := getQueryInt[uint](r, "musicFolderId")
 	if err == nil {
 		// For artists and albums, we filter by checking if they have songs in the folder
 		artistQuery = artistQuery.Joins("JOIN song_artists ON song_artists.artist_id3_id = artist_id3.id").
@@ -81,10 +82,10 @@ func (s *Subsonic) searchCommon(c *gin.Context) ([]models.ArtistID3, []models.Al
 	return artists, albums, songs, nil
 }
 
-func (s *Subsonic) handleSearch2(c *gin.Context) {
-	artists, albums, songs, err := s.searchCommon(c)
+func (s *Subsonic) handleSearch2(w http.ResponseWriter, r *http.Request) {
+	artists, albums, songs, err := s.searchCommon(r)
 	if err != nil {
-		s.sendResponse(c, models.NewErrorResponse(0, err.Error()))
+		s.sendResponse(w, r, models.NewErrorResponse(0, err.Error()))
 		return
 	}
 
@@ -116,13 +117,13 @@ func (s *Subsonic) handleSearch2(c *gin.Context) {
 		Album:  searchAlbums,
 		Song:   songs,
 	}
-	s.sendResponse(c, resp)
+	s.sendResponse(w, r, resp)
 }
 
-func (s *Subsonic) handleSearch3(c *gin.Context) {
-	artists, albums, songs, err := s.searchCommon(c)
+func (s *Subsonic) handleSearch3(w http.ResponseWriter, r *http.Request) {
+	artists, albums, songs, err := s.searchCommon(r)
 	if err != nil {
-		s.sendResponse(c, models.NewErrorResponse(0, err.Error()))
+		s.sendResponse(w, r, models.NewErrorResponse(0, err.Error()))
 		return
 	}
 
@@ -132,5 +133,5 @@ func (s *Subsonic) handleSearch3(c *gin.Context) {
 		Album:  albums,
 		Song:   songs,
 	}
-	s.sendResponse(c, resp)
+	s.sendResponse(w, r, resp)
 }

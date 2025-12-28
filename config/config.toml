@@ -1,5 +1,6 @@
 [server]
 port = 8082
+jwtSecret = "miko_secret"
 
 [provider]
 # Default platform to use when none is specified
