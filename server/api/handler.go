@@ -61,6 +61,11 @@ func (h *Handler) newApiContext(r *http.Request) (context.Context, error) {
 }
 
 func (h *Handler) RegisterRoutes(r chi.Router) {
+	// for docker health check
+	r.Get("/health", func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusNoContent)
+	})
+
 	r.Route("/api", func(r chi.Router) {
 		r.Post("/login", h.handleLogin)
 
