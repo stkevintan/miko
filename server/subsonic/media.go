@@ -258,12 +258,7 @@ func (s *Subsonic) handleGetAvatar(w http.ResponseWriter, r *http.Request) {
 }
 
 func updateNowPlaying(w http.ResponseWriter, r *http.Request, s *Subsonic, id string) {
-	u, err := di.Invoke[models.Username](r.Context())
-	username := string(u)
-	if err != nil {
-		s.sendResponse(w, r, models.NewErrorResponse(20, "Authentication required"))
-		return
-	}
+	username := string(di.MustInvoke[models.Username](r.Context()))
 	clientName := r.URL.Query().Get("c")
 	if clientName == "" {
 		clientName = "Unknown"

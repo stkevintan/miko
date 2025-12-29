@@ -128,3 +128,11 @@ func MustInvoke[T any](ctx context.Context) T {
 	}
 	return s
 }
+
+func MustInvokeNamed[T any](ctx context.Context, name string) T {
+	s, err := InvokeNamed[T](ctx, name)
+	if err != nil {
+		panic(err)
+	}
+	return s
+}

@@ -9,7 +9,7 @@ import (
 	"gorm.io/gorm"
 )
 
-func getAlbums(r *http.Request, s *Subsonic) ([]models.AlbumID3, error) {
+func getAlbums(r *http.Request) ([]models.AlbumID3, error) {
 	query := r.URL.Query()
 	listType := query.Get("type")
 	if listType == "" {
@@ -58,7 +58,7 @@ func getAlbums(r *http.Request, s *Subsonic) ([]models.AlbumID3, error) {
 }
 
 func (s *Subsonic) handleGetAlbumList2(w http.ResponseWriter, r *http.Request) {
-	albums, err := getAlbums(r, s)
+	albums, err := getAlbums(r)
 	if err != nil {
 		s.sendResponse(w, r, models.NewErrorResponse(0, err.Error()))
 		return
@@ -77,7 +77,7 @@ func (s *Subsonic) handleGetAlbumList(w http.ResponseWriter, r *http.Request) {
 	// Actually it returns <albumList> which is same as <albumList2> but with different element names.
 	// For simplicity, let's just use the same logic but return AlbumList.
 
-	albums, err := getAlbums(r, s)
+	albums, err := getAlbums(r)
 	if err != nil {
 		s.sendResponse(w, r, models.NewErrorResponse(0, err.Error()))
 		return
@@ -219,7 +219,7 @@ func (s *Subsonic) handleGetNowPlaying(w http.ResponseWriter, r *http.Request) {
 	s.sendResponse(w, r, resp)
 }
 
-func getStarredItems(r *http.Request, s *Subsonic) ([]models.ArtistID3, []models.AlbumID3, []models.Child, error) {
+func getStarredItems(r *http.Request) ([]models.ArtistID3, []models.AlbumID3, []models.Child, error) {
 	db := di.MustInvoke[*gorm.DB](r.Context())
 
 	var artists []models.ArtistID3
@@ -259,7 +259,7 @@ func getStarredItems(r *http.Request, s *Subsonic) ([]models.ArtistID3, []models
 }
 
 func (s *Subsonic) handleGetStarred(w http.ResponseWriter, r *http.Request) {
-	artists, albums, songs, err := getStarredItems(r, s)
+	artists, albums, songs, err := getStarredItems(r)
 	if err != nil {
 		s.sendResponse(w, r, models.NewErrorResponse(0, err.Error()))
 		return
@@ -303,7 +303,7 @@ func (s *Subsonic) handleGetStarred(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Subsonic) handleGetStarred2(w http.ResponseWriter, r *http.Request) {
-	artists, albums, songs, err := getStarredItems(r, s)
+	artists, albums, songs, err := getStarredItems(r)
 	if err != nil {
 		s.sendResponse(w, r, models.NewErrorResponse(0, err.Error()))
 		return

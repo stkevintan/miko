@@ -96,12 +96,8 @@ func (s *Subsonic) handleGetPlaylist(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	u, err := di.Invoke[models.Username](r.Context())
-	username := string(u)
-	if err != nil {
-		s.sendResponse(w, r, models.NewErrorResponse(0, "Internal server error"))
-		return
-	}
+	username := string(di.MustInvoke[models.Username](r.Context()))
+
 	if !p.Public && p.Owner != username {
 		s.sendResponse(w, r, models.NewErrorResponse(70, "Playlist not found"))
 		return
@@ -149,19 +145,14 @@ func (s *Subsonic) handleCreatePlaylist(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	u, err := di.Invoke[models.Username](r.Context())
-	username := string(u)
-	if err != nil {
-		s.sendResponse(w, r, models.NewErrorResponse(0, "Internal server error"))
-		return
-	}
+	username := string(di.MustInvoke[models.Username](r.Context()))
 
 	p := models.PlaylistRecord{
 		Name:  name,
 		Owner: username,
 	}
 
-	err = db.Transaction(func(tx *gorm.DB) error {
+	err := db.Transaction(func(tx *gorm.DB) error {
 		if err := tx.Create(&p).Error; err != nil {
 			return err
 		}
@@ -206,12 +197,8 @@ func (s *Subsonic) handleUpdatePlaylist(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	u, err := di.Invoke[models.Username](r.Context())
-	username := string(u)
-	if err != nil {
-		s.sendResponse(w, r, models.NewErrorResponse(0, "Internal server error"))
-		return
-	}
+	username := string(di.MustInvoke[models.Username](r.Context()))
+
 	if p.Owner != username {
 		s.sendResponse(w, r, models.NewErrorResponse(0, "Permission denied"))
 		return
@@ -311,12 +298,7 @@ func (s *Subsonic) handleDeletePlaylist(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	u, err := di.Invoke[models.Username](r.Context())
-	username := string(u)
-	if err != nil {
-		s.sendResponse(w, r, models.NewErrorResponse(0, "Internal server error"))
-		return
-	}
+	username := string(di.MustInvoke[models.Username](r.Context()))
 	if p.Owner != username {
 		s.sendResponse(w, r, models.NewErrorResponse(0, "Permission denied"))
 		return
