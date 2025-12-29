@@ -1,13 +1,15 @@
 package server
 
 import (
+	"context"
 	"net/http"
 	"strings"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
 	"github.com/go-chi/cors"
-	"github.com/samber/do/v2"
+	"github.com/stkevintan/miko/config"
+	"github.com/stkevintan/miko/pkg/di"
 	"github.com/stkevintan/miko/pkg/log"
 	"github.com/stkevintan/miko/server/api"
 	"github.com/stkevintan/miko/server/subsonic"
@@ -15,19 +17,20 @@ import (
 
 // Handler contains HTTP handlers for our service
 type Handler struct {
-	injector do.Injector
+	ctx context.Context
 }
 
 // New creates a new handler instance
-func New(i do.Injector) *Handler {
+func New(ctx context.Context) *Handler {
 	return &Handler{
-		injector: i,
+		ctx: ctx,
 	}
 }
 
 // Routes sets up the HTTP routes using Chi
 func (h *Handler) Routes() http.Handler {
 	r := chi.NewRouter()
+	cfg := di.MustInvoke[*config.Config](h.ctx)
 
 	r.Use(cors.Handler(cors.Options{
 		AllowedOrigins:   []string{"*"},
@@ -38,7 +41,9 @@ func (h *Handler) Routes() http.Handler {
 	}))
 
 	// Standard middleware
-	r.Use(middleware.Logger)
+	if cfg.Log.Level == "debug" {
+		r.Use(middleware.Logger)
+	}
 	r.Use(middleware.Recoverer)
 
 	// Subsonic .view suffix rewrite middleware
@@ -55,11 +60,11 @@ func (h *Handler) Routes() http.Handler {
 	})
 
 	// subsonic v1.16.1 API group
-	s := subsonic.New(h.injector)
+	s := subsonic.New(h.ctx)
 	s.RegisterRoutes(chi.Router(r))
 
 	// API v1 group
-	apiHandler := api.New(h.injector)
+	apiHandler := api.New(h.ctx)
 	apiHandler.RegisterRoutes(chi.Router(r))
 
 	return r

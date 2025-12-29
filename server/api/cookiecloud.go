@@ -4,9 +4,9 @@ import (
 	"encoding/json"
 	"net/http"
 
-	"github.com/samber/do/v2"
 	"github.com/stkevintan/miko/models"
 	"github.com/stkevintan/miko/pkg/cookiecloud"
+	"github.com/stkevintan/miko/pkg/di"
 )
 
 // handleCookiecloudIdentity updates CookieCloud identity
@@ -40,9 +40,9 @@ func (h *Handler) handleCookiecloudIdentity(w http.ResponseWriter, r *http.Reque
 	}
 
 	// Force pull after identity saved
-	injector, err := h.getRequestInjector(r)
+	ctx, err := h.newApiContext(r)
 	if err == nil {
-		if jar, err := do.Invoke[cookiecloud.CookieJar](injector); err == nil {
+		if jar, err := di.Invoke[cookiecloud.CookieJar](ctx); err == nil {
 			_ = jar.PullAll()
 		}
 	}
@@ -57,13 +57,13 @@ func (h *Handler) handleCookiecloudIdentity(w http.ResponseWriter, r *http.Reque
 
 // handleCookiecloudPull forces a pull from CookieCloud
 func (h *Handler) handleCookiecloudPull(w http.ResponseWriter, r *http.Request) {
-	injector, err := h.getRequestInjector(r)
+	ctx, err := h.newApiContext(r)
 	if err != nil {
 		JSON(w, http.StatusInternalServerError, &models.ErrorResponse{Error: err.Error()})
 		return
 	}
 
-	jar, err := do.Invoke[cookiecloud.CookieJar](injector)
+	jar, err := di.Invoke[cookiecloud.CookieJar](ctx)
 	if err != nil {
 		JSON(w, http.StatusInternalServerError, &models.ErrorResponse{Error: err.Error()})
 		return

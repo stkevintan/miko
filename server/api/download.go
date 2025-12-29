@@ -8,8 +8,8 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/samber/do/v2"
 	"github.com/stkevintan/miko/models"
+	"github.com/stkevintan/miko/pkg/di"
 	"github.com/stkevintan/miko/pkg/provider"
 	"github.com/stkevintan/miko/pkg/types"
 )
@@ -63,14 +63,13 @@ func (h *Handler) handleDownload(w http.ResponseWriter, r *http.Request) {
 		},
 	}
 
-	injector, err := h.getRequestInjector(r)
+	ctx, err := h.newApiContext(r)
 	if err != nil {
 		JSON(w, http.StatusInternalServerError, &models.ErrorResponse{Error: err.Error()})
 		return
 	}
-	defer injector.Shutdown()
 
-	result, err := req.Download(r.Context(), injector)
+	result, err := req.Download(ctx)
 
 	if err != nil {
 		errorResp := models.ErrorResponse{Error: err.Error()}
@@ -109,7 +108,7 @@ type DownloadRequest struct {
 	Timeout  time.Duration
 }
 
-func (r *DownloadRequest) Download(ctx context.Context, i do.Injector) (*types.MusicDownloadResults, error) {
+func (r *DownloadRequest) Download(ctx context.Context) (*types.MusicDownloadResults, error) {
 	var (
 		nctx   context.Context
 		cancel context.CancelFunc
@@ -130,7 +129,7 @@ func (r *DownloadRequest) Download(ctx context.Context, i do.Injector) (*types.M
 	}
 
 	defer cancel()
-	provider, err := do.InvokeNamed[provider.Provider](i, r.Platform)
+	provider, err := di.InvokeNamed[provider.Provider](ctx, r.Platform)
 	if err != nil {
 		return nil, fmt.Errorf("create provider: %w", err)
 	}

@@ -4,14 +4,14 @@ import (
 	"net/http"
 	"strconv"
 
-	"github.com/samber/do/v2"
 	"github.com/stkevintan/miko/models"
+	"github.com/stkevintan/miko/pkg/di"
 	"github.com/stkevintan/miko/pkg/log"
 	"gorm.io/gorm"
 )
 
 func (s *Subsonic) handleGetPlaylists(w http.ResponseWriter, r *http.Request) {
-	db := do.MustInvoke[*gorm.DB](s.injector)
+	db := di.MustInvoke[*gorm.DB](s.ctx)
 	username, err := models.GetUsername(r)
 	if err != nil {
 		s.sendResponse(w, r, models.NewErrorResponse(0, "Internal server error"))
@@ -87,7 +87,7 @@ func (s *Subsonic) handleGetPlaylists(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Subsonic) handleGetPlaylist(w http.ResponseWriter, r *http.Request) {
-	db := do.MustInvoke[*gorm.DB](s.injector)
+	db := di.MustInvoke[*gorm.DB](s.ctx)
 	id, err := getQueryInt[uint](r, "id")
 	if err != nil {
 		s.sendResponse(w, r, models.NewErrorResponse(10, err.Error()))
@@ -144,7 +144,7 @@ func (s *Subsonic) handleGetPlaylist(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Subsonic) handleCreatePlaylist(w http.ResponseWriter, r *http.Request) {
-	db := do.MustInvoke[*gorm.DB](s.injector)
+	db := di.MustInvoke[*gorm.DB](s.ctx)
 	query := r.URL.Query()
 	name := query.Get("name")
 	if name == "" {
@@ -195,7 +195,7 @@ func (s *Subsonic) handleCreatePlaylist(w http.ResponseWriter, r *http.Request) 
 }
 
 func (s *Subsonic) handleUpdatePlaylist(w http.ResponseWriter, r *http.Request) {
-	db := do.MustInvoke[*gorm.DB](s.injector)
+	db := di.MustInvoke[*gorm.DB](s.ctx)
 	id, err := getQueryInt[uint](r, "playlistId")
 	if err != nil {
 		s.sendResponse(w, r, models.NewErrorResponse(10, err.Error()))
@@ -299,7 +299,7 @@ func (s *Subsonic) handleUpdatePlaylist(w http.ResponseWriter, r *http.Request) 
 }
 
 func (s *Subsonic) handleDeletePlaylist(w http.ResponseWriter, r *http.Request) {
-	db := do.MustInvoke[*gorm.DB](s.injector)
+	db := di.MustInvoke[*gorm.DB](s.ctx)
 	id, err := getQueryInt[uint](r, "id")
 	if err != nil {
 		s.sendResponse(w, r, models.NewErrorResponse(10, err.Error()))

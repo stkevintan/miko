@@ -5,8 +5,8 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/samber/do/v2"
 	"github.com/stkevintan/miko/models"
+	"github.com/stkevintan/miko/pkg/di"
 	"gorm.io/gorm"
 )
 
@@ -16,7 +16,7 @@ func (s *Subsonic) updateStarredStatus(r *http.Request, value interface{}) error
 	albumIds := query["albumId"]
 	artistIds := query["artistId"]
 
-	db := do.MustInvoke[*gorm.DB](s.injector)
+	db := di.MustInvoke[*gorm.DB](s.ctx)
 
 	return db.Transaction(func(tx *gorm.DB) error {
 		if len(ids) > 0 {
@@ -69,7 +69,7 @@ func (s *Subsonic) handleSetRating(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	db := do.MustInvoke[*gorm.DB](s.injector)
+	db := di.MustInvoke[*gorm.DB](s.ctx)
 
 	// Try to update as song/directory first
 	result := db.Model(&models.Child{}).Where("id = ?", id).Update("user_rating", rating)

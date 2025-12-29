@@ -4,8 +4,8 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/samber/do/v2"
 	"github.com/stkevintan/miko/models"
+	"github.com/stkevintan/miko/pkg/di"
 	"gorm.io/gorm"
 )
 
@@ -21,7 +21,7 @@ func getAlbums(r *http.Request, s *Subsonic) ([]models.AlbumID3, error) {
 	fromYear := getQueryIntOrDefault(r, "fromYear", 0)
 	toYear := getQueryIntOrDefault(r, "toYear", 3000)
 
-	db := do.MustInvoke[*gorm.DB](s.injector)
+	db := di.MustInvoke[*gorm.DB](s.ctx)
 	var albums []models.AlbumID3
 
 	dbQuery := db.Limit(size).Offset(offset)
@@ -113,7 +113,7 @@ func (s *Subsonic) handleGetRandomSongs(w http.ResponseWriter, r *http.Request) 
 	fromYear := getQueryIntOrDefault(r, "fromYear", 0)
 	toYear := getQueryIntOrDefault(r, "toYear", 3000)
 
-	db := do.MustInvoke[*gorm.DB](s.injector)
+	db := di.MustInvoke[*gorm.DB](s.ctx)
 	var songs []models.Child
 
 	dbQuery := db.Where("is_dir = ?", false).Limit(size).Order("RANDOM()")
@@ -157,7 +157,7 @@ func (s *Subsonic) handleGetSongsByGenre(w http.ResponseWriter, r *http.Request)
 	count := getQueryIntOrDefault(r, "count", 10)
 	offset := getQueryIntOrDefault(r, "offset", 0)
 
-	db := do.MustInvoke[*gorm.DB](s.injector)
+	db := di.MustInvoke[*gorm.DB](s.ctx)
 	var songs []models.Child
 	dbQuery := db.Joins("JOIN song_genres ON song_genres.child_id = children.id").
 		Where("song_genres.genre_name = ?", genre)
@@ -182,7 +182,7 @@ func (s *Subsonic) handleGetSongsByGenre(w http.ResponseWriter, r *http.Request)
 }
 
 func (s *Subsonic) handleGetNowPlaying(w http.ResponseWriter, r *http.Request) {
-	db := do.MustInvoke[*gorm.DB](s.injector)
+	db := di.MustInvoke[*gorm.DB](s.ctx)
 
 	tenMinutesAgo := time.Now().Add(-10 * time.Minute)
 	entries := make([]models.NowPlayingEntry, 0)
@@ -220,7 +220,7 @@ func (s *Subsonic) handleGetNowPlaying(w http.ResponseWriter, r *http.Request) {
 }
 
 func getStarredItems(r *http.Request, s *Subsonic) ([]models.ArtistID3, []models.AlbumID3, []models.Child, error) {
-	db := do.MustInvoke[*gorm.DB](s.injector)
+	db := di.MustInvoke[*gorm.DB](s.ctx)
 
 	var artists []models.ArtistID3
 	artistQuery := db.Where("starred IS NOT NULL")

@@ -13,9 +13,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/samber/do/v2"
 	"github.com/stkevintan/miko/config"
 	"github.com/stkevintan/miko/models"
+	"github.com/stkevintan/miko/pkg/di"
 	"github.com/stkevintan/miko/pkg/log"
 	"go.senan.xyz/taglib"
 	"gorm.io/gorm"
@@ -28,7 +28,7 @@ func (s *Subsonic) handleStream(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	db := do.MustInvoke[*gorm.DB](s.injector)
+	db := di.MustInvoke[*gorm.DB](s.ctx)
 	var song models.Child
 	if err := db.Where("id = ?", id).First(&song).Error; err != nil {
 		s.sendResponse(w, r, models.NewErrorResponse(70, "Song not found"))
@@ -56,7 +56,7 @@ func (s *Subsonic) handleDownload(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	db := do.MustInvoke[*gorm.DB](s.injector)
+	db := di.MustInvoke[*gorm.DB](s.ctx)
 	var song models.Child
 	if err := db.Where("id = ?", id).First(&song).Error; err != nil {
 		s.sendResponse(w, r, models.NewErrorResponse(70, "Song not found"))
@@ -79,7 +79,7 @@ func (s *Subsonic) handleGetCoverArt(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	cfg := do.MustInvoke[*config.Config](s.injector)
+	cfg := di.MustInvoke[*config.Config](s.ctx)
 	cacheDir := filepath.Join(cfg.Subsonic.DataDir, "cache", "covers")
 
 	// Try to serve from cache first
@@ -92,7 +92,7 @@ func (s *Subsonic) handleGetCoverArt(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	db := do.MustInvoke[*gorm.DB](s.injector)
+	db := di.MustInvoke[*gorm.DB](s.ctx)
 
 	var path string
 	// Try to find as song first
@@ -142,7 +142,7 @@ func (s *Subsonic) handleGetLyrics(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	db := do.MustInvoke[*gorm.DB](s.injector)
+	db := di.MustInvoke[*gorm.DB](s.ctx)
 	var song models.Child
 	if err := db.Where("artist = ? AND title = ?", artist, title).First(&song).Error; err != nil {
 		s.sendResponse(w, r, models.NewErrorResponse(70, "Lyrics not found"))
@@ -165,7 +165,7 @@ func (s *Subsonic) handleGetLyricsBySongId(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
-	db := do.MustInvoke[*gorm.DB](s.injector)
+	db := di.MustInvoke[*gorm.DB](s.ctx)
 	var song models.Child
 	if err := db.Where("id = ?", id).First(&song).Error; err != nil {
 		s.sendResponse(w, r, models.NewErrorResponse(70, "Lyrics not found"))
@@ -231,7 +231,7 @@ func (s *Subsonic) handleGetAvatar(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	cfg := do.MustInvoke[*config.Config](s.injector)
+	cfg := di.MustInvoke[*config.Config](s.ctx)
 	avatarDir := filepath.Join(cfg.Subsonic.DataDir, "avatars")
 
 	hash := md5.Sum([]byte(username))
@@ -292,7 +292,7 @@ func (s *Subsonic) handleScrobble(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	db := do.MustInvoke[*gorm.DB](s.injector)
+	db := di.MustInvoke[*gorm.DB](s.ctx)
 	if err := db.Model(&models.Child{}).Where("id = ?", id).UpdateColumn("play_count", gorm.Expr("play_count + 1")).Error; err != nil {
 		s.sendResponse(w, r, models.NewErrorResponse(0, "Failed to update play count"))
 		return

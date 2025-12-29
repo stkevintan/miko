@@ -3,8 +3,8 @@ package subsonic
 import (
 	"net/http"
 
-	"github.com/samber/do/v2"
 	"github.com/stkevintan/miko/models"
+	"github.com/stkevintan/miko/pkg/di"
 	"gorm.io/gorm"
 )
 
@@ -13,7 +13,7 @@ func (s *Subsonic) handleSearch(w http.ResponseWriter, r *http.Request) {
 	count := getQueryIntOrDefault(r, "count", 20)
 	offset := getQueryIntOrDefault(r, "offset", 0)
 
-	db := do.MustInvoke[*gorm.DB](s.injector)
+	db := di.MustInvoke[*gorm.DB](s.ctx)
 
 	var songs []models.Child
 	searchQuery := "%" + query + "%"
@@ -48,7 +48,7 @@ func (s *Subsonic) searchCommon(r *http.Request) ([]models.ArtistID3, []models.A
 	songCount := getQueryIntOrDefault(r, "songCount", 20)
 	songOffset := getQueryIntOrDefault(r, "songOffset", 0)
 
-	db := do.MustInvoke[*gorm.DB](s.injector)
+	db := di.MustInvoke[*gorm.DB](s.ctx)
 
 	var artists []models.ArtistID3
 	var albums []models.AlbumID3
