@@ -4,8 +4,8 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/stkevintan/miko/pkg/di"
 	"github.com/stkevintan/miko/models"
+	"github.com/stkevintan/miko/pkg/di"
 	"gorm.io/gorm"
 )
 
