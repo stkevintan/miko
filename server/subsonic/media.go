@@ -28,7 +28,7 @@ func (s *Subsonic) handleStream(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	db := di.MustInvoke[*gorm.DB](s.ctx)
+	db := di.MustInvoke[*gorm.DB](r.Context())
 	var song models.Child
 	if err := db.Where("id = ?", id).First(&song).Error; err != nil {
 		s.sendResponse(w, r, models.NewErrorResponse(70, "Song not found"))
@@ -56,7 +56,7 @@ func (s *Subsonic) handleDownload(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	db := di.MustInvoke[*gorm.DB](s.ctx)
+	db := di.MustInvoke[*gorm.DB](r.Context())
 	var song models.Child
 	if err := db.Where("id = ?", id).First(&song).Error; err != nil {
 		s.sendResponse(w, r, models.NewErrorResponse(70, "Song not found"))
@@ -79,7 +79,7 @@ func (s *Subsonic) handleGetCoverArt(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	cfg := di.MustInvoke[*config.Config](s.ctx)
+	cfg := di.MustInvoke[*config.Config](r.Context())
 	cacheDir := filepath.Join(cfg.Subsonic.DataDir, "cache", "covers")
 
 	// Try to serve from cache first
@@ -92,7 +92,7 @@ func (s *Subsonic) handleGetCoverArt(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	db := di.MustInvoke[*gorm.DB](s.ctx)
+	db := di.MustInvoke[*gorm.DB](r.Context())
 
 	var path string
 	// Try to find as song first
@@ -142,7 +142,7 @@ func (s *Subsonic) handleGetLyrics(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	db := di.MustInvoke[*gorm.DB](s.ctx)
+	db := di.MustInvoke[*gorm.DB](r.Context())
 	var song models.Child
 	if err := db.Where("artist = ? AND title = ?", artist, title).First(&song).Error; err != nil {
 		s.sendResponse(w, r, models.NewErrorResponse(70, "Lyrics not found"))
@@ -165,9 +165,14 @@ func (s *Subsonic) handleGetLyricsBySongId(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
-	db := di.MustInvoke[*gorm.DB](s.ctx)
+	db := di.MustInvoke[*gorm.DB](r.Context())
 	var song models.Child
 	if err := db.Where("id = ?", id).First(&song).Error; err != nil {
+		s.sendResponse(w, r, models.NewErrorResponse(70, "Lyrics not found"))
+		return
+	}
+
+	if song.Lyrics == "" {
 		s.sendResponse(w, r, models.NewErrorResponse(70, "Lyrics not found"))
 		return
 	}
@@ -199,7 +204,6 @@ func (s *Subsonic) handleGetLyricsBySongId(w http.ResponseWriter, r *http.Reques
 				Start: startTime,
 				Value: text,
 			})
-			log.Info("RParsed lyrics line:", row, "->", startTime, text)
 		} else {
 			// If any line is non-synced, mark whole lyrics as non-synced
 			synced = false
@@ -221,6 +225,7 @@ func (s *Subsonic) handleGetLyricsBySongId(w http.ResponseWriter, r *http.Reques
 			},
 		},
 	}
+	log.Debug("Returning lyrics for song ID %s: %+v", id, resp.LyricsList)
 	s.sendResponse(w, r, resp)
 }
 
@@ -231,7 +236,7 @@ func (s *Subsonic) handleGetAvatar(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	cfg := di.MustInvoke[*config.Config](s.ctx)
+	cfg := di.MustInvoke[*config.Config](r.Context())
 	avatarDir := filepath.Join(cfg.Subsonic.DataDir, "avatars")
 
 	hash := md5.Sum([]byte(username))
@@ -253,11 +258,7 @@ func (s *Subsonic) handleGetAvatar(w http.ResponseWriter, r *http.Request) {
 }
 
 func updateNowPlaying(w http.ResponseWriter, r *http.Request, s *Subsonic, id string) {
-	username, err := models.GetUsername(r)
-	if err != nil {
-		s.sendResponse(w, r, models.NewErrorResponse(20, "Authentication required"))
-		return
-	}
+	username := string(di.MustInvoke[models.Username](r.Context()))
 	clientName := r.URL.Query().Get("c")
 	if clientName == "" {
 		clientName = "Unknown"
@@ -292,18 +293,14 @@ func (s *Subsonic) handleScrobble(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	db := di.MustInvoke[*gorm.DB](s.ctx)
+	db := di.MustInvoke[*gorm.DB](r.Context())
 	if err := db.Model(&models.Child{}).Where("id = ?", id).UpdateColumn("play_count", gorm.Expr("play_count + 1")).Error; err != nil {
 		s.sendResponse(w, r, models.NewErrorResponse(0, "Failed to update play count"))
 		return
 	}
 
 	// Remove now playing record since it's now scrobbled (finished)
-	username, err := models.GetUsername(r)
-	if err != nil {
-		s.sendResponse(w, r, models.NewErrorResponse(0, "Internal server error"))
-		return
-	}
+	username := string(di.MustInvoke[models.Username](r.Context()))
 	clientName := query.Get("c")
 	if clientName == "" {
 		clientName = "Unknown"

@@ -8,6 +8,7 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/stkevintan/miko/config"
 	"github.com/stkevintan/miko/models"
 	"github.com/stkevintan/miko/pkg/di"
 	"github.com/stkevintan/miko/pkg/provider"
@@ -16,6 +17,7 @@ import (
 
 // handleDownload handles music download requests
 func (h *Handler) handleDownload(w http.ResponseWriter, r *http.Request) {
+	cfg := di.MustInvoke[*config.Config](r.Context())
 	// Get query parameters
 	query := r.URL.Query()
 	uris := query["uri"]
@@ -31,7 +33,7 @@ func (h *Handler) handleDownload(w http.ResponseWriter, r *http.Request) {
 	}
 	platform := query.Get("platform")
 	if platform == "" {
-		platform = h.cfg.Provider.Platform
+		platform = cfg.Provider.Platform
 	}
 
 	// Validate required parameters
@@ -63,7 +65,7 @@ func (h *Handler) handleDownload(w http.ResponseWriter, r *http.Request) {
 		},
 	}
 
-	ctx, err := h.newApiContext(r)
+	ctx, err := h.getApiRequestContext(r)
 	if err != nil {
 		JSON(w, http.StatusInternalServerError, &models.ErrorResponse{Error: err.Error()})
 		return

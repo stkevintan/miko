@@ -1,6 +1,7 @@
 package subsonic
 
 import (
+	"context"
 	"crypto/md5"
 	"fmt"
 	"io/fs"
@@ -38,7 +39,9 @@ func (s *Subsonic) handleGetScanStatus(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Subsonic) handleStartScan(w http.ResponseWriter, r *http.Request) {
-	go s.scan()
+	// r.Context() may destroy on client disconnect, so create a new background context
+	ctx := di.Inherit(context.Background(), r.Context())
+	go s.scan(ctx)
 	resp := models.NewResponse(models.ResponseStatusOK)
 	resp.ScanStatus = &models.ScanStatus{
 		Scanning: true,
@@ -46,7 +49,7 @@ func (s *Subsonic) handleStartScan(w http.ResponseWriter, r *http.Request) {
 	s.sendResponse(w, r, resp)
 }
 
-func (s *Subsonic) scan() {
+func (s *Subsonic) scan(ctx context.Context) {
 	if !isScanning.CompareAndSwap(false, true) {
 		return
 	}
@@ -54,8 +57,8 @@ func (s *Subsonic) scan() {
 
 	defer isScanning.Store(false)
 
-	db := di.MustInvoke[*gorm.DB](s.ctx)
-	cfg := di.MustInvoke[*config.Config](s.ctx)
+	db := di.MustInvoke[*gorm.DB](ctx)
+	cfg := di.MustInvoke[*config.Config](ctx)
 
 	cacheDir := filepath.Join(cfg.Subsonic.DataDir, "cache", "covers")
 	if err := os.MkdirAll(cacheDir, 0755); err != nil {

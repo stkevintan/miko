@@ -15,39 +15,30 @@ import (
 	"gorm.io/gorm"
 )
 
-type Handler struct {
-	db        *gorm.DB
-	cfg       *config.Config
-	ctx       context.Context
-	jwtSecret []byte
+type Handler struct{}
+
+func New() *Handler {
+	return &Handler{}
 }
 
-func New(ctx context.Context) *Handler {
-	return &Handler{
-		db:  di.MustInvoke[*gorm.DB](ctx),
-		cfg: di.MustInvoke[*config.Config](ctx),
-		ctx: ctx,
-	}
-}
+func (h *Handler) getApiRequestContext(r *http.Request) (context.Context, error) {
+	ctx := r.Context()
+	username := string(di.MustInvoke[models.Username](ctx))
+	db := di.MustInvoke[*gorm.DB](ctx)
+	cfg := di.MustInvoke[*config.Config](ctx)
 
-func (h *Handler) newApiContext(r *http.Request) (context.Context, error) {
-	username, err := models.GetUsername(r)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get username from request: %w", err)
-	}
+	ctx = di.Inherit(ctx)
 
 	var identity cookiecloud.Identity
-	if err := h.db.Where("username = ?", username).First(&identity).Error; err != nil {
+	if err := db.Where("username = ?", username).First(&identity).Error; err != nil {
 		return nil, fmt.Errorf("failed to find identity for user %s: %w", username, err)
 	}
 
-	jar, err := cookiecloud.NewCookieCloudJar(r.Context(), h.cfg.CookieCloud, &identity)
+	jar, err := cookiecloud.NewCookieCloudJar(ctx, cfg.CookieCloud, &identity)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create cookie jar: %w", err)
 	}
 
-	// Create a request-scoped context that inherits global dependencies
-	ctx := di.NewScope(h.ctx)
 	di.Provide(ctx, jar)
 
 	// Register providers in this scope so they can resolve the CookieJar
@@ -55,6 +46,7 @@ func (h *Handler) newApiContext(r *http.Request) (context.Context, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to create netease provider: %w", err)
 	}
+
 	di.ProvideNamed(ctx, "netease", neteaseProvider)
 
 	return ctx, nil
@@ -68,7 +60,6 @@ func (h *Handler) RegisterRoutes(r chi.Router) {
 
 	r.Route("/api", func(r chi.Router) {
 		r.Post("/login", h.handleLogin)
-
 		// Protected routes
 		r.Group(func(r chi.Router) {
 			r.Use(h.jwtAuth)

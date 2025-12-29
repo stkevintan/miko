@@ -24,18 +24,21 @@ func NewContext(ctx context.Context) context.Context {
 	})
 }
 
-// NewScope creates a new child context that inherits services from the parent container.
-// This allows creating request-scoped containers without re-providing global dependencies.
-func NewScope(ctx context.Context) context.Context {
-	parent, ok := ctx.Value(containerKey{}).(*container)
+// Inherit creates a new child context from ctx that inherits services from the container in parent.
+// If parent is not provided, it inherits from the container in ctx.
+func Inherit(ctx context.Context, parent ...context.Context) context.Context {
+	pCtx := ctx
+	if len(parent) > 0 {
+		pCtx = parent[0]
+	}
+
+	p, ok := pCtx.Value(containerKey{}).(*container)
 	if !ok {
-		// If parent doesn't have a container, return a new context
 		return NewContext(ctx)
 	}
 
-	// Create a new container with reference to parent
 	child := &container{
-		parent:        parent,
+		parent:        p,
 		services:      make(map[reflect.Type]any),
 		namedServices: make(map[string]any),
 	}
@@ -120,6 +123,14 @@ func InvokeNamed[T any](ctx context.Context, name string) (T, error) {
 // MustInvoke retrieves a service from the container or panics if not found.
 func MustInvoke[T any](ctx context.Context) T {
 	s, err := Invoke[T](ctx)
+	if err != nil {
+		panic(err)
+	}
+	return s
+}
+
+func MustInvokeNamed[T any](ctx context.Context, name string) T {
+	s, err := InvokeNamed[T](ctx, name)
 	if err != nil {
 		panic(err)
 	}

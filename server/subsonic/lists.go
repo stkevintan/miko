@@ -9,7 +9,7 @@ import (
 	"gorm.io/gorm"
 )
 
-func getAlbums(r *http.Request, s *Subsonic) ([]models.AlbumID3, error) {
+func getAlbums(r *http.Request) ([]models.AlbumID3, error) {
 	query := r.URL.Query()
 	listType := query.Get("type")
 	if listType == "" {
@@ -21,7 +21,7 @@ func getAlbums(r *http.Request, s *Subsonic) ([]models.AlbumID3, error) {
 	fromYear := getQueryIntOrDefault(r, "fromYear", 0)
 	toYear := getQueryIntOrDefault(r, "toYear", 3000)
 
-	db := di.MustInvoke[*gorm.DB](s.ctx)
+	db := di.MustInvoke[*gorm.DB](r.Context())
 	var albums []models.AlbumID3
 
 	dbQuery := db.Limit(size).Offset(offset)
@@ -58,7 +58,7 @@ func getAlbums(r *http.Request, s *Subsonic) ([]models.AlbumID3, error) {
 }
 
 func (s *Subsonic) handleGetAlbumList2(w http.ResponseWriter, r *http.Request) {
-	albums, err := getAlbums(r, s)
+	albums, err := getAlbums(r)
 	if err != nil {
 		s.sendResponse(w, r, models.NewErrorResponse(0, err.Error()))
 		return
@@ -77,7 +77,7 @@ func (s *Subsonic) handleGetAlbumList(w http.ResponseWriter, r *http.Request) {
 	// Actually it returns <albumList> which is same as <albumList2> but with different element names.
 	// For simplicity, let's just use the same logic but return AlbumList.
 
-	albums, err := getAlbums(r, s)
+	albums, err := getAlbums(r)
 	if err != nil {
 		s.sendResponse(w, r, models.NewErrorResponse(0, err.Error()))
 		return
@@ -113,7 +113,7 @@ func (s *Subsonic) handleGetRandomSongs(w http.ResponseWriter, r *http.Request) 
 	fromYear := getQueryIntOrDefault(r, "fromYear", 0)
 	toYear := getQueryIntOrDefault(r, "toYear", 3000)
 
-	db := di.MustInvoke[*gorm.DB](s.ctx)
+	db := di.MustInvoke[*gorm.DB](r.Context())
 	var songs []models.Child
 
 	dbQuery := db.Where("is_dir = ?", false).Limit(size).Order("RANDOM()")
@@ -157,7 +157,7 @@ func (s *Subsonic) handleGetSongsByGenre(w http.ResponseWriter, r *http.Request)
 	count := getQueryIntOrDefault(r, "count", 10)
 	offset := getQueryIntOrDefault(r, "offset", 0)
 
-	db := di.MustInvoke[*gorm.DB](s.ctx)
+	db := di.MustInvoke[*gorm.DB](r.Context())
 	var songs []models.Child
 	dbQuery := db.Joins("JOIN song_genres ON song_genres.child_id = children.id").
 		Where("song_genres.genre_name = ?", genre)
@@ -182,7 +182,7 @@ func (s *Subsonic) handleGetSongsByGenre(w http.ResponseWriter, r *http.Request)
 }
 
 func (s *Subsonic) handleGetNowPlaying(w http.ResponseWriter, r *http.Request) {
-	db := di.MustInvoke[*gorm.DB](s.ctx)
+	db := di.MustInvoke[*gorm.DB](r.Context())
 
 	tenMinutesAgo := time.Now().Add(-10 * time.Minute)
 	entries := make([]models.NowPlayingEntry, 0)
@@ -219,8 +219,8 @@ func (s *Subsonic) handleGetNowPlaying(w http.ResponseWriter, r *http.Request) {
 	s.sendResponse(w, r, resp)
 }
 
-func getStarredItems(r *http.Request, s *Subsonic) ([]models.ArtistID3, []models.AlbumID3, []models.Child, error) {
-	db := di.MustInvoke[*gorm.DB](s.ctx)
+func getStarredItems(r *http.Request) ([]models.ArtistID3, []models.AlbumID3, []models.Child, error) {
+	db := di.MustInvoke[*gorm.DB](r.Context())
 
 	var artists []models.ArtistID3
 	artistQuery := db.Where("starred IS NOT NULL")
@@ -259,7 +259,7 @@ func getStarredItems(r *http.Request, s *Subsonic) ([]models.ArtistID3, []models
 }
 
 func (s *Subsonic) handleGetStarred(w http.ResponseWriter, r *http.Request) {
-	artists, albums, songs, err := getStarredItems(r, s)
+	artists, albums, songs, err := getStarredItems(r)
 	if err != nil {
 		s.sendResponse(w, r, models.NewErrorResponse(0, err.Error()))
 		return
@@ -303,7 +303,7 @@ func (s *Subsonic) handleGetStarred(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Subsonic) handleGetStarred2(w http.ResponseWriter, r *http.Request) {
-	artists, albums, songs, err := getStarredItems(r, s)
+	artists, albums, songs, err := getStarredItems(r)
 	if err != nil {
 		s.sendResponse(w, r, models.NewErrorResponse(0, err.Error()))
 		return

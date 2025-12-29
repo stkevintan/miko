@@ -90,18 +90,16 @@ func main() {
 	}
 
 	// Initialize Injector
-	diCtx := di.NewContext(context.Background())
+	ctx := di.NewContext(context.Background())
 
 	// Register services
-	di.Provide(diCtx, cfg)
-	di.Provide(diCtx, db)
-	di.Provide(diCtx, cfg.CookieCloud)
+	di.Provide(ctx, cfg)
+	di.Provide(ctx, db)
+	di.Provide(ctx, cfg.CookieCloud)
 
 	// Initialize HTTP handler
-	h := server.New(diCtx)
+	h := server.New(ctx)
 	r := h.Routes()
-
-	ctx := context.Background()
 
 	// Create HTTP server
 	server := &http.Server{

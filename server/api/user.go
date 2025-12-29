@@ -5,6 +5,8 @@ import (
 	"net/http"
 
 	"github.com/stkevintan/miko/models"
+	"github.com/stkevintan/miko/pkg/di"
+	"gorm.io/gorm"
 )
 
 // handleLogin authenticates a user and returns a JWT token
@@ -15,8 +17,10 @@ func (h *Handler) handleLogin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	ctx := r.Context()
+	db := di.MustInvoke[*gorm.DB](ctx)
 	var user models.User
-	if err := h.db.Where("username = ?", req.Username).First(&user).Error; err != nil {
+	if err := db.Where("username = ?", req.Username).First(&user).Error; err != nil {
 		JSON(w, http.StatusUnauthorized, models.ErrorResponse{Error: "Invalid username or password"})
 		return
 	}
@@ -26,7 +30,7 @@ func (h *Handler) handleLogin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	token, err := h.GenerateToken(user.Username)
+	token, err := h.GenerateToken(r.Context(), user.Username)
 	if err != nil {
 		JSON(w, http.StatusInternalServerError, models.ErrorResponse{Error: "Failed to generate token"})
 		return

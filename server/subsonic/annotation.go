@@ -16,7 +16,7 @@ func (s *Subsonic) updateStarredStatus(r *http.Request, value interface{}) error
 	albumIds := query["albumId"]
 	artistIds := query["artistId"]
 
-	db := di.MustInvoke[*gorm.DB](s.ctx)
+	db := di.MustInvoke[*gorm.DB](r.Context())
 
 	return db.Transaction(func(tx *gorm.DB) error {
 		if len(ids) > 0 {
@@ -69,7 +69,7 @@ func (s *Subsonic) handleSetRating(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	db := di.MustInvoke[*gorm.DB](s.ctx)
+	db := di.MustInvoke[*gorm.DB](r.Context())
 
 	// Try to update as song/directory first
 	result := db.Model(&models.Child{}).Where("id = ?", id).Update("user_rating", rating)
