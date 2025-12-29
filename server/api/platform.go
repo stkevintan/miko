@@ -13,7 +13,7 @@ import (
 func (h *Handler) handlePlatformUser(w http.ResponseWriter, r *http.Request) {
 	platform := chi.URLParam(r, "platform")
 
-	ctx, err := h.getRequestInjector(r)
+	ctx, err := h.newApiContext(r)
 	if err != nil {
 		JSON(w, http.StatusInternalServerError, &models.ErrorResponse{Error: err.Error()})
 		return

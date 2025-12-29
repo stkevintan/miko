@@ -63,7 +63,7 @@ func (h *Handler) handleDownload(w http.ResponseWriter, r *http.Request) {
 		},
 	}
 
-	ctx, err := h.getRequestInjector(r)
+	ctx, err := h.newApiContext(r)
 	if err != nil {
 		JSON(w, http.StatusInternalServerError, &models.ErrorResponse{Error: err.Error()})
 		return

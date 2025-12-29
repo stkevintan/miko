@@ -40,7 +40,7 @@ func (h *Handler) handleCookiecloudIdentity(w http.ResponseWriter, r *http.Reque
 	}
 
 	// Force pull after identity saved
-	ctx, err := h.getRequestInjector(r)
+	ctx, err := h.newApiContext(r)
 	if err == nil {
 		if jar, err := di.Invoke[cookiecloud.CookieJar](ctx); err == nil {
 			_ = jar.PullAll()
@@ -57,7 +57,7 @@ func (h *Handler) handleCookiecloudIdentity(w http.ResponseWriter, r *http.Reque
 
 // handleCookiecloudPull forces a pull from CookieCloud
 func (h *Handler) handleCookiecloudPull(w http.ResponseWriter, r *http.Request) {
-	ctx, err := h.getRequestInjector(r)
+	ctx, err := h.newApiContext(r)
 	if err != nil {
 		JSON(w, http.StatusInternalServerError, &models.ErrorResponse{Error: err.Error()})
 		return

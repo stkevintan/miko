@@ -72,22 +72,22 @@ func Invoke[T any](ctx context.Context) (T, error) {
 		var zero T
 		return zero, fmt.Errorf("di: context does not contain a container")
 	}
-	
+
 	targetType := reflect.TypeOf((*T)(nil)).Elem()
-	
+
 	// Search current container and parent chain
 	for c != nil {
 		c.mu.RLock()
 		s, ok := c.services[targetType]
 		c.mu.RUnlock()
-		
+
 		if ok {
 			return s.(T), nil
 		}
-		
+
 		c = c.parent
 	}
-	
+
 	var zero T
 	return zero, fmt.Errorf("di: service %T not found", zero)
 }
@@ -99,20 +99,20 @@ func InvokeNamed[T any](ctx context.Context, name string) (T, error) {
 		var zero T
 		return zero, fmt.Errorf("di: context does not contain a container")
 	}
-	
+
 	// Search current container and parent chain
 	for c != nil {
 		c.mu.RLock()
 		s, ok := c.namedServices[name]
 		c.mu.RUnlock()
-		
+
 		if ok {
 			return s.(T), nil
 		}
-		
+
 		c = c.parent
 	}
-	
+
 	var zero T
 	return zero, fmt.Errorf("di: named service %s not found", name)
 }

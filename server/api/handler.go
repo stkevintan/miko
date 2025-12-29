@@ -30,7 +30,7 @@ func New(ctx context.Context) *Handler {
 	}
 }
 
-func (h *Handler) getRequestInjector(r *http.Request) (context.Context, error) {
+func (h *Handler) newApiContext(r *http.Request) (context.Context, error) {
 	username, err := models.GetUsername(r)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get username from request: %w", err)
