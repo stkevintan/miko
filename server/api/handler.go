@@ -46,10 +46,8 @@ func (h *Handler) getRequestInjector(r *http.Request) (context.Context, error) {
 		return nil, fmt.Errorf("failed to create cookie jar: %w", err)
 	}
 
-	// Create a request-scoped context
-	ctx := di.NewContext(r.Context())
-	di.Provide(ctx, h.cfg)
-	di.Provide(ctx, h.db)
+	// Create a request-scoped context that inherits global dependencies
+	ctx := di.NewScope(h.ctx)
 	di.Provide(ctx, jar)
 
 	// Register providers in this scope so they can resolve the CookieJar
