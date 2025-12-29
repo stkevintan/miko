@@ -6,8 +6,8 @@ import (
 	"strings"
 
 	"github.com/stkevintan/miko/pkg/log"
+	"github.com/stkevintan/miko/pkg/tags"
 	"github.com/stkevintan/miko/pkg/types"
-	"go.senan.xyz/taglib"
 )
 
 // setMusicTags sets ID3 tags for the downloaded music file
@@ -17,15 +17,15 @@ func (d *NMProvider) setMusicTags(ctx context.Context, music *types.Music, fileP
 		artistNames = append(artistNames, ar.Name)
 	}
 
-	err := taglib.WriteTags(filePath, map[string][]string{
+	err := tags.Write(filePath, map[string][]string{
 		// Multi-valued tags allowed
-		taglib.Artist:      artistNames,
-		taglib.Album:       {music.Album.Name},
-		taglib.Title:       {music.Name},
-		taglib.Length:      {fmt.Sprintf("%d", music.Time/1000)}, // convert milliseconds to seconds
-		taglib.Lyrics:      {music.Lyrics},
-		taglib.TrackNumber: {music.TrackNumber},
-	}, 0)
+		tags.Artist:      artistNames,
+		tags.Album:       {music.Album.Name},
+		tags.Title:       {music.Name},
+		tags.Length:      {fmt.Sprintf("%d", music.Time/1000)}, // convert milliseconds to seconds
+		tags.Lyrics:      {music.Lyrics},
+		tags.TrackNumber: {music.TrackNumber},
+	})
 	if err != nil {
 		return fmt.Errorf("WriteTags: %w", err)
 	}
@@ -35,7 +35,7 @@ func (d *NMProvider) setMusicTags(ctx context.Context, music *types.Music, fileP
 		log.Warn("download cover err: %v", err)
 		return nil // ignore picture download error
 	}
-	err = taglib.WriteImage(filePath, data)
+	err = tags.WriteImage(filePath, data)
 	if err != nil {
 		log.Warn("write image err: %v", err)
 		return nil
