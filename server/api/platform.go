@@ -4,8 +4,8 @@ import (
 	"net/http"
 
 	"github.com/go-chi/chi/v5"
-	"github.com/samber/do/v2"
 	"github.com/stkevintan/miko/models"
+	"github.com/stkevintan/miko/pkg/di"
 	"github.com/stkevintan/miko/pkg/provider"
 )
 
@@ -13,20 +13,19 @@ import (
 func (h *Handler) handlePlatformUser(w http.ResponseWriter, r *http.Request) {
 	platform := chi.URLParam(r, "platform")
 
-	injector, err := h.getRequestInjector(r)
+	ctx, err := h.getRequestInjector(r)
 	if err != nil {
 		JSON(w, http.StatusInternalServerError, &models.ErrorResponse{Error: err.Error()})
 		return
 	}
-	defer injector.Shutdown()
 
-	provider, err := do.InvokeNamed[provider.Provider](injector, platform)
+	provider, err := di.InvokeNamed[provider.Provider](ctx, platform)
 
 	if err != nil {
 		JSON(w, http.StatusBadRequest, &models.ErrorResponse{Error: err.Error()})
 		return
 	}
-	user, err := provider.User(r.Context())
+	user, err := provider.User(ctx)
 	if err != nil {
 		JSON(w, http.StatusInternalServerError, &models.ErrorResponse{Error: err.Error()})
 		return

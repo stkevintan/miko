@@ -13,10 +13,10 @@ import (
 	"time"
 
 	"github.com/glebarez/sqlite"
-	"github.com/samber/do/v2"
 	"github.com/stkevintan/miko/config"
 	"github.com/stkevintan/miko/models"
 	"github.com/stkevintan/miko/pkg/cookiecloud"
+	"github.com/stkevintan/miko/pkg/di"
 	"github.com/stkevintan/miko/pkg/log"
 	"github.com/stkevintan/miko/server"
 	"gorm.io/gorm"
@@ -90,21 +90,15 @@ func main() {
 	}
 
 	// Initialize Injector
-	injector := do.New()
+	diCtx := di.NewContext(context.Background())
 
 	// Register services
-	do.Provide(injector, func(i do.Injector) (*config.Config, error) {
-		return cfg, nil
-	})
-	do.Provide(injector, func(i do.Injector) (*gorm.DB, error) {
-		return db, nil
-	})
-	do.Provide(injector, func(i do.Injector) (*cookiecloud.Config, error) {
-		return cfg.CookieCloud, nil
-	})
+	di.Provide(diCtx, cfg)
+	di.Provide(diCtx, db)
+	di.Provide(diCtx, cfg.CookieCloud)
 
 	// Initialize HTTP handler
-	h := server.New(injector)
+	h := server.New(diCtx)
 	r := h.Routes()
 
 	ctx := context.Background()

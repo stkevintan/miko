@@ -10,19 +10,19 @@ import (
 	"sync"
 
 	"github.com/go-chi/chi/v5"
-	"github.com/samber/do/v2"
 	"github.com/stkevintan/miko/models"
+	"github.com/stkevintan/miko/pkg/di"
 	"gorm.io/gorm"
 )
 
 type Subsonic struct {
-	injector   do.Injector
+	ctx        context.Context
 	nowPlaying sync.Map // key: string (username:clientName), value: models.NowPlayingRecord
 }
 
-func New(injector do.Injector) *Subsonic {
+func New(ctx context.Context) *Subsonic {
 	return &Subsonic{
-		injector:   injector,
+		ctx:        ctx,
 		nowPlaying: sync.Map{},
 	}
 }
@@ -184,7 +184,7 @@ func (s *Subsonic) subsonicAuth(next http.Handler) http.Handler {
 		}
 
 		user := models.LoginRequest{}
-		db := do.MustInvoke[*gorm.DB](s.injector)
+		db := di.MustInvoke[*gorm.DB](s.ctx)
 		if err := db.Model(&models.User{}).Select("username", "password").Where("username = ?", username).First(&user).Error; err != nil {
 			s.sendResponse(w, r, models.NewErrorResponse(10, "User not found"))
 			return

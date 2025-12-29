@@ -1,16 +1,16 @@
 package api
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"net/http"
-	"time"
 
 	"github.com/go-chi/chi/v5"
-	"github.com/samber/do/v2"
 	"github.com/stkevintan/miko/config"
 	"github.com/stkevintan/miko/models"
 	"github.com/stkevintan/miko/pkg/cookiecloud"
+	"github.com/stkevintan/miko/pkg/di"
 	"github.com/stkevintan/miko/pkg/netease"
 	"gorm.io/gorm"
 )
@@ -18,19 +18,19 @@ import (
 type Handler struct {
 	db        *gorm.DB
 	cfg       *config.Config
-	injector  do.Injector
+	ctx       context.Context
 	jwtSecret []byte
 }
 
-func New(i do.Injector) *Handler {
+func New(ctx context.Context) *Handler {
 	return &Handler{
-		db:       do.MustInvoke[*gorm.DB](i),
-		cfg:      do.MustInvoke[*config.Config](i),
-		injector: i,
+		db:  di.MustInvoke[*gorm.DB](ctx),
+		cfg: di.MustInvoke[*config.Config](ctx),
+		ctx: ctx,
 	}
 }
 
-func (h *Handler) getRequestInjector(r *http.Request) (do.Injector, error) {
+func (h *Handler) getRequestInjector(r *http.Request) (context.Context, error) {
 	username, err := models.GetUsername(r)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get username from request: %w", err)
@@ -46,16 +46,20 @@ func (h *Handler) getRequestInjector(r *http.Request) (do.Injector, error) {
 		return nil, fmt.Errorf("failed to create cookie jar: %w", err)
 	}
 
-	// Create a request-scoped injector
-	scope := h.injector.Scope(fmt.Sprintf("request-%s-%d", username, time.Now().UnixNano()))
-	do.Provide(scope, func(i do.Injector) (cookiecloud.CookieJar, error) {
-		return jar, nil
-	})
+	// Create a request-scoped context
+	ctx := di.NewContext(r.Context())
+	di.Provide(ctx, h.cfg)
+	di.Provide(ctx, h.db)
+	di.Provide(ctx, jar)
 
 	// Register providers in this scope so they can resolve the CookieJar
-	do.ProvideNamed(scope, "netease", netease.NewNetEaseProvider)
+	neteaseProvider, err := netease.NewNetEaseProvider(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create netease provider: %w", err)
+	}
+	di.ProvideNamed(ctx, "netease", neteaseProvider)
 
-	return scope, nil
+	return ctx, nil
 }
 
 func (h *Handler) RegisterRoutes(r chi.Router) {

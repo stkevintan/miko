@@ -5,15 +5,15 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/samber/do/v2"
+	"github.com/stkevintan/miko/pkg/di"
 	"github.com/stkevintan/miko/config"
 	"github.com/stkevintan/miko/models"
 	"gorm.io/gorm"
 )
 
 func (s *Subsonic) handleGetMusicFolders(w http.ResponseWriter, r *http.Request) {
-	db := do.MustInvoke[*gorm.DB](s.injector)
-	cfg := do.MustInvoke[*config.Config](s.injector)
+	db := di.MustInvoke[*gorm.DB](s.ctx)
+	cfg := di.MustInvoke[*config.Config](s.ctx)
 
 	var folders []models.MusicFolder
 	// Ensure folders from config are in DB
@@ -31,7 +31,7 @@ func (s *Subsonic) handleGetMusicFolders(w http.ResponseWriter, r *http.Request)
 }
 
 func (s *Subsonic) handleGetIndexes(w http.ResponseWriter, r *http.Request) {
-	db := do.MustInvoke[*gorm.DB](s.injector)
+	db := di.MustInvoke[*gorm.DB](s.ctx)
 
 	var children []models.Child
 	query := db.Where("is_dir = ?", true).Where("parent = ?", "")
@@ -77,7 +77,7 @@ func (s *Subsonic) handleGetMusicDirectory(w http.ResponseWriter, r *http.Reques
 		s.sendResponse(w, r, models.NewErrorResponse(10, "ID is required"))
 		return
 	}
-	db := do.MustInvoke[*gorm.DB](s.injector)
+	db := di.MustInvoke[*gorm.DB](s.ctx)
 	var dir models.Child
 	if err := db.Where("id = ? AND is_dir = ?", id, true).First(&dir).Error; err != nil {
 		s.sendResponse(w, r, models.NewErrorResponse(70, "Directory not found"))
@@ -102,7 +102,7 @@ func (s *Subsonic) handleGetMusicDirectory(w http.ResponseWriter, r *http.Reques
 }
 
 func (s *Subsonic) handleGetGenres(w http.ResponseWriter, r *http.Request) {
-	db := do.MustInvoke[*gorm.DB](s.injector)
+	db := di.MustInvoke[*gorm.DB](s.ctx)
 	var genres []models.Genre
 
 	// Query genres with counts
@@ -124,7 +124,7 @@ func (s *Subsonic) handleGetGenres(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Subsonic) handleGetArtists(w http.ResponseWriter, r *http.Request) {
-	db := do.MustInvoke[*gorm.DB](s.injector)
+	db := di.MustInvoke[*gorm.DB](s.ctx)
 	var artists []models.ArtistID3
 
 	if err := db.Raw(`
@@ -163,7 +163,7 @@ func (s *Subsonic) handleGetArtists(w http.ResponseWriter, r *http.Request) {
 
 func (s *Subsonic) handleGetArtist(w http.ResponseWriter, r *http.Request) {
 	id := r.URL.Query().Get("id")
-	db := do.MustInvoke[*gorm.DB](s.injector)
+	db := di.MustInvoke[*gorm.DB](s.ctx)
 
 	var artist models.ArtistID3
 	if err := db.Where("id = ?", id).First(&artist).Error; err != nil {
@@ -184,7 +184,7 @@ func (s *Subsonic) handleGetArtist(w http.ResponseWriter, r *http.Request) {
 
 func (s *Subsonic) handleGetAlbum(w http.ResponseWriter, r *http.Request) {
 	id := r.URL.Query().Get("id")
-	db := do.MustInvoke[*gorm.DB](s.injector)
+	db := di.MustInvoke[*gorm.DB](s.ctx)
 
 	var album models.AlbumID3
 	if err := db.Where("id = ?", id).First(&album).Error; err != nil {
@@ -205,7 +205,7 @@ func (s *Subsonic) handleGetAlbum(w http.ResponseWriter, r *http.Request) {
 
 func (s *Subsonic) handleGetSong(w http.ResponseWriter, r *http.Request) {
 	id := r.URL.Query().Get("id")
-	db := do.MustInvoke[*gorm.DB](s.injector)
+	db := di.MustInvoke[*gorm.DB](s.ctx)
 
 	var song models.Child
 	if err := db.Where("id = ? AND is_dir = ?", id, false).First(&song).Error; err != nil {

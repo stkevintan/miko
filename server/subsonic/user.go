@@ -4,7 +4,7 @@ import (
 	"errors"
 	"net/http"
 
-	"github.com/samber/do/v2"
+	"github.com/stkevintan/miko/pkg/di"
 	"github.com/stkevintan/miko/models"
 	"gorm.io/gorm"
 )
@@ -16,7 +16,7 @@ func (s *Subsonic) handleGetUser(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	db := do.MustInvoke[*gorm.DB](s.injector)
+	db := di.MustInvoke[*gorm.DB](s.ctx)
 	var user models.User
 	if err := db.Preload("MusicFolders").Where("username = ?", username).First(&user).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
@@ -33,7 +33,7 @@ func (s *Subsonic) handleGetUser(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Subsonic) handleGetUsers(w http.ResponseWriter, r *http.Request) {
-	db := do.MustInvoke[*gorm.DB](s.injector)
+	db := di.MustInvoke[*gorm.DB](s.ctx)
 	var users []*models.User
 	if err := db.Preload("MusicFolders").Find(&users).Error; err != nil {
 		s.sendResponse(w, r, models.NewErrorResponse(0, "An internal error occurred"))

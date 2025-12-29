@@ -7,8 +7,8 @@ import (
 	"github.com/chaunsin/netease-cloud-music/api"
 	"github.com/chaunsin/netease-cloud-music/api/weapi"
 	nmlog "github.com/chaunsin/netease-cloud-music/pkg/log"
-	"github.com/samber/do/v2"
 	"github.com/stkevintan/miko/pkg/cookiecloud"
+	"github.com/stkevintan/miko/pkg/di"
 	"github.com/stkevintan/miko/pkg/provider"
 )
 
@@ -22,8 +22,8 @@ func init() {
 
 }
 
-func NewNetEaseProvider(i do.Injector) (provider.Provider, error) {
-	jar := do.MustInvoke[cookiecloud.CookieJar](i)
+func NewNetEaseProvider(ctx context.Context) (provider.Provider, error) {
+	jar := di.MustInvoke[cookiecloud.CookieJar](ctx)
 	return NewProvider(jar)
 }
 

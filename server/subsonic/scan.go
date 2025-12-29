@@ -13,7 +13,7 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/samber/do/v2"
+	"github.com/stkevintan/miko/pkg/di"
 	"github.com/stkevintan/miko/config"
 	"github.com/stkevintan/miko/models"
 	"github.com/stkevintan/miko/pkg/log"
@@ -54,8 +54,8 @@ func (s *Subsonic) scan() {
 
 	defer isScanning.Store(false)
 
-	db := do.MustInvoke[*gorm.DB](s.injector)
-	cfg := do.MustInvoke[*config.Config](s.injector)
+	db := di.MustInvoke[*gorm.DB](s.ctx)
+	cfg := di.MustInvoke[*config.Config](s.ctx)
 
 	cacheDir := filepath.Join(cfg.Subsonic.DataDir, "cache", "covers")
 	if err := os.MkdirAll(cacheDir, 0755); err != nil {
