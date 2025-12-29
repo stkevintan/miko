@@ -59,13 +59,25 @@ func (h *Handler) Routes() http.Handler {
 		})
 	})
 
+	r.Use(bridgeDI(h.ctx))
+
 	// subsonic v1.16.1 API group
-	s := subsonic.New(h.ctx)
+	s := subsonic.New()
 	s.RegisterRoutes(chi.Router(r))
 
 	// API v1 group
-	apiHandler := api.New(h.ctx)
+	apiHandler := api.New()
 	apiHandler.RegisterRoutes(chi.Router(r))
 
 	return r
+}
+
+// bridgeDI is a middleware that injects the provided context's bridgeDI container into the request context.
+func bridgeDI(parent context.Context) func(next http.Handler) http.Handler {
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			reqCtx := di.Inherit(r.Context(), parent)
+			next.ServeHTTP(w, r.WithContext(reqCtx))
+		})
+	}
 }

@@ -1,7 +1,6 @@
 package subsonic
 
 import (
-	"context"
 	"crypto/md5"
 	"encoding/json"
 	"encoding/xml"
@@ -16,13 +15,11 @@ import (
 )
 
 type Subsonic struct {
-	ctx        context.Context
 	nowPlaying sync.Map // key: string (username:clientName), value: models.NowPlayingRecord
 }
 
-func New(ctx context.Context) *Subsonic {
+func New() *Subsonic {
 	return &Subsonic{
-		ctx:        ctx,
 		nowPlaying: sync.Map{},
 	}
 }
@@ -184,7 +181,7 @@ func (s *Subsonic) subsonicAuth(next http.Handler) http.Handler {
 		}
 
 		user := models.LoginRequest{}
-		db := di.MustInvoke[*gorm.DB](s.ctx)
+		db := di.MustInvoke[*gorm.DB](r.Context())
 		if err := db.Model(&models.User{}).Select("username", "password").Where("username = ?", username).First(&user).Error; err != nil {
 			s.sendResponse(w, r, models.NewErrorResponse(10, "User not found"))
 			return
@@ -209,7 +206,8 @@ func (s *Subsonic) subsonicAuth(next http.Handler) http.Handler {
 			return
 		}
 
-		ctx := context.WithValue(r.Context(), models.UsernameKey, username)
+		ctx := di.Inherit(r.Context())
+		di.Provide(ctx, models.Username(username))
 		next.ServeHTTP(w, r.WithContext(ctx))
 	})
 }

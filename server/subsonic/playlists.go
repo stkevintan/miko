@@ -11,12 +11,8 @@ import (
 )
 
 func (s *Subsonic) handleGetPlaylists(w http.ResponseWriter, r *http.Request) {
-	db := di.MustInvoke[*gorm.DB](s.ctx)
-	username, err := models.GetUsername(r)
-	if err != nil {
-		s.sendResponse(w, r, models.NewErrorResponse(0, "Internal server error"))
-		return
-	}
+	db := di.MustInvoke[*gorm.DB](r.Context())
+	username := string(di.MustInvoke[models.Username](r.Context()))
 
 	query := r.URL.Query()
 	targetUsername := query.Get("username")
@@ -87,7 +83,7 @@ func (s *Subsonic) handleGetPlaylists(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Subsonic) handleGetPlaylist(w http.ResponseWriter, r *http.Request) {
-	db := di.MustInvoke[*gorm.DB](s.ctx)
+	db := di.MustInvoke[*gorm.DB](r.Context())
 	id, err := getQueryInt[uint](r, "id")
 	if err != nil {
 		s.sendResponse(w, r, models.NewErrorResponse(10, err.Error()))
@@ -100,7 +96,8 @@ func (s *Subsonic) handleGetPlaylist(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	username, err := models.GetUsername(r)
+	u, err := di.Invoke[models.Username](r.Context())
+	username := string(u)
 	if err != nil {
 		s.sendResponse(w, r, models.NewErrorResponse(0, "Internal server error"))
 		return
@@ -144,7 +141,7 @@ func (s *Subsonic) handleGetPlaylist(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Subsonic) handleCreatePlaylist(w http.ResponseWriter, r *http.Request) {
-	db := di.MustInvoke[*gorm.DB](s.ctx)
+	db := di.MustInvoke[*gorm.DB](r.Context())
 	query := r.URL.Query()
 	name := query.Get("name")
 	if name == "" {
@@ -152,7 +149,8 @@ func (s *Subsonic) handleCreatePlaylist(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	username, err := models.GetUsername(r)
+	u, err := di.Invoke[models.Username](r.Context())
+	username := string(u)
 	if err != nil {
 		s.sendResponse(w, r, models.NewErrorResponse(0, "Internal server error"))
 		return
@@ -195,7 +193,7 @@ func (s *Subsonic) handleCreatePlaylist(w http.ResponseWriter, r *http.Request) 
 }
 
 func (s *Subsonic) handleUpdatePlaylist(w http.ResponseWriter, r *http.Request) {
-	db := di.MustInvoke[*gorm.DB](s.ctx)
+	db := di.MustInvoke[*gorm.DB](r.Context())
 	id, err := getQueryInt[uint](r, "playlistId")
 	if err != nil {
 		s.sendResponse(w, r, models.NewErrorResponse(10, err.Error()))
@@ -208,7 +206,8 @@ func (s *Subsonic) handleUpdatePlaylist(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	username, err := models.GetUsername(r)
+	u, err := di.Invoke[models.Username](r.Context())
+	username := string(u)
 	if err != nil {
 		s.sendResponse(w, r, models.NewErrorResponse(0, "Internal server error"))
 		return
@@ -299,7 +298,7 @@ func (s *Subsonic) handleUpdatePlaylist(w http.ResponseWriter, r *http.Request) 
 }
 
 func (s *Subsonic) handleDeletePlaylist(w http.ResponseWriter, r *http.Request) {
-	db := di.MustInvoke[*gorm.DB](s.ctx)
+	db := di.MustInvoke[*gorm.DB](r.Context())
 	id, err := getQueryInt[uint](r, "id")
 	if err != nil {
 		s.sendResponse(w, r, models.NewErrorResponse(10, err.Error()))
@@ -312,7 +311,8 @@ func (s *Subsonic) handleDeletePlaylist(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	username, err := models.GetUsername(r)
+	u, err := di.Invoke[models.Username](r.Context())
+	username := string(u)
 	if err != nil {
 		s.sendResponse(w, r, models.NewErrorResponse(0, "Internal server error"))
 		return

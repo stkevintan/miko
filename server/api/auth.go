@@ -10,8 +10,11 @@ import (
 	"time"
 
 	"github.com/golang-jwt/jwt/v5"
+	"github.com/stkevintan/miko/config"
 	"github.com/stkevintan/miko/models"
+	"github.com/stkevintan/miko/pkg/di"
 	"github.com/stkevintan/miko/pkg/log"
+	"gorm.io/gorm"
 )
 
 type Claims struct {
@@ -19,22 +22,29 @@ type Claims struct {
 	jwt.RegisteredClaims
 }
 
-func (h *Handler) resolveJWTSecret() []byte {
-	if h.jwtSecret != nil {
-		return h.jwtSecret
+var jwtSecretName = "jwt_secret"
+
+func (h *Handler) resolveJWTSecret(ctx context.Context) []byte {
+	if jwtSecret, err := di.InvokeNamed[[]byte](ctx, jwtSecretName); err == nil {
+		return jwtSecret
 	}
+	cfg := di.MustInvoke[*config.Config](ctx)
 
 	// 1. Check config
-	if h.cfg.Server.JWTSecret != "" {
-		h.jwtSecret = []byte(h.cfg.Server.JWTSecret)
-		return h.jwtSecret
+	if cfg.Server.JWTSecret != "" {
+		jwtSecret := []byte(cfg.Server.JWTSecret)
+		di.ProvideNamed(ctx, jwtSecretName, jwtSecret)
+		return jwtSecret
 	}
 
 	// 2. Check database
+	db := di.MustInvoke[*gorm.DB](ctx)
+
 	var setting models.SystemSetting
-	if err := h.db.Where("key = ?", "jwt_secret").First(&setting).Error; err == nil {
-		h.jwtSecret = []byte(setting.Value)
-		return h.jwtSecret
+	if err := db.Where("key = ?", jwtSecretName).First(&setting).Error; err == nil {
+		jwtSecret := []byte(setting.Value)
+		di.ProvideNamed(ctx, jwtSecretName, jwtSecret)
+		return jwtSecret
 	}
 
 	// 3. Generate and store
@@ -43,17 +53,18 @@ func (h *Handler) resolveJWTSecret() []byte {
 	if _, err := rand.Read(b); err != nil {
 		log.Fatalf("Critical failure: failed to generate random JWT secret: %v", err)
 	}
-	secret := hex.EncodeToString(b)
-	h.db.Create(&models.SystemSetting{
-		Key:   "jwt_secret",
-		Value: secret,
-	})
-
-	h.jwtSecret = []byte(secret)
-	return h.jwtSecret
+	secret := []byte(hex.EncodeToString(b))
+	if err := db.Create(&models.SystemSetting{
+		Key:   jwtSecretName,
+		Value: string(secret),
+	}).Error; err != nil {
+		log.Warn("failed to save generated JWT secret to database: %v", err)
+	}
+	di.ProvideNamed(ctx, jwtSecretName, secret)
+	return secret
 }
 
-func (h *Handler) GenerateToken(username string) (string, error) {
+func (h *Handler) GenerateToken(ctx context.Context, username string) (string, error) {
 	expirationTime := time.Now().Add(24 * time.Hour)
 	claims := &Claims{
 		Username: username,
@@ -63,7 +74,7 @@ func (h *Handler) GenerateToken(username string) (string, error) {
 	}
 
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
-	return token.SignedString(h.resolveJWTSecret())
+	return token.SignedString(h.resolveJWTSecret(ctx))
 }
 
 func (h *Handler) jwtAuth(next http.Handler) http.Handler {
@@ -84,7 +95,7 @@ func (h *Handler) jwtAuth(next http.Handler) http.Handler {
 		claims := &Claims{}
 
 		token, err := jwt.ParseWithClaims(tokenString, claims, func(token *jwt.Token) (interface{}, error) {
-			return h.resolveJWTSecret(), nil
+			return h.resolveJWTSecret(r.Context()), nil
 		})
 
 		if err != nil {
@@ -101,7 +112,8 @@ func (h *Handler) jwtAuth(next http.Handler) http.Handler {
 			return
 		}
 
-		ctx := context.WithValue(r.Context(), models.UsernameKey, claims.Username)
+		ctx := di.Inherit(r.Context())
+		di.Provide(ctx, models.Username(claims.Username))
 		next.ServeHTTP(w, r.WithContext(ctx))
 	})
 }
