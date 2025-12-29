@@ -39,7 +39,9 @@ func (s *Subsonic) handleGetScanStatus(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Subsonic) handleStartScan(w http.ResponseWriter, r *http.Request) {
-	go s.scan(r.Context())
+	// r.Context() may destroy on client disconnect, so create a new background context
+	ctx := di.Inherit(context.Background(), r.Context())
+	go s.scan(ctx)
 	resp := models.NewResponse(models.ResponseStatusOK)
 	resp.ScanStatus = &models.ScanStatus{
 		Scanning: true,
