@@ -11,6 +11,7 @@ type containerKey struct{}
 
 type container struct {
 	mu            sync.RWMutex
+	parent        *container
 	services      map[reflect.Type]any
 	namedServices map[string]any
 }
@@ -32,22 +33,11 @@ func NewScope(ctx context.Context) context.Context {
 		return NewContext(ctx)
 	}
 
-	// Lock parent for reading while copying
-	parent.mu.RLock()
-	defer parent.mu.RUnlock()
-
-	// Create a new container and copy parent services
+	// Create a new container with reference to parent
 	child := &container{
-		services:      make(map[reflect.Type]any, len(parent.services)),
-		namedServices: make(map[string]any, len(parent.namedServices)),
-	}
-
-	// Copy all services from parent
-	for k, v := range parent.services {
-		child.services[k] = v
-	}
-	for k, v := range parent.namedServices {
-		child.namedServices[k] = v
+		parent:        parent,
+		services:      make(map[reflect.Type]any),
+		namedServices: make(map[string]any),
 	}
 
 	return context.WithValue(ctx, containerKey{}, child)
@@ -82,14 +72,24 @@ func Invoke[T any](ctx context.Context) (T, error) {
 		var zero T
 		return zero, fmt.Errorf("di: context does not contain a container")
 	}
-	c.mu.RLock()
-	defer c.mu.RUnlock()
-	s, ok := c.services[reflect.TypeOf((*T)(nil)).Elem()]
-	if !ok {
-		var zero T
-		return zero, fmt.Errorf("di: service %T not found", zero)
+	
+	targetType := reflect.TypeOf((*T)(nil)).Elem()
+	
+	// Search current container and parent chain
+	for c != nil {
+		c.mu.RLock()
+		s, ok := c.services[targetType]
+		c.mu.RUnlock()
+		
+		if ok {
+			return s.(T), nil
+		}
+		
+		c = c.parent
 	}
-	return s.(T), nil
+	
+	var zero T
+	return zero, fmt.Errorf("di: service %T not found", zero)
 }
 
 // InvokeNamed retrieves a named service from the container within the context.
@@ -99,14 +99,22 @@ func InvokeNamed[T any](ctx context.Context, name string) (T, error) {
 		var zero T
 		return zero, fmt.Errorf("di: context does not contain a container")
 	}
-	c.mu.RLock()
-	defer c.mu.RUnlock()
-	s, ok := c.namedServices[name]
-	if !ok {
-		var zero T
-		return zero, fmt.Errorf("di: named service %s not found", name)
+	
+	// Search current container and parent chain
+	for c != nil {
+		c.mu.RLock()
+		s, ok := c.namedServices[name]
+		c.mu.RUnlock()
+		
+		if ok {
+			return s.(T), nil
+		}
+		
+		c = c.parent
 	}
-	return s.(T), nil
+	
+	var zero T
+	return zero, fmt.Errorf("di: named service %s not found", name)
 }
 
 // MustInvoke retrieves a service from the container or panics if not found.
