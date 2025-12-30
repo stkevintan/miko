@@ -95,19 +95,31 @@ func (s *Subsonic) handleGetCoverArt(w http.ResponseWriter, r *http.Request) {
 	db := di.MustInvoke[*gorm.DB](r.Context())
 
 	var path string
-	// Try to find as song first
-	var song models.Child
-	if err := db.Where("id = ?", id).First(&song).Error; err == nil {
-		path = song.Path
-	} else {
-		// Try to find as album
+	if strings.HasPrefix(id, "al-") {
+		realID := id[3:]
 		var album models.AlbumID3
-		if err := db.Where("id = ?", id).First(&album).Error; err == nil {
-			// For albums, we need to find one song in the album to get the file
+		if err := db.Where("id = ?", realID).First(&album).Error; err == nil {
 			var firstSong models.Child
 			if err := db.Where("album_id = ?", album.ID).First(&firstSong).Error; err == nil {
 				path = firstSong.Path
 			}
+		}
+	} else if strings.HasPrefix(id, "ar-") {
+		realID := id[3:]
+		var artist models.ArtistID3
+		if err := db.Where("id = ?", realID).First(&artist).Error; err == nil {
+			var firstSong models.Child
+			if err := db.Table("children").
+				Joins("JOIN song_artists ON song_artists.child_id = children.id").
+				Where("song_artists.artist_id3_id = ?", artist.ID).
+				First(&firstSong).Error; err == nil {
+				path = firstSong.Path
+			}
+		}
+	} else {
+		var song models.Child
+		if err := db.Where("id = ?", id).First(&song).Error; err == nil {
+			path = song.Path
 		}
 	}
 
@@ -293,7 +305,10 @@ func (s *Subsonic) handleScrobble(w http.ResponseWriter, r *http.Request) {
 	}
 
 	db := di.MustInvoke[*gorm.DB](r.Context())
-	if err := db.Model(&models.Child{}).Where("id = ?", id).UpdateColumn("play_count", gorm.Expr("play_count + 1")).Error; err != nil {
+	if err := db.Model(&models.Child{}).Where("id = ?", id).Updates(map[string]interface{}{
+		"play_count":  gorm.Expr("play_count + 1"),
+		"last_played": time.Now(),
+	}).Error; err != nil {
 		s.sendResponse(w, r, models.NewErrorResponse(0, "Failed to update play count"))
 		return
 	}

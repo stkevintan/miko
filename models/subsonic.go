@@ -3,6 +3,8 @@ package models
 import (
 	"encoding/xml"
 	"time"
+
+	"gorm.io/gorm"
 )
 
 type ResponseStatus string
@@ -142,7 +144,7 @@ type ArtistID3 struct {
 	Name           string     `gorm:"index" xml:"name,attr" json:"name"`
 	CoverArt       string     `xml:"coverArt,attr,omitempty" json:"coverArt,omitempty"`
 	ArtistImageUrl string     `xml:"artistImageUrl,attr,omitempty" json:"artistImageUrl,omitempty"`
-	AlbumCount     int        `xml:"albumCount,attr" json:"albumCount"`
+	AlbumCount     int        `gorm:"->;-:migration" xml:"albumCount,attr" json:"albumCount"`
 	Starred        *time.Time `xml:"starred,attr,omitempty" json:"starred,omitempty"`
 	UserRating     int        `xml:"userRating,attr,omitempty" json:"userRating,omitempty"`
 	AverageRating  float64    `xml:"averageRating,attr,omitempty" json:"averageRating,omitempty"`
@@ -161,9 +163,10 @@ type AlbumID3 struct {
 	Artist        string      `gorm:"index" xml:"artist,attr,omitempty" json:"artist,omitempty"`
 	ArtistID      string      `gorm:"index" xml:"artistId,attr,omitempty" json:"artistId,omitempty"`
 	CoverArt      string      `xml:"coverArt,attr,omitempty" json:"coverArt,omitempty"`
-	SongCount     int         `xml:"songCount,attr" json:"songCount"`
-	Duration      int         `xml:"duration,attr" json:"duration"`
-	PlayCount     int64       `xml:"playCount,attr,omitempty" json:"playCount,omitempty"`
+	SongCount     int         `gorm:"->;-:migration" xml:"songCount,attr" json:"songCount"`
+	Duration      int         `gorm:"->;-:migration" xml:"duration,attr" json:"duration"`
+	PlayCount     int64       `gorm:"->;-:migration" xml:"playCount,attr,omitempty" json:"playCount,omitempty"`
+	LastPlayed    *time.Time  `gorm:"->;-:migration" xml:"-" json:"lastPlayed,omitempty"`
 	Created       time.Time   `xml:"created,attr" json:"created"`
 	Starred       *time.Time  `xml:"starred,attr,omitempty" json:"starred,omitempty"`
 	UserRating    int         `xml:"userRating,attr,omitempty" json:"userRating,omitempty"`
@@ -240,6 +243,7 @@ type Child struct {
 	UserRating            int         `xml:"userRating,attr,omitempty" json:"userRating,omitempty"`
 	AverageRating         float64     `xml:"averageRating,attr,omitempty" json:"averageRating,omitempty"`
 	PlayCount             int64       `xml:"playCount,attr,omitempty" json:"playCount,omitempty"`
+	LastPlayed            *time.Time  `xml:"lastPlayed,attr,omitempty" json:"lastPlayed,omitempty"`
 	DiscNumber            int         `xml:"discNumber,attr,omitempty" json:"discNumber,omitempty"`
 	Created               *time.Time  `xml:"created,attr,omitempty" json:"created,omitempty"`
 	Starred               *time.Time  `xml:"starred,attr,omitempty" json:"starred,omitempty"`
@@ -538,4 +542,24 @@ func NewErrorResponse(code int, message string) *SubsonicResponse {
 		Message: message,
 	}
 	return resp
+}
+
+func AlbumWithStats(includeLastPlayed bool) func(db *gorm.DB) *gorm.DB {
+	return func(db *gorm.DB) *gorm.DB {
+		selects := "album_id3.*, " +
+			"(SELECT COUNT(*) FROM children WHERE album_id = album_id3.id AND is_dir = false) AS song_count, " +
+			"(SELECT CAST(IFNULL(SUM(duration), 0) AS INTEGER) FROM children WHERE album_id = album_id3.id AND is_dir = false) AS duration, " +
+			"(SELECT CAST(IFNULL(SUM(play_count), 0) AS INTEGER) FROM children WHERE album_id = album_id3.id AND is_dir = false) AS play_count"
+
+		if includeLastPlayed {
+			selects += ", (SELECT last_played FROM children WHERE album_id = album_id3.id AND is_dir = false ORDER BY last_played DESC LIMIT 1) AS last_played"
+		}
+
+		return db.Select(selects)
+	}
+}
+
+func ArtistWithStats(db *gorm.DB) *gorm.DB {
+	return db.Select("artist_id3.*, " +
+		"(SELECT COUNT(*) FROM album_artists WHERE artist_id3_id = artist_id3.id) AS album_count")
 }

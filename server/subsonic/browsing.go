@@ -129,11 +129,7 @@ func (s *Subsonic) handleGetArtists(w http.ResponseWriter, r *http.Request) {
 	db := di.MustInvoke[*gorm.DB](r.Context())
 	var artists []models.ArtistID3
 
-	if err := db.Raw(`
-		SELECT a.*, 
-		       (SELECT COUNT(*) FROM album_artists WHERE artist_id3_id = a.id) as album_count
-		FROM artist_id3 a
-	`).Scan(&artists).Error; err != nil {
+	if err := db.Scopes(models.ArtistWithStats).Find(&artists).Error; err != nil {
 		s.sendResponse(w, r, models.NewErrorResponse(0, "Failed to query artists"))
 		return
 	}
@@ -168,13 +164,16 @@ func (s *Subsonic) handleGetArtist(w http.ResponseWriter, r *http.Request) {
 	db := di.MustInvoke[*gorm.DB](r.Context())
 
 	var artist models.ArtistID3
-	if err := db.Where("id = ?", id).First(&artist).Error; err != nil {
+	if err := db.Scopes(models.ArtistWithStats).Where("id = ?", id).First(&artist).Error; err != nil {
 		s.sendResponse(w, r, models.NewErrorResponse(70, "Artist not found"))
 		return
 	}
 
 	var albums []models.AlbumID3
-	db.Model(&artist).Association("Albums").Find(&albums)
+	db.Scopes(models.AlbumWithStats(false)).
+		Joins("JOIN album_artists ON album_artists.album_id3_id = album_id3.id").
+		Where("album_artists.artist_id3_id = ?", artist.ID).
+		Find(&albums)
 
 	resp := models.NewResponse(models.ResponseStatusOK)
 	resp.Artist = &models.ArtistWithAlbumsID3{
@@ -189,7 +188,7 @@ func (s *Subsonic) handleGetAlbum(w http.ResponseWriter, r *http.Request) {
 	db := di.MustInvoke[*gorm.DB](r.Context())
 
 	var album models.AlbumID3
-	if err := db.Where("id = ?", id).First(&album).Error; err != nil {
+	if err := db.Scopes(models.AlbumWithStats(true)).Where("id = ?", id).First(&album).Error; err != nil {
 		s.sendResponse(w, r, models.NewErrorResponse(70, "Album not found"))
 		return
 	}

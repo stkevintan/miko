@@ -24,7 +24,7 @@ func getAlbums(r *http.Request) ([]models.AlbumID3, error) {
 	db := di.MustInvoke[*gorm.DB](r.Context())
 	var albums []models.AlbumID3
 
-	dbQuery := db.Limit(size).Offset(offset)
+	dbQuery := db.Scopes(models.AlbumWithStats(listType == "recent")).Limit(size).Offset(offset)
 
 	musicFolderId, err := getQueryInt[uint](r, "musicFolderId")
 	if err == nil {
@@ -33,11 +33,22 @@ func getAlbums(r *http.Request) ([]models.AlbumID3, error) {
 			Group("album_id3.id")
 	}
 
+	/**
+	The list type. Must be one of the following: random, newest, frequent, recent, starred, alphabeticalByName or alphabeticalByArtist
+	Since 1.10.1 you can use byYear and byGenre to list albums in a given year range or genre
+	*/
 	switch listType {
 	case "random":
 		dbQuery = dbQuery.Order("RANDOM()")
 	case "newest":
 		dbQuery = dbQuery.Order("album_id3.created DESC")
+	case "frequent":
+		dbQuery = dbQuery.Order("play_count DESC")
+	case "recent":
+		dbQuery = dbQuery.Where("(SELECT MAX(last_played) FROM children WHERE album_id = album_id3.id AND is_dir = false) IS NOT NULL").
+			Order("last_played DESC")
+	case "starred":
+		dbQuery = dbQuery.Where("album_id3.starred IS NOT NULL").Order("album_id3.starred DESC")
 	case "alphabeticalByName":
 		dbQuery = dbQuery.Order("album_id3.name ASC")
 	case "alphabeticalByArtist":
@@ -87,15 +98,18 @@ func (s *Subsonic) handleGetAlbumList(w http.ResponseWriter, r *http.Request) {
 	children := make([]models.Child, len(albums))
 	for i, a := range albums {
 		children[i] = models.Child{
-			ID:       a.ID,
-			Title:    a.Name,
-			Artist:   a.Artist,
-			ArtistID: a.ArtistID,
-			CoverArt: a.CoverArt,
-			IsDir:    true,
-			Created:  &a.Created,
-			Year:     a.Year,
-			Genre:    a.Genre,
+			ID:        a.ID,
+			Title:     a.Name,
+			Artist:    a.Artist,
+			ArtistID:  a.ArtistID,
+			CoverArt:  a.CoverArt,
+			IsDir:     true,
+			Created:   &a.Created,
+			Year:      a.Year,
+			Genre:     a.Genre,
+			Starred:   a.Starred,
+			Duration:  a.Duration,
+			PlayCount: a.PlayCount,
 		}
 	}
 
@@ -223,7 +237,7 @@ func getStarredItems(r *http.Request) ([]models.ArtistID3, []models.AlbumID3, []
 	db := di.MustInvoke[*gorm.DB](r.Context())
 
 	var artists []models.ArtistID3
-	artistQuery := db.Where("starred IS NOT NULL")
+	artistQuery := db.Scopes(models.ArtistWithStats).Where("artist_id3.starred IS NOT NULL")
 	musicFolderId, err := getQueryInt[uint](r, "musicFolderId")
 	musicFolderExists := err == nil
 	if musicFolderExists {
@@ -236,7 +250,7 @@ func getStarredItems(r *http.Request) ([]models.ArtistID3, []models.AlbumID3, []
 	}
 
 	var albums []models.AlbumID3
-	albumQuery := db.Where("starred IS NOT NULL")
+	albumQuery := db.Scopes(models.AlbumWithStats(false)).Where("album_id3.starred IS NOT NULL")
 	if musicFolderExists {
 		albumQuery = albumQuery.Joins("JOIN children ON children.album_id = album_id3.id").
 			Where("children.music_folder_id = ?", musicFolderId).
@@ -247,9 +261,9 @@ func getStarredItems(r *http.Request) ([]models.ArtistID3, []models.AlbumID3, []
 	}
 
 	var songs []models.Child
-	songQuery := db.Where("is_dir = ? AND starred IS NOT NULL", false)
+	songQuery := db.Where("children.is_dir = ? AND children.starred IS NOT NULL", false)
 	if musicFolderExists {
-		songQuery = songQuery.Where("music_folder_id = ?", musicFolderId)
+		songQuery = songQuery.Where("children.music_folder_id = ?", musicFolderId)
 	}
 	if err := songQuery.Find(&songs).Error; err != nil {
 		return nil, nil, nil, err
@@ -280,16 +294,18 @@ func (s *Subsonic) handleGetStarred(w http.ResponseWriter, r *http.Request) {
 	starredAlbums := make([]models.Child, len(albums))
 	for i, a := range albums {
 		starredAlbums[i] = models.Child{
-			ID:       a.ID,
-			Title:    a.Name,
-			Artist:   a.Artist,
-			ArtistID: a.ArtistID,
-			CoverArt: a.CoverArt,
-			IsDir:    true,
-			Created:  &a.Created,
-			Year:     a.Year,
-			Genre:    a.Genre,
-			Starred:  a.Starred,
+			ID:        a.ID,
+			Title:     a.Name,
+			Artist:    a.Artist,
+			ArtistID:  a.ArtistID,
+			CoverArt:  a.CoverArt,
+			IsDir:     true,
+			Created:   &a.Created,
+			Year:      a.Year,
+			Genre:     a.Genre,
+			Starred:   a.Starred,
+			Duration:  a.Duration,
+			PlayCount: a.PlayCount,
 		}
 	}
 
