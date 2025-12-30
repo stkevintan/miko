@@ -31,7 +31,7 @@ func (s *Scanner) Prune(seenIDs *sync.Map) {
 		}
 
 		// 3. Delete children that are NOT in the seen_ids table
-		result := tx.Exec("DELETE FROM children WHERE id NOT IN (SELECT id FROM seen_ids)")
+		result := tx.Exec("DELETE FROM children WHERE NOT EXISTS (SELECT 1 FROM seen_ids WHERE seen_ids.id = children.id)")
 		if result.Error != nil {
 			return result.Error
 		}
@@ -53,11 +53,22 @@ func (s *Scanner) Prune(seenIDs *sync.Map) {
 
 		// 5. Prune orphaned join table entries
 		// We must do this BEFORE pruning artists and genres because they rely on these tables
-		tx.Exec(`DELETE FROM song_artists WHERE child_id NOT IN (SELECT id FROM children)`)
-		tx.Exec(`DELETE FROM album_artists WHERE album_id3_id NOT IN (SELECT id FROM album_id3)`)
-		tx.Exec(`DELETE FROM song_genres WHERE child_id NOT IN (SELECT id FROM children)`)
-		tx.Exec(`DELETE FROM album_genres WHERE album_id3_id NOT IN (SELECT id FROM album_id3)`)
-		tx.Exec(`DELETE FROM playlist_songs WHERE song_id NOT IN (SELECT id FROM children)`)
+		if err := tx.Exec(`DELETE FROM song_artists WHERE child_id NOT IN (SELECT id FROM children)`).Error; err != nil {
+			return err
+		}
+		if err := tx.Exec(`DELETE FROM album_artists WHERE album_id3_id NOT IN (SELECT id FROM album_id3)`).Error; err != nil {
+			return err
+		}
+		if err := tx.Exec(`DELETE FROM song_genres WHERE child_id NOT IN (SELECT id FROM children)`).Error; err != nil {
+			return err
+		}
+		if err := tx.Exec(`DELETE FROM album_genres WHERE album_id3_id NOT IN (SELECT id FROM album_id3)`).Error; err != nil {
+			return err
+		}
+		if err := tx.Exec(`DELETE FROM playlist_songs WHERE song_id NOT IN (SELECT id FROM children)`).Error; err != nil {
+			return err
+		}
+
 
 		// 6. Prune orphaned artists
 		// This is a bit more complex because artists can be linked to songs or albums

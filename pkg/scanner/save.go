@@ -13,7 +13,7 @@ import (
 func (s *Scanner) saveResults(resultChan <-chan scanResult, cacheDir string) {
 	seenArtists := make(map[string]bool)
 	seenGenres := make(map[string]bool)
-	seenAlbums := make(map[string]bool)
+	seenAlbumsWithCover := make(map[string]bool)
 	var children []models.Child
 
 	flushChildren := func() {
@@ -77,7 +77,8 @@ func (s *Scanner) saveResults(resultChan <-chan scanResult, cacheDir string) {
 				albumID := GenerateAlbumID(displayArtist, child.Album)
 				child.AlbumID = albumID
 
-				if !seenAlbums[albumID] {
+				hasCover, albumSeen := seenAlbumsWithCover[albumID]
+				if !albumSeen {
 					created := time.Now()
 					if child.Created != nil {
 						created = *child.Created
@@ -97,12 +98,13 @@ func (s *Scanner) saveResults(resultChan <-chan scanResult, cacheDir string) {
 						if err := os.WriteFile(filepath.Join(cacheDir, album.ID), t.Image, 0644); err != nil {
 							log.Warn("Failed to write album cover to cache for album %s: %v", album.ID, err)
 						}
+						hasCover = true
 					}
 					s.db.Clauses(clause.OnConflict{UpdateAll: true}).Create(&album)
-					seenAlbums[albumID] = true
+					seenAlbumsWithCover[albumID] = hasCover
 				}
 
-				if _, err := os.Stat(filepath.Join(cacheDir, albumID)); err == nil {
+				if hasCover {
 					child.CoverArt = albumID
 				}
 			}

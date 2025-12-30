@@ -160,7 +160,7 @@ func (s *Scanner) Scan(ctx context.Context, incremental bool) {
 					Suffix:        strings.TrimPrefix(filepath.Ext(task.path), "."),
 					ContentType:   contentType,
 					MusicFolderID: task.folder.ID,
-					Created:       &modTime,
+					Created:       &modTime, // Corresponds to file modification time for incremental scans.
 				}
 
 				t, err := tags.Read(task.path)
