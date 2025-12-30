@@ -129,11 +129,11 @@ func (s *Subsonic) RegisterRoutes(r chi.Router) {
 		r.Get("/changePassword", s.handleNotImplemented)
 
 		// Bookmarks
-		r.Get("/getBookmarks", s.handleNotImplemented)
-		r.Get("/createBookmark", s.handleNotImplemented)
-		r.Get("/deleteBookmark", s.handleNotImplemented)
-		r.Get("/getPlayQueue", s.handleNotImplemented)
-		r.Get("/savePlayQueue", s.handleNotImplemented)
+		r.Get("/getBookmarks", s.handleGetBookmarks)
+		r.Get("/createBookmark", s.handleCreateBookmark)
+		r.Get("/deleteBookmark", s.handleDeleteBookmark)
+		r.Get("/getPlayQueue", s.handleGetPlayQueue)
+		r.Get("/savePlayQueue", s.handleSavePlayQueue)
 
 		// Media library scanning
 		r.Get("/getScanStatus", s.handleGetScanStatus)

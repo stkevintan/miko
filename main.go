@@ -15,6 +15,7 @@ import (
 	"github.com/glebarez/sqlite"
 	"github.com/stkevintan/miko/config"
 	"github.com/stkevintan/miko/models"
+	"github.com/stkevintan/miko/pkg/bookmarks"
 	"github.com/stkevintan/miko/pkg/browser"
 	"github.com/stkevintan/miko/pkg/cookiecloud"
 	"github.com/stkevintan/miko/pkg/di"
@@ -70,6 +71,9 @@ func main() {
 		&models.Genre{},
 		&models.PlaylistRecord{},
 		&models.PlaylistSong{},
+		&models.BookmarkRecord{},
+		&models.PlayQueueRecord{},
+		&models.PlayQueueSong{},
 	)
 	if err != nil {
 		log.Fatalf("Failed to migrate database: %v", err)
@@ -99,6 +103,7 @@ func main() {
 	di.Provide(ctx, db)
 	di.Provide(ctx, cfg.CookieCloud)
 	di.Provide(ctx, browser.New(db))
+	di.Provide(ctx, bookmarks.New(db))
 	// TODO: factory pattern for scanner with config
 	di.Provide(ctx, scanner.New(db, cfg))
 
