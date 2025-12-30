@@ -38,3 +38,54 @@ func (h *Handler) handleLogin(w http.ResponseWriter, r *http.Request) {
 
 	JSON(w, http.StatusOK, models.LoginResponse{Token: token})
 }
+
+// handleGetMe returns the current user's profile
+func (h *Handler) handleGetMe(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	username := di.MustInvoke[models.Username](ctx)
+	db := di.MustInvoke[*gorm.DB](ctx)
+
+	var user models.User
+	if err := db.Where("username = ?", string(username)).First(&user).Error; err != nil {
+		JSON(w, http.StatusNotFound, models.ErrorResponse{Error: "User not found"})
+		return
+	}
+
+	JSON(w, http.StatusOK, user)
+}
+
+type ChangePasswordRequest struct {
+	OldPassword string `json:"oldPassword" binding:"required"`
+	NewPassword string `json:"newPassword" binding:"required"`
+}
+
+// handleChangePassword updates the user's password
+func (h *Handler) handleChangePassword(w http.ResponseWriter, r *http.Request) {
+	var req ChangePasswordRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		JSON(w, http.StatusBadRequest, models.ErrorResponse{Error: err.Error()})
+		return
+	}
+
+	ctx := r.Context()
+	username := di.MustInvoke[models.Username](ctx)
+	db := di.MustInvoke[*gorm.DB](ctx)
+
+	var user models.User
+	if err := db.Where("username = ?", string(username)).First(&user).Error; err != nil {
+		JSON(w, http.StatusNotFound, models.ErrorResponse{Error: "User not found"})
+		return
+	}
+
+	if user.Password != req.OldPassword {
+		JSON(w, http.StatusUnauthorized, models.ErrorResponse{Error: "Invalid old password"})
+		return
+	}
+
+	if err := db.Model(&user).Update("password", req.NewPassword).Error; err != nil {
+		JSON(w, http.StatusInternalServerError, models.ErrorResponse{Error: "Failed to update password"})
+		return
+	}
+
+	w.WriteHeader(http.StatusNoContent)
+}

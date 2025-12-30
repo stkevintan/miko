@@ -63,6 +63,8 @@ func (h *Handler) RegisterRoutes(r chi.Router) {
 		// Protected routes
 		r.Group(func(r chi.Router) {
 			r.Use(h.jwtAuth)
+			r.Get("/me", h.handleGetMe)
+			r.Post("/change-password", h.handleChangePassword)
 			r.Get("/cookiecloud/server", h.getCookiecloudServer)
 			r.Post("/cookiecloud/identity", h.handleCookiecloudIdentity)
 			r.Post("/cookiecloud/pull", h.handleCookiecloudPull)
