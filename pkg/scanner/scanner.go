@@ -105,7 +105,11 @@ func (s *Scanner) Scan(ctx context.Context, incremental bool) {
 					return
 				default:
 				}
-				relPath, _ := filepath.Rel(task.rootPath, task.path)
+				relPath, err := filepath.Rel(task.rootPath, task.path)
+				if err != nil {
+					log.Warn("Failed to get relative path for %q: %v", task.path, err)
+					continue
+				}
 				id := GenerateID(task.rootPath, relPath)
 				parentID := GetParentID(task.rootPath, relPath)
 
@@ -174,7 +178,7 @@ func (s *Scanner) Scan(ctx context.Context, incremental bool) {
 	doneSaver := make(chan struct{})
 	go func() {
 		defer close(doneSaver)
-		s.saveResults(s.db, resultChan, cacheDir)
+		s.saveResults(resultChan, cacheDir)
 	}()
 
 	// Producer
@@ -202,7 +206,7 @@ func (s *Scanner) Scan(ctx context.Context, incremental bool) {
 	close(resultChan)
 	<-doneSaver
 
-	s.Prune(s.db, seenIDs)
+	s.Prune(seenIDs)
 
 	s.lastScanTime.Store(time.Now().Unix())
 	log.Info("Scan completed. Total files: %d", s.scanCount.Load())

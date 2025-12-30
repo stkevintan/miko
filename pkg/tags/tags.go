@@ -4,6 +4,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/stkevintan/miko/pkg/log"
 	"go.senan.xyz/taglib"
 )
 
@@ -66,13 +67,13 @@ func Read(path string) (*Tags, error) {
 	}
 
 	if v, ok := t[taglib.TrackNumber]; ok && len(v) > 0 {
-		res.Track, _ = strconv.Atoi(v[0])
+		res.Track = parseTagInt("Track", v[0])
 	}
 	if v, ok := t[taglib.DiscNumber]; ok && len(v) > 0 {
-		res.Disc, _ = strconv.Atoi(v[0])
+		res.Disc = parseTagInt("Disc", v[0])
 	}
 	if v, ok := t[taglib.Date]; ok && len(v) > 0 {
-		res.Year, _ = strconv.Atoi(v[0])
+		res.Year = parseTagInt("Year", v[0])
 	}
 	if v, ok := t[taglib.Genre]; ok && len(v) > 0 {
 		res.Genres = v
@@ -98,6 +99,26 @@ func Read(path string) (*Tags, error) {
 	}
 
 	return res, nil
+}
+
+func parseTagInt(name string, v string) int {
+	if v == "" {
+		return 0
+	}
+	// Handle cases like "1/12" or "2023-10-12"
+	parts := strings.FieldsFunc(v, func(r rune) bool {
+		return r == '/' || r == '-' || r == '\\'
+	})
+	if len(parts) > 0 {
+		v = parts[0]
+	}
+
+	i, err := strconv.Atoi(strings.TrimSpace(v))
+	if err != nil {
+		log.Warn("Failed to parse %s tag value %q as integer: %v", name, v, err)
+		return 0
+	}
+	return i
 }
 
 func ReadImage(path string) ([]byte, error) {

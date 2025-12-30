@@ -7,11 +7,10 @@ import (
 
 	"github.com/stkevintan/miko/models"
 	"github.com/stkevintan/miko/pkg/log"
-	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
 )
 
-func (s *Scanner) saveResults(db *gorm.DB, resultChan <-chan scanResult, cacheDir string) {
+func (s *Scanner) saveResults(resultChan <-chan scanResult, cacheDir string) {
 	seenArtists := make(map[string]bool)
 	seenGenres := make(map[string]bool)
 	seenAlbums := make(map[string]bool)
@@ -19,7 +18,7 @@ func (s *Scanner) saveResults(db *gorm.DB, resultChan <-chan scanResult, cacheDi
 
 	flushChildren := func() {
 		if len(children) > 0 {
-			db.Clauses(clause.OnConflict{UpdateAll: true}).CreateInBatches(children, 100)
+			s.db.Clauses(clause.OnConflict{UpdateAll: true}).CreateInBatches(children, 100)
 			children = children[:0]
 		}
 	}
@@ -34,7 +33,7 @@ func (s *Scanner) saveResults(db *gorm.DB, resultChan <-chan scanResult, cacheDi
 			}
 			if t.Artist != "" {
 				child.Artist = t.Artist
-				child.Artists = s.getArtistsFromNames(db, t.Artists, seenArtists)
+				child.Artists = s.getArtistsFromNames(t.Artists, seenArtists)
 				if len(child.Artists) > 0 {
 					child.ArtistID = child.Artists[0].ID
 				}
@@ -47,7 +46,7 @@ func (s *Scanner) saveResults(db *gorm.DB, resultChan <-chan scanResult, cacheDi
 			child.Year = t.Year
 			if t.Genre != "" {
 				child.Genre = t.Genre
-				child.Genres = s.getGenresFromNames(db, t.Genres, seenGenres)
+				child.Genres = s.getGenresFromNames(t.Genres, seenGenres)
 			}
 			if t.Lyrics != "" {
 				child.Lyrics = t.Lyrics
@@ -60,7 +59,7 @@ func (s *Scanner) saveResults(db *gorm.DB, resultChan <-chan scanResult, cacheDi
 				albumArtistStr := t.AlbumArtist
 				var albumArtists []models.ArtistID3
 				if albumArtistStr != "" {
-					albumArtists = s.getArtistsFromNames(db, t.AlbumArtists, seenArtists)
+					albumArtists = s.getArtistsFromNames(t.AlbumArtists, seenArtists)
 				}
 
 				groupArtist := child.Artist
@@ -99,7 +98,7 @@ func (s *Scanner) saveResults(db *gorm.DB, resultChan <-chan scanResult, cacheDi
 							log.Warn("Failed to write album cover to cache for album %s: %v", album.ID, err)
 						}
 					}
-					db.Clauses(clause.OnConflict{UpdateAll: true}).Create(&album)
+					s.db.Clauses(clause.OnConflict{UpdateAll: true}).Create(&album)
 					seenAlbums[albumID] = true
 				}
 
@@ -127,7 +126,7 @@ func (s *Scanner) saveResults(db *gorm.DB, resultChan <-chan scanResult, cacheDi
 	flushChildren()
 }
 
-func (s *Scanner) getArtistsFromNames(db *gorm.DB, names []string, seen map[string]bool) []models.ArtistID3 {
+func (s *Scanner) getArtistsFromNames(names []string, seen map[string]bool) []models.ArtistID3 {
 	var artists []models.ArtistID3
 	for _, name := range names {
 		artistID := GenerateArtistID(name)
@@ -136,7 +135,7 @@ func (s *Scanner) getArtistsFromNames(db *gorm.DB, names []string, seen map[stri
 			Name: name,
 		}
 		if !seen[artistID] {
-			db.Clauses(clause.OnConflict{UpdateAll: true}).Create(&artist)
+			s.db.Clauses(clause.OnConflict{UpdateAll: true}).Create(&artist)
 			seen[artistID] = true
 		}
 		artists = append(artists, artist)
@@ -144,12 +143,12 @@ func (s *Scanner) getArtistsFromNames(db *gorm.DB, names []string, seen map[stri
 	return artists
 }
 
-func (s *Scanner) getGenresFromNames(db *gorm.DB, names []string, seen map[string]bool) []models.Genre {
+func (s *Scanner) getGenresFromNames(names []string, seen map[string]bool) []models.Genre {
 	var genres []models.Genre
 	for _, name := range names {
 		genre := models.Genre{Name: name}
 		if !seen[name] {
-			db.Clauses(clause.OnConflict{UpdateAll: true}).Create(&genre)
+			s.db.Clauses(clause.OnConflict{UpdateAll: true}).Create(&genre)
 			seen[name] = true
 		}
 		genres = append(genres, genre)
