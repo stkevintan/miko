@@ -111,7 +111,7 @@ func (s *Scanner) saveResults(resultChan <-chan scanResult, cacheDir string) {
 					} else {
 						// Only update the cache if both file write and DB update succeed
 						hasCover = true
-						seenAlbumsWithCover[albumID] = hasCover
+						seenAlbumsWithCover[albumID] = true
 					}
 				}
 
