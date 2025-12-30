@@ -20,7 +20,8 @@ func (s *Subsonic) handleGetScanStatus(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Subsonic) handleStartScan(w http.ResponseWriter, r *http.Request) {
-	incremental := r.URL.Query().Get("inc") == "true"
+	// default to incremental scan
+	incremental := !isPositive(r.URL.Query().Get("full"))
 	sc := di.MustInvoke[*scanner.Scanner](r.Context())
 	// r.Context() may destroy on client disconnect, so create a new background context
 	ctx := di.Inherit(context.Background(), r.Context())
@@ -30,4 +31,8 @@ func (s *Subsonic) handleStartScan(w http.ResponseWriter, r *http.Request) {
 		Scanning: true,
 	}
 	s.sendResponse(w, r, resp)
+}
+
+func isPositive(s string) bool {
+	return s == "1" || s == "true" || s == "yes"
 }

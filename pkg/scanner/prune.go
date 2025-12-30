@@ -5,59 +5,94 @@ import (
 
 	"github.com/stkevintan/miko/pkg/log"
 	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 )
 
 func (s *Scanner) Prune(db *gorm.DB, seenIDs *sync.Map) {
 	log.Info("Pruning deleted files and orphaned records...")
 
-	// 1. Create a temporary table to store seen IDs
-	db.Exec("CREATE TEMPORARY TABLE seen_ids (id TEXT PRIMARY KEY)")
-	defer db.Exec("DROP TABLE seen_ids")
+	err := db.Transaction(func(tx *gorm.DB) error {
+		// 1. Create a temporary table to store seen IDs
+		tx.Exec("CREATE TEMPORARY TABLE seen_ids (id TEXT PRIMARY KEY)")
+		defer tx.Exec("DROP TABLE seen_ids")
 
-	// 2. Insert all seen IDs into the temporary table
-	// We do this in batches to be efficient
-	var ids []string
-	seenIDs.Range(func(key, value any) bool {
-		ids = append(ids, key.(string))
-		if len(ids) >= 500 {
-			s.insertSeenIDs(db, ids)
-			ids = ids[:0]
+		// 2. Insert all seen IDs into the temporary table
+		var ids []string
+		seenIDs.Range(func(key, value any) bool {
+			ids = append(ids, key.(string))
+			if len(ids) >= 500 {
+				s.insertSeenIDs(tx, ids)
+				ids = ids[:0]
+			}
+			return true
+		})
+		if len(ids) > 0 {
+			s.insertSeenIDs(tx, ids)
 		}
-		return true
+
+		// 3. Delete children that are NOT in the seen_ids table
+		result := tx.Exec("DELETE FROM children WHERE id NOT IN (SELECT id FROM seen_ids)")
+		if result.Error != nil {
+			return result.Error
+		}
+		if result.RowsAffected > 0 {
+			log.Info("Pruned %d deleted files from database", result.RowsAffected)
+		}
+
+		// 4. Prune orphaned albums (albums with no songs)
+		result = tx.Exec(`
+			DELETE FROM album_id3 
+			WHERE NOT EXISTS (SELECT 1 FROM children WHERE children.album_id = album_id3.id)
+		`)
+		if result.Error != nil {
+			return result.Error
+		}
+		if result.RowsAffected > 0 {
+			log.Info("Pruned %d orphaned albums", result.RowsAffected)
+		}
+
+		// 5. Prune orphaned join table entries
+		// We must do this BEFORE pruning artists and genres because they rely on these tables
+		tx.Exec(`DELETE FROM song_artists WHERE child_id NOT IN (SELECT id FROM children)`)
+		tx.Exec(`DELETE FROM album_artists WHERE album_id3_id NOT IN (SELECT id FROM album_id3)`)
+		tx.Exec(`DELETE FROM song_genres WHERE child_id NOT IN (SELECT id FROM children)`)
+		tx.Exec(`DELETE FROM album_genres WHERE album_id3_id NOT IN (SELECT id FROM album_id3)`)
+		tx.Exec(`DELETE FROM playlist_songs WHERE song_id NOT IN (SELECT id FROM children)`)
+
+		// 6. Prune orphaned artists
+		// This is a bit more complex because artists can be linked to songs or albums
+		result = tx.Exec(`
+			DELETE FROM artist_id3 
+			WHERE NOT EXISTS (SELECT 1 FROM children WHERE children.artist_id = artist_id3.id)
+			AND NOT EXISTS (SELECT 1 FROM album_id3 WHERE album_id3.artist_id = artist_id3.id)
+			AND NOT EXISTS (SELECT 1 FROM song_artists WHERE song_artists.artist_id3_id = artist_id3.id)
+			AND NOT EXISTS (SELECT 1 FROM album_artists WHERE album_artists.artist_id3_id = artist_id3.id)
+		`)
+		if result.Error != nil {
+			return result.Error
+		}
+		if result.RowsAffected > 0 {
+			log.Info("Pruned %d orphaned artists", result.RowsAffected)
+		}
+
+		// 7. Prune orphaned genres
+		result = tx.Exec(`
+			DELETE FROM genres 
+			WHERE NOT EXISTS (SELECT 1 FROM song_genres WHERE song_genres.genre_name = genres.name)
+			AND NOT EXISTS (SELECT 1 FROM album_genres WHERE album_genres.genre_name = genres.name)
+		`)
+		if result.Error != nil {
+			return result.Error
+		}
+		if result.RowsAffected > 0 {
+			log.Info("Pruned %d orphaned genres", result.RowsAffected)
+		}
+
+		return nil
 	})
-	if len(ids) > 0 {
-		s.insertSeenIDs(db, ids)
-	}
 
-	// 3. Delete children that are NOT in the seen_ids table
-	result := db.Exec("DELETE FROM children WHERE id NOT IN (SELECT id FROM seen_ids)")
-	if result.Error != nil {
-		log.Error("Failed to prune deleted files: %v", result.Error)
-	} else if result.RowsAffected > 0 {
-		log.Info("Pruned %d deleted files from database", result.RowsAffected)
-	}
-
-	// 4. Prune orphaned albums (albums with no songs)
-	result = db.Exec("DELETE FROM album_id3 WHERE id NOT IN (SELECT DISTINCT album_id FROM children WHERE album_id IS NOT NULL AND album_id != '')")
-	if result.Error != nil {
-		log.Error("Failed to prune orphaned albums: %v", result.Error)
-	} else if result.RowsAffected > 0 {
-		log.Info("Pruned %d orphaned albums", result.RowsAffected)
-	}
-
-	// 5. Prune orphaned artists (artists with no songs and no albums)
-	// This is a bit more complex because artists can be linked to songs or albums
-	result = db.Exec(`
-		DELETE FROM artist_id3 
-		WHERE id NOT IN (SELECT DISTINCT artist_id FROM children WHERE artist_id IS NOT NULL AND artist_id != '')
-		AND id NOT IN (SELECT DISTINCT artist_id FROM album_id3 WHERE artist_id IS NOT NULL AND artist_id != '')
-		AND id NOT IN (SELECT DISTINCT artist_id3_id FROM artist_id3_songs)
-		AND id NOT IN (SELECT DISTINCT artist_id3_id FROM artist_id3_albums)
-	`)
-	if result.Error != nil {
-		log.Error("Failed to prune orphaned artists: %v", result.Error)
-	} else if result.RowsAffected > 0 {
-		log.Info("Pruned %d orphaned artists", result.RowsAffected)
+	if err != nil {
+		log.Error("Failed to prune database: %v", err)
 	}
 }
 
@@ -65,15 +100,13 @@ func (s *Scanner) insertSeenIDs(db *gorm.DB, ids []string) {
 	if len(ids) == 0 {
 		return
 	}
-	// SQLite doesn't support multiple rows in a single INSERT easily with raw SQL without some tricks,
-	// but GORM's CreateInBatches works on models. Since we don't have a model for the temp table,
-	// we'll just use a simple loop or a prepared statement.
-	tx := db.Begin()
-	sqlDB, _ := tx.DB()
-	stmt, _ := sqlDB.Prepare("INSERT OR IGNORE INTO seen_ids (id) VALUES (?)")
-	for _, id := range ids {
-		stmt.Exec(id)
+	data := make([]map[string]any, len(ids))
+	for i, id := range ids {
+		data[i] = map[string]any{"id": id}
 	}
-	stmt.Close()
-	tx.Commit()
+	// GORM will automatically use a single multi-row INSERT statement for better performance.
+	// Clauses(clause.OnConflict{DoNothing: true}) is equivalent to INSERT OR IGNORE.
+	if err := db.Table("seen_ids").Clauses(clause.OnConflict{DoNothing: true}).Create(data).Error; err != nil {
+		log.Error("Failed to insert seen IDs: %v", err)
+	}
 }
