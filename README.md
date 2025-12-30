@@ -1,17 +1,17 @@
 # Miko 
 
-Miko is a lightweight, high-performance music service that combines a **Subsonic-compatible server** with a powerful **music downloader**. It is designed to be self-hosted, CGO-free, and highly portable.
+Miko is a lightweight, high-performance music service that combines a **Subsonic-compatible server** with a powerful **online music service**. It is designed to be self-hosted, CGO-free, and highly portable.
 
 ## Features
 
-- **Subsonic API (v1.16.1)**: Compatible with most Subsonic clients (DSub, Play:Sub, Symfonium, etc.).
-- **OpenSubsonic Extensions**: Supports modern extensions like `songLyrics` (synced/unsynced LRC).
-- **Music Downloader**: Integrated downloader for music platforms (primarily NetEase Cloud Music).
-- **CookieCloud Integration**: Seamlessly sync authentication cookies from your browser to the server.
-- **CGO-Free & Portable**: Built with a pure-Go SQLite driver, making it easy to run in lightweight Docker containers (Alpine).
-- **Multi-Arch Support**: Native binaries and Docker images for `amd64` and `arm64` (Apple Silicon/Raspberry Pi).
-- **Clean Architecture**: Built with Chi, GORM, and Dependency Injection (`samber/do`).
-- **Centralized Data Management**: All database, cache, and user data are stored in a single, configurable `dataDir`.
+- 🚀 **High Performance & Tiny Footprint**: A highly optimized ~6MB binary built with Go, capable of handling large libraries with minimal resources.
+- 📂 **File Structure Free**: Forget rigid folder hierarchies. Miko uses ID3 tags to organize your music, giving you total freedom over your file storage.
+- 🎨 **Modern Web UI**: Manage your library, downloads, and server settings through a sleek, intuitive, and responsive web interface.
+- 📻 **Subsonic & OpenSubsonic**: Full compatibility with the Subsonic API (v1.16.1) and modern OpenSubsonic extensions like `songLyrics`.
+- ☁️ **Online Music Integration**: Integrated downloader and metadata scraper for online music platforms (primarily NetEase Cloud Music).
+- 🍪 **CookieCloud Sync**: Effortlessly sync authentication cookies from your browser to the server for seamless integration.
+- 📦 **CGO-Free & Portable**: Pure Go implementation with a built-in SQLite driver. Easy to deploy anywhere, from Raspberry Pi to cloud servers.
+- 🏗️ **Clean Architecture**: Built with Chi, GORM, and Dependency Injection for a robust and maintainable codebase.
 
 ## Project Structure
 
