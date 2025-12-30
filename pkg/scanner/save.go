@@ -94,8 +94,8 @@ func (s *Scanner) saveResults(resultChan <-chan scanResult, cacheDir string) {
 						album.Artists = groupArtists
 					}
 					if len(t.Image) > 0 {
-						album.CoverArt = album.ID
-						if err := os.WriteFile(filepath.Join(cacheDir, album.ID), t.Image, 0644); err != nil {
+						album.CoverArt = "al-" + album.ID
+						if err := os.WriteFile(filepath.Join(cacheDir, album.CoverArt), t.Image, 0644); err != nil {
 							log.Warn("Failed to write album cover to cache for album %s: %v", album.ID, err)
 						}
 						hasCover = true
@@ -104,9 +104,10 @@ func (s *Scanner) saveResults(resultChan <-chan scanResult, cacheDir string) {
 					seenAlbumsWithCover[albumID] = hasCover
 				} else if !hasCover && len(t.Image) > 0 {
 					// Handle case where first song had no cover but a later song does
-					if err := os.WriteFile(filepath.Join(cacheDir, albumID), t.Image, 0644); err != nil {
+					coverArtID := "al-" + albumID
+					if err := os.WriteFile(filepath.Join(cacheDir, coverArtID), t.Image, 0644); err != nil {
 						log.Warn("Failed to write album cover to cache for album %s: %v", albumID, err)
-					} else if err := s.db.Model(&models.AlbumID3{}).Where("id = ?", albumID).Update("cover_art", albumID).Error; err != nil {
+					} else if err := s.db.Model(&models.AlbumID3{}).Where("id = ?", albumID).Update("cover_art", coverArtID).Error; err != nil {
 						log.Warn("Failed to update album cover art in database for album %s: %v", albumID, err)
 					} else {
 						// Only update the cache if both file write and DB update succeed
@@ -116,7 +117,7 @@ func (s *Scanner) saveResults(resultChan <-chan scanResult, cacheDir string) {
 				}
 
 				if hasCover {
-					child.CoverArt = albumID
+					child.CoverArt = "al-" + albumID
 				}
 			}
 
@@ -144,8 +145,9 @@ func (s *Scanner) getArtistsFromNames(names []string, seen map[string]bool) []mo
 	for _, name := range names {
 		artistID := GenerateArtistID(name)
 		artist := models.ArtistID3{
-			ID:   artistID,
-			Name: name,
+			ID:       artistID,
+			Name:     name,
+			CoverArt: "ar-" + artistID,
 		}
 		if !seen[artistID] {
 			s.db.Clauses(clause.OnConflict{UpdateAll: true}).Create(&artist)

@@ -2,6 +2,7 @@ package subsonic
 
 import (
 	"net/http"
+	"strings"
 
 	"github.com/stkevintan/miko/models"
 	"github.com/stkevintan/miko/pkg/di"
@@ -40,6 +41,8 @@ func (s *Subsonic) handleSearch(w http.ResponseWriter, r *http.Request) {
 
 func (s *Subsonic) searchCommon(r *http.Request) ([]models.ArtistID3, []models.AlbumID3, []models.Child, error) {
 	query := r.URL.Query().Get("query")
+	// remove leading and trailing quotes and spaces
+	query = strings.Trim(query, " \"'")
 
 	artistCount := getQueryIntOrDefault(r, "artistCount", 20)
 	artistOffset := getQueryIntOrDefault(r, "artistOffset", 0)
@@ -55,10 +58,15 @@ func (s *Subsonic) searchCommon(r *http.Request) ([]models.ArtistID3, []models.A
 	var songs []models.Child
 
 	searchQuery := "%" + query + "%"
+	if query == "" {
+		searchQuery = "%"
+	}
 
-	artistQuery := db.Where("name LIKE ?", searchQuery).Limit(artistCount).Offset(artistOffset)
-	albumQuery := db.Where("name LIKE ?", searchQuery).Limit(albumCount).Offset(albumOffset)
-	songQuery := db.Where("title LIKE ?", searchQuery).Limit(songCount).Offset(songOffset)
+	artistQuery := db.Scopes(models.ArtistWithStats).
+		Where("name LIKE ?", searchQuery).Limit(artistCount).Offset(artistOffset)
+	albumQuery := db.Scopes(models.AlbumWithStats(false)).
+		Where("name LIKE ?", searchQuery).Limit(albumCount).Offset(albumOffset)
+	songQuery := db.Where("is_dir = false AND title LIKE ?", searchQuery).Limit(songCount).Offset(songOffset)
 	// Optional musicFolderId filter
 	musicFolderId, err := getQueryInt[uint](r, "musicFolderId")
 	if err == nil {
@@ -102,12 +110,14 @@ func (s *Subsonic) handleSearch2(w http.ResponseWriter, r *http.Request) {
 	searchAlbums := make([]models.Child, len(albums))
 	for i, a := range albums {
 		searchAlbums[i] = models.Child{
-			ID:       a.ID,
-			Title:    a.Name,
-			Artist:   a.Artist,
-			ArtistID: a.ArtistID,
-			CoverArt: a.CoverArt,
-			IsDir:    true,
+			ID:        a.ID,
+			Title:     a.Name,
+			Artist:    a.Artist,
+			ArtistID:  a.ArtistID,
+			CoverArt:  a.CoverArt,
+			IsDir:     true,
+			Duration:  a.Duration,
+			PlayCount: a.PlayCount,
 		}
 	}
 
