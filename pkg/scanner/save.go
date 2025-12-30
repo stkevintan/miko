@@ -106,13 +106,12 @@ func (s *Scanner) saveResults(resultChan <-chan scanResult, cacheDir string) {
 					// Handle case where first song had no cover but a later song does
 					if err := os.WriteFile(filepath.Join(cacheDir, albumID), t.Image, 0644); err != nil {
 						log.Warn("Failed to write album cover to cache for album %s: %v", albumID, err)
+					} else if err := s.db.Model(&models.AlbumID3{}).Where("id = ?", albumID).Update("cover_art", albumID).Error; err != nil {
+						log.Warn("Failed to update album cover art in database for album %s: %v", albumID, err)
 					} else {
+						// Only update the cache if both file write and DB update succeed
 						hasCover = true
 						seenAlbumsWithCover[albumID] = hasCover
-						// Update the album record to include the cover art
-						if err := s.db.Model(&models.AlbumID3{}).Where("id = ?", albumID).Update("cover_art", albumID).Error; err != nil {
-							log.Warn("Failed to update album cover art in database for album %s: %v", albumID, err)
-						}
 					}
 				}
 
