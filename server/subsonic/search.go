@@ -5,8 +5,8 @@ import (
 	"strings"
 
 	"github.com/stkevintan/miko/models"
+	"github.com/stkevintan/miko/pkg/browser"
 	"github.com/stkevintan/miko/pkg/di"
-	"gorm.io/gorm"
 )
 
 func (s *Subsonic) handleSearch(w http.ResponseWriter, r *http.Request) {
@@ -14,16 +14,9 @@ func (s *Subsonic) handleSearch(w http.ResponseWriter, r *http.Request) {
 	count := getQueryIntOrDefault(r, "count", 20)
 	offset := getQueryIntOrDefault(r, "offset", 0)
 
-	db := di.MustInvoke[*gorm.DB](r.Context())
-
-	var songs []models.Child
-	searchQuery := "%" + query + "%"
-
-	var totalHits int64
-	db.Model(&models.Child{}).Where("title LIKE ? OR album LIKE ? OR artist LIKE ?", searchQuery, searchQuery, searchQuery).Count(&totalHits)
-
-	if err := db.Where("title LIKE ? OR album LIKE ? OR artist LIKE ?", searchQuery, searchQuery, searchQuery).
-		Limit(count).Offset(offset).Find(&songs).Error; err != nil {
+	br := di.MustInvoke[*browser.Browser](r.Context())
+	songs, totalHits, err := br.SearchSongs(query, count, offset)
+	if err != nil {
 		s.sendResponse(w, r, models.NewErrorResponse(0, "Failed to search for songs"))
 		return
 	}
@@ -39,59 +32,26 @@ func (s *Subsonic) handleSearch(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-func (s *Subsonic) searchCommon(r *http.Request) ([]models.ArtistID3, []models.AlbumID3, []models.Child, error) {
+func (s *Subsonic) handleSearch2(w http.ResponseWriter, r *http.Request) {
+	br := di.MustInvoke[*browser.Browser](r.Context())
 	query := r.URL.Query().Get("query")
-	// remove leading and trailing quotes and spaces
 	query = strings.Trim(query, " \"'")
 
-	artistCount := getQueryIntOrDefault(r, "artistCount", 20)
-	artistOffset := getQueryIntOrDefault(r, "artistOffset", 0)
-	albumCount := getQueryIntOrDefault(r, "albumCount", 20)
-	albumOffset := getQueryIntOrDefault(r, "albumOffset", 0)
-	songCount := getQueryIntOrDefault(r, "songCount", 20)
-	songOffset := getQueryIntOrDefault(r, "songOffset", 0)
-
-	db := di.MustInvoke[*gorm.DB](r.Context())
-
-	var artists []models.ArtistID3
-	var albums []models.AlbumID3
-	var songs []models.Child
-
-	searchQuery := "%" + query + "%"
-	if query == "" {
-		searchQuery = "%"
-	}
-
-	artistQuery := db.Scopes(models.ArtistWithStats).
-		Where("name LIKE ?", searchQuery).Limit(artistCount).Offset(artistOffset)
-	albumQuery := db.Scopes(models.AlbumWithStats(false)).
-		Where("name LIKE ?", searchQuery).Limit(albumCount).Offset(albumOffset)
-	songQuery := db.Where("is_dir = false AND title LIKE ?", searchQuery).Limit(songCount).Offset(songOffset)
-	// Optional musicFolderId filter
 	musicFolderId, err := getQueryInt[uint](r, "musicFolderId")
-	if err == nil {
-		// For artists and albums, we filter by checking if they have songs in the folder
-		artistQuery = artistQuery.Joins("JOIN song_artists ON song_artists.artist_id3_id = artist_id3.id").
-			Joins("JOIN children ON children.id = song_artists.child_id").
-			Where("children.music_folder_id = ?", musicFolderId).
-			Group("artist_id3.id")
+	hasFolderId := err == nil
 
-		albumQuery = albumQuery.Joins("JOIN children ON children.album_id = album_id3.id").
-			Where("children.music_folder_id = ?", musicFolderId).
-			Group("album_id3.id")
+	artists, albums, songs, err := br.Search(browser.SearchOptions{
+		Query:         query,
+		ArtistCount:   getQueryIntOrDefault(r, "artistCount", 20),
+		ArtistOffset:  getQueryIntOrDefault(r, "artistOffset", 0),
+		AlbumCount:    getQueryIntOrDefault(r, "albumCount", 20),
+		AlbumOffset:   getQueryIntOrDefault(r, "albumOffset", 0),
+		SongCount:     getQueryIntOrDefault(r, "songCount", 20),
+		SongOffset:    getQueryIntOrDefault(r, "songOffset", 0),
+		MusicFolderID: musicFolderId,
+		HasFolderID:   hasFolderId,
+	})
 
-		songQuery = songQuery.Where("music_folder_id = ?", musicFolderId)
-	}
-
-	artistQuery.Find(&artists)
-	albumQuery.Find(&albums)
-	songQuery.Find(&songs)
-
-	return artists, albums, songs, nil
-}
-
-func (s *Subsonic) handleSearch2(w http.ResponseWriter, r *http.Request) {
-	artists, albums, songs, err := s.searchCommon(r)
 	if err != nil {
 		s.sendResponse(w, r, models.NewErrorResponse(0, err.Error()))
 		return
@@ -101,8 +61,10 @@ func (s *Subsonic) handleSearch2(w http.ResponseWriter, r *http.Request) {
 	searchArtists := make([]models.Artist, len(artists))
 	for i, a := range artists {
 		searchArtists[i] = models.Artist{
-			ID:   a.ID,
-			Name: a.Name,
+			ID:             a.ID,
+			Name:           a.Name,
+			ArtistImageUrl: a.ArtistImageUrl,
+			Starred:        a.Starred,
 		}
 	}
 
@@ -116,6 +78,10 @@ func (s *Subsonic) handleSearch2(w http.ResponseWriter, r *http.Request) {
 			ArtistID:  a.ArtistID,
 			CoverArt:  a.CoverArt,
 			IsDir:     true,
+			Created:   &a.Created,
+			Year:      a.Year,
+			Genre:     a.Genre,
+			Starred:   a.Starred,
 			Duration:  a.Duration,
 			PlayCount: a.PlayCount,
 		}
@@ -131,7 +97,25 @@ func (s *Subsonic) handleSearch2(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Subsonic) handleSearch3(w http.ResponseWriter, r *http.Request) {
-	artists, albums, songs, err := s.searchCommon(r)
+	br := di.MustInvoke[*browser.Browser](r.Context())
+	query := r.URL.Query().Get("query")
+	query = strings.Trim(query, " \"'")
+
+	musicFolderId, err := getQueryInt[uint](r, "musicFolderId")
+	hasFolderId := err == nil
+
+	artists, albums, songs, err := br.Search(browser.SearchOptions{
+		Query:         query,
+		ArtistCount:   getQueryIntOrDefault(r, "artistCount", 20),
+		ArtistOffset:  getQueryIntOrDefault(r, "artistOffset", 0),
+		AlbumCount:    getQueryIntOrDefault(r, "albumCount", 20),
+		AlbumOffset:   getQueryIntOrDefault(r, "albumOffset", 0),
+		SongCount:     getQueryIntOrDefault(r, "songCount", 20),
+		SongOffset:    getQueryIntOrDefault(r, "songOffset", 0),
+		MusicFolderID: musicFolderId,
+		HasFolderID:   hasFolderId,
+	})
+
 	if err != nil {
 		s.sendResponse(w, r, models.NewErrorResponse(0, err.Error()))
 		return
