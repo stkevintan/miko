@@ -45,7 +45,7 @@ func getAlbums(r *http.Request) ([]models.AlbumID3, error) {
 	case "frequent":
 		dbQuery = dbQuery.Order("play_count DESC")
 	case "recent":
-		dbQuery = dbQuery.Where("(SELECT MAX(last_played) FROM children WHERE album_id = album_id3.id AND is_dir = false) IS NOT NULL").
+dbQuery = dbQuery.Having("last_played IS NOT NULL").
 			Order("last_played DESC")
 	case "starred":
 		dbQuery = dbQuery.Where("album_id3.starred IS NOT NULL").Order("album_id3.starred DESC")
