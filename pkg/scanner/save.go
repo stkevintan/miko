@@ -108,9 +108,11 @@ func (s *Scanner) saveResults(resultChan <-chan scanResult, cacheDir string) {
 						log.Warn("Failed to write album cover to cache for album %s: %v", albumID, err)
 					} else {
 						hasCover = true
-						seenAlbumsWithCover[albumID] = true
+						seenAlbumsWithCover[albumID] = hasCover
 						// Update the album record to include the cover art
-						s.db.Model(&models.AlbumID3{}).Where("id = ?", albumID).Update("cover_art", albumID)
+						if err := s.db.Model(&models.AlbumID3{}).Where("id = ?", albumID).Update("cover_art", albumID).Error; err != nil {
+							log.Warn("Failed to update album cover art in database for album %s: %v", albumID, err)
+						}
 					}
 				}
 
