@@ -161,6 +161,8 @@ func (s *Scanner) Scan(ctx context.Context, incremental bool) {
 					ContentType:   contentType,
 					MusicFolderID: task.folder.ID,
 					Created:       &modTime, // Corresponds to file modification time for incremental scans.
+					// TODO: Add audiobook support
+					Type: "music",
 				}
 
 				t, err := tags.Read(task.path)
