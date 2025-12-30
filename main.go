@@ -15,6 +15,7 @@ import (
 	"github.com/glebarez/sqlite"
 	"github.com/stkevintan/miko/config"
 	"github.com/stkevintan/miko/models"
+	"github.com/stkevintan/miko/pkg/browser"
 	"github.com/stkevintan/miko/pkg/cookiecloud"
 	"github.com/stkevintan/miko/pkg/di"
 	"github.com/stkevintan/miko/pkg/log"
@@ -97,6 +98,7 @@ func main() {
 	di.Provide(ctx, cfg)
 	di.Provide(ctx, db)
 	di.Provide(ctx, cfg.CookieCloud)
+	di.Provide(ctx, browser.New(db))
 	// TODO: factory pattern for scanner with config
 	di.Provide(ctx, scanner.New(db, cfg))
 

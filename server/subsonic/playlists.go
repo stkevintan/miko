@@ -5,13 +5,14 @@ import (
 	"strconv"
 
 	"github.com/stkevintan/miko/models"
+	"github.com/stkevintan/miko/pkg/browser"
 	"github.com/stkevintan/miko/pkg/di"
 	"github.com/stkevintan/miko/pkg/log"
 	"gorm.io/gorm"
 )
 
 func (s *Subsonic) handleGetPlaylists(w http.ResponseWriter, r *http.Request) {
-	db := di.MustInvoke[*gorm.DB](r.Context())
+	br := di.MustInvoke[*browser.Browser](r.Context())
 	username := string(di.MustInvoke[models.Username](r.Context()))
 
 	query := r.URL.Query()
@@ -19,60 +20,11 @@ func (s *Subsonic) handleGetPlaylists(w http.ResponseWriter, r *http.Request) {
 	if targetUsername == "" {
 		targetUsername = username
 	}
-	var playlists []models.PlaylistRecord
-	dbQuery := db.Model(&models.PlaylistRecord{})
-	dbQuery = dbQuery.Where("owner = ?", targetUsername)
-	if targetUsername != username {
-		dbQuery = dbQuery.Where("public = ?", true)
-	}
-	if err := dbQuery.Find(&playlists).Error; err != nil {
+
+	subsonicPlaylists, err := br.GetPlaylists(username, targetUsername)
+	if err != nil {
 		s.sendResponse(w, r, models.NewErrorResponse(0, "Failed to retrieve playlists"))
 		return
-	}
-
-	subsonicPlaylists := make([]models.Playlist, 0, len(playlists))
-	if len(playlists) > 0 {
-		playlistIDs := make([]uint, len(playlists))
-		for i, p := range playlists {
-			playlistIDs[i] = p.ID
-		}
-
-		type PlaylistStats struct {
-			PlaylistID uint
-			SongCount  int
-			Duration   int
-		}
-		var stats []PlaylistStats
-		err := db.Table("playlist_songs").
-			Select("playlist_id, COUNT(playlist_songs.id) as song_count, COALESCE(SUM(children.duration), 0) as duration").
-			Joins("LEFT JOIN children ON children.id = playlist_songs.song_id").
-			Where("playlist_id IN ?", playlistIDs).
-			Group("playlist_id").
-			Scan(&stats).Error
-		if err != nil {
-			s.sendResponse(w, r, models.NewErrorResponse(0, "Failed to retrieve playlist stats"))
-			return
-		}
-
-		statsMap := make(map[uint]PlaylistStats)
-		for _, s := range stats {
-			statsMap[s.PlaylistID] = s
-		}
-
-		for _, p := range playlists {
-			s := statsMap[p.ID]
-			subsonicPlaylists = append(subsonicPlaylists, models.Playlist{
-				ID:        strconv.FormatUint(uint64(p.ID), 10),
-				Name:      p.Name,
-				Comment:   p.Comment,
-				Owner:     p.Owner,
-				Public:    p.Public,
-				SongCount: s.SongCount,
-				Duration:  s.Duration,
-				Created:   p.CreatedAt,
-				Changed:   p.UpdatedAt,
-			})
-		}
 	}
 
 	resp := models.NewResponse(models.ResponseStatusOK)
@@ -83,56 +35,31 @@ func (s *Subsonic) handleGetPlaylists(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Subsonic) handleGetPlaylist(w http.ResponseWriter, r *http.Request) {
-	db := di.MustInvoke[*gorm.DB](r.Context())
+	br := di.MustInvoke[*browser.Browser](r.Context())
 	id, err := getQueryInt[uint](r, "id")
 	if err != nil {
 		s.sendResponse(w, r, models.NewErrorResponse(10, err.Error()))
 		return
 	}
 
-	var p models.PlaylistRecord
-	if err := db.First(&p, id).Error; err != nil {
-		s.sendResponse(w, r, models.NewErrorResponse(70, "Playlist not found"))
+	playlist, err := br.GetPlaylist(id)
+	if err != nil {
+		if err == gorm.ErrRecordNotFound {
+			s.sendResponse(w, r, models.NewErrorResponse(70, "Playlist not found"))
+		} else {
+			s.sendResponse(w, r, models.NewErrorResponse(0, "Failed to retrieve playlist"))
+		}
 		return
 	}
 
 	username := string(di.MustInvoke[models.Username](r.Context()))
-
-	if !p.Public && p.Owner != username {
+	if !playlist.Public && playlist.Owner != username {
 		s.sendResponse(w, r, models.NewErrorResponse(70, "Playlist not found"))
 		return
 	}
 
-	var songs []models.Child
-	if err := db.Model(&models.Child{}).
-		Joins("JOIN playlist_songs ON playlist_songs.song_id = children.id").
-		Where("playlist_songs.playlist_id = ?", p.ID).
-		Order("playlist_songs.position ASC").
-		Find(&songs).Error; err != nil {
-		s.sendResponse(w, r, models.NewErrorResponse(0, "Failed to retrieve songs"))
-		return
-	}
-
-	var duration int
-	for _, song := range songs {
-		duration += song.Duration
-	}
-
 	resp := models.NewResponse(models.ResponseStatusOK)
-	resp.Playlist = &models.PlaylistWithSongs{
-		Playlist: models.Playlist{
-			ID:        strconv.FormatUint(uint64(p.ID), 10),
-			Name:      p.Name,
-			Comment:   p.Comment,
-			Owner:     p.Owner,
-			Public:    p.Public,
-			SongCount: len(songs),
-			Duration:  duration,
-			Created:   p.CreatedAt,
-			Changed:   p.UpdatedAt,
-		},
-		Entry: songs,
-	}
+	resp.Playlist = playlist
 	s.sendResponse(w, r, resp)
 }
 

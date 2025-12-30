@@ -1,6 +1,5 @@
 [server]
 port = 8082
-# jwtSecret = "miko_secret" # If not set, a random secret will be generated and stored in the database
 
 [provider]
 # Default platform to use when none is specified
@@ -27,3 +26,8 @@ dsn = "${HOME}/.miko/miko.db"
 [subsonic]
 folders = ["${HOME}/Music"]
 dataDir = "${HOME}/.miko/data"
+# default mode of scanning: "full" or "inc"
+scanMode = "inc"
+# how to index music files: by "tag" or "filepath"
+browseMode = "tag"
+ignoredArticles = "The El La Los Las Le Les"
