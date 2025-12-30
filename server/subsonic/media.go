@@ -1,7 +1,6 @@
 package subsonic
 
 import (
-	"crypto/md5"
 	"fmt"
 	"hash/adler32"
 	"mime"
@@ -17,7 +16,8 @@ import (
 	"github.com/stkevintan/miko/models"
 	"github.com/stkevintan/miko/pkg/di"
 	"github.com/stkevintan/miko/pkg/log"
-	"go.senan.xyz/taglib"
+	"github.com/stkevintan/miko/pkg/scanner"
+	"github.com/stkevintan/miko/pkg/tags"
 	"gorm.io/gorm"
 )
 
@@ -80,7 +80,7 @@ func (s *Subsonic) handleGetCoverArt(w http.ResponseWriter, r *http.Request) {
 	}
 
 	cfg := di.MustInvoke[*config.Config](r.Context())
-	cacheDir := filepath.Join(cfg.Subsonic.DataDir, "cache", "covers")
+	cacheDir := scanner.GetCoverCacheDir(cfg)
 
 	// Try to serve from cache first
 	cachePath := filepath.Join(cacheDir, id)
@@ -112,7 +112,7 @@ func (s *Subsonic) handleGetCoverArt(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if path != "" {
-		if data, err := taglib.ReadImage(path); err == nil && len(data) > 0 {
+		if data, err := tags.ReadImage(path); err == nil && len(data) > 0 {
 			// Cache it for next time
 			if err := os.MkdirAll(cacheDir, 0755); err != nil {
 				log.Warn("Failed to create cover art cache directory %q: %v", cacheDir, err)
@@ -239,8 +239,7 @@ func (s *Subsonic) handleGetAvatar(w http.ResponseWriter, r *http.Request) {
 	cfg := di.MustInvoke[*config.Config](r.Context())
 	avatarDir := filepath.Join(cfg.Subsonic.DataDir, "avatars")
 
-	hash := md5.Sum([]byte(username))
-	filename := fmt.Sprintf("%x", hash)
+	filename := scanner.GenerateHash(username)
 
 	extensions := []string{".jpg", ".png"}
 	for _, ext := range extensions {

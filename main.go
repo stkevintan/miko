@@ -18,6 +18,7 @@ import (
 	"github.com/stkevintan/miko/pkg/cookiecloud"
 	"github.com/stkevintan/miko/pkg/di"
 	"github.com/stkevintan/miko/pkg/log"
+	"github.com/stkevintan/miko/pkg/scanner"
 	"github.com/stkevintan/miko/server"
 	"gorm.io/gorm"
 )
@@ -96,6 +97,8 @@ func main() {
 	di.Provide(ctx, cfg)
 	di.Provide(ctx, db)
 	di.Provide(ctx, cfg.CookieCloud)
+	// TODO: factory pattern for scanner with config
+	di.Provide(ctx, scanner.New(db, cfg))
 
 	// Initialize HTTP handler
 	h := server.New(ctx)

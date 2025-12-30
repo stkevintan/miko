@@ -8,6 +8,7 @@ import (
 	"github.com/stkevintan/miko/config"
 	"github.com/stkevintan/miko/models"
 	"github.com/stkevintan/miko/pkg/di"
+	"github.com/stkevintan/miko/pkg/scanner"
 	"gorm.io/gorm"
 )
 
@@ -32,6 +33,7 @@ func (s *Subsonic) handleGetMusicFolders(w http.ResponseWriter, r *http.Request)
 
 func (s *Subsonic) handleGetIndexes(w http.ResponseWriter, r *http.Request) {
 	db := di.MustInvoke[*gorm.DB](r.Context())
+	sc := di.MustInvoke[*scanner.Scanner](r.Context())
 
 	var children []models.Child
 	query := db.Where("is_dir = ?", true).Where("parent = ?", "")
@@ -65,7 +67,7 @@ func (s *Subsonic) handleGetIndexes(w http.ResponseWriter, r *http.Request) {
 
 	resp := models.NewResponse(models.ResponseStatusOK)
 	resp.Indexes = &models.Indexes{
-		LastModified: lastScanTime.Load(),
+		LastModified: sc.LastScanTime(),
 		Index:        indexes,
 	}
 	s.sendResponse(w, r, resp)

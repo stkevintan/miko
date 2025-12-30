@@ -42,7 +42,7 @@ func (h *Handler) getApiRequestContext(r *http.Request) (context.Context, error)
 	di.Provide(ctx, jar)
 
 	// Register providers in this scope so they can resolve the CookieJar
-	neteaseProvider, err := netease.NewNetEaseProvider(ctx)
+	neteaseProvider, err := netease.NewProvider(jar)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create netease provider: %w", err)
 	}
