@@ -4,6 +4,7 @@ import (
 	"context"
 	"net/http"
 
+	"github.com/stkevintan/miko/config"
 	"github.com/stkevintan/miko/models"
 	"github.com/stkevintan/miko/pkg/di"
 	"github.com/stkevintan/miko/pkg/scanner"
@@ -26,7 +27,15 @@ func (s *Subsonic) handleGetScanStatus(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Subsonic) handleStartScan(w http.ResponseWriter, r *http.Request) {
-	incremental := isPositive(r.URL.Query().Get("inc"))
+	query := r.URL.Query()
+	var incremental bool
+	if query.Has("inc") {
+		incremental = isPositive(query.Get("inc"))
+	} else {
+		cfg := di.MustInvoke[*config.Config](r.Context())
+		incremental = cfg.Subsonic.ScanMode != "full"
+	}
+
 	sc := di.MustInvoke[*scanner.Scanner](r.Context())
 	db := di.MustInvoke[*gorm.DB](r.Context())
 

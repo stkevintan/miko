@@ -34,27 +34,57 @@ func (s *Subsonic) handleGetMusicFolders(w http.ResponseWriter, r *http.Request)
 func (s *Subsonic) handleGetIndexes(w http.ResponseWriter, r *http.Request) {
 	db := di.MustInvoke[*gorm.DB](r.Context())
 	sc := di.MustInvoke[*scanner.Scanner](r.Context())
+	cfg := di.MustInvoke[*config.Config](r.Context())
 
-	var children []models.Child
-	query := db.Where("is_dir = ?", true).Where("parent = ?", "")
-	folderID, err := getQueryInt[uint](r, "musicFolderId")
-	if err == nil {
-		query = query.Where("music_folder_id = ?", folderID)
-	}
-	query.Find(&children)
-
-	// Group by first letter
 	indexMap := make(map[string][]models.Artist)
-	for _, child := range children {
-		name := child.Title
-		if name == "" {
-			continue
+	folderID, err := getQueryInt[uint](r, "musicFolderId")
+	hasFolderId := err == nil
+
+	if cfg.Subsonic.BrowseMode == "tag" {
+		var artists []models.ArtistID3
+		query := db.Model(&models.ArtistID3{})
+		query = query.Joins("JOIN song_artists ON song_artists.artist_id3_id = artist_id3.id").
+			Joins("JOIN children ON children.id = song_artists.child_id")
+		if hasFolderId {
+			query = query.Where("children.music_folder_id = ?", folderID)
 		}
-		firstChar := strings.ToUpper(name[:1])
-		indexMap[firstChar] = append(indexMap[firstChar], models.Artist{
-			ID:   child.ID,
-			Name: child.Title,
-		})
+		if err := query.Group("artist_id3.id").Find(&artists).Error; err != nil {
+			s.sendResponse(w, r, models.NewErrorResponse(0, "Failed to query artists"))
+			return
+		}
+		for _, artist := range artists {
+			if artist.Name == "" {
+				continue
+			}
+			firstChar := strings.ToUpper(artist.Name[:1])
+			indexMap[firstChar] = append(indexMap[firstChar], models.Artist{
+				ID:   artist.ID,
+				Name: artist.Name,
+			})
+		}
+	} else {
+		var children []models.Child
+		query := db.Where("is_dir = ?", true).Where("parent = ?", "")
+		if hasFolderId {
+			query = query.Where("music_folder_id = ?", folderID)
+		}
+
+		if err := query.Find(&children).Error; err != nil {
+			s.sendResponse(w, r, models.NewErrorResponse(0, "Failed to query artists"))
+			return
+		}
+
+		for _, child := range children {
+			name := child.Title
+			if name == "" {
+				continue
+			}
+			firstChar := strings.ToUpper(name[:1])
+			indexMap[firstChar] = append(indexMap[firstChar], models.Artist{
+				ID:   child.ID,
+				Name: child.Title,
+			})
+		}
 	}
 
 	var indexes []models.Index
@@ -80,6 +110,72 @@ func (s *Subsonic) handleGetMusicDirectory(w http.ResponseWriter, r *http.Reques
 		return
 	}
 	db := di.MustInvoke[*gorm.DB](r.Context())
+	cfg := di.MustInvoke[*config.Config](r.Context())
+
+	if cfg.Subsonic.BrowseMode == "tag" {
+		// Try to find as artist first
+		var artist models.ArtistID3
+		if err := db.Where("id = ?", id).First(&artist).Error; err == nil {
+			// It's an artist, return their albums as directories
+			var albums []models.AlbumID3
+			db.Scopes(models.AlbumWithStats(false)).
+				Joins("JOIN album_artists ON album_artists.album_id3_id = album_id3.id").
+				Where("album_artists.artist_id3_id = ?", artist.ID).
+				Find(&albums)
+
+			children := make([]models.Child, len(albums))
+			for i, a := range albums {
+				children[i] = models.Child{
+					ID:        a.ID,
+					Parent:    artist.ID,
+					IsDir:     true,
+					Title:     a.Name,
+					Artist:    a.Artist,
+					ArtistID:  a.ArtistID,
+					CoverArt:  a.CoverArt,
+					Duration:  a.Duration,
+					PlayCount: a.PlayCount,
+					Starred:   a.Starred,
+					Year:      a.Year,
+					Genre:     a.Genre,
+					Created:   &a.Created,
+				}
+			}
+
+			resp := models.NewResponse(models.ResponseStatusOK)
+			resp.Directory = &models.Directory{
+				ID:      artist.ID,
+				Name:    artist.Name,
+				Starred: artist.Starred,
+				Child:   children,
+			}
+			s.sendResponse(w, r, resp)
+			return
+		}
+
+		// Try to find as album
+		var album models.AlbumID3
+		if err := db.Where("id = ?", id).First(&album).Error; err != nil {
+			s.sendResponse(w, r, models.NewErrorResponse(70, "Directory not found"))
+			return
+		}
+		// It's an album, return its songs
+		var songs []models.Child
+		db.Where("album_id = ?", album.ID).Order("disc_number, track").Find(&songs)
+
+		resp := models.NewResponse(models.ResponseStatusOK)
+		resp.Directory = &models.Directory{
+			ID:      album.ID,
+			Parent:  album.ArtistID,
+			Name:    album.Name,
+			Starred: album.Starred,
+			Child:   songs,
+		}
+		s.sendResponse(w, r, resp)
+		return
+	}
+
+	// Fallback to folder-based browsing
 	var dir models.Child
 	if err := db.Where("id = ? AND is_dir = ?", id, true).First(&dir).Error; err != nil {
 		s.sendResponse(w, r, models.NewErrorResponse(70, "Directory not found"))

@@ -59,8 +59,10 @@ type ServerConfig struct {
 }
 
 type SubsonicConfig struct {
-	Folders []string `json:"folders" mapstructure:"folders"`
-	DataDir string   `json:"dataDir" mapstructure:"dataDir"`
+	Folders    []string `json:"folders" mapstructure:"folders"`
+	DataDir    string   `json:"dataDir" mapstructure:"dataDir"`
+	ScanMode   string   `json:"scanMode" mapstructure:"scanMode"`
+	BrowseMode string   `json:"browseMode" mapstructure:"browseMode"`
 }
 
 type DatabaseConfig struct {
