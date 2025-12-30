@@ -69,7 +69,6 @@ func (s *Scanner) Prune(seenIDs *sync.Map) {
 			return err
 		}
 
-
 		// 6. Prune orphaned artists
 		// This is a bit more complex because artists can be linked to songs or albums
 		result = tx.Exec(`
