@@ -547,19 +547,21 @@ func NewErrorResponse(code int, message string) *SubsonicResponse {
 func AlbumWithStats(includeLastPlayed bool) func(db *gorm.DB) *gorm.DB {
 	return func(db *gorm.DB) *gorm.DB {
 		selects := "album_id3.*, " +
-			"(SELECT COUNT(*) FROM children WHERE album_id = album_id3.id AND is_dir = false) AS song_count, " +
-			"(SELECT CAST(IFNULL(SUM(duration), 0) AS INTEGER) FROM children WHERE album_id = album_id3.id AND is_dir = false) AS duration, " +
-			"(SELECT CAST(IFNULL(SUM(play_count), 0) AS INTEGER) FROM children WHERE album_id = album_id3.id AND is_dir = false) AS play_count"
+			"COALESCE(stats.song_count, 0) AS song_count, " +
+			"CAST(COALESCE(stats.duration, 0) AS INTEGER) AS duration, " +
+			"CAST(COALESCE(stats.play_count, 0) AS INTEGER) AS play_count"
 
 		if includeLastPlayed {
+			// Use correlated subquery for last_played to avoid SQLite type affinity issues with MAX() in subqueries
 			selects += ", (SELECT last_played FROM children WHERE album_id = album_id3.id AND is_dir = false ORDER BY last_played DESC LIMIT 1) AS last_played"
 		}
 
-		return db.Select(selects)
+		return db.Select(selects).
+			Joins("LEFT JOIN (SELECT album_id, COUNT(*) as song_count, SUM(duration) as duration, SUM(play_count) as play_count FROM children WHERE is_dir = false GROUP BY album_id) stats ON stats.album_id = album_id3.id")
 	}
 }
 
 func ArtistWithStats(db *gorm.DB) *gorm.DB {
-	return db.Select("artist_id3.*, " +
-		"(SELECT COUNT(*) FROM album_artists WHERE artist_id3_id = artist_id3.id) AS album_count")
+	return db.Select("artist_id3.*, COALESCE(stats.album_count, 0) AS album_count").
+		Joins("LEFT JOIN (SELECT artist_id3_id, COUNT(*) as album_count FROM album_artists GROUP BY artist_id3_id) stats ON stats.artist_id3_id = artist_id3.id")
 }
