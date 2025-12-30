@@ -251,7 +251,7 @@ type Child struct {
 	ArtistID              string      `gorm:"index" xml:"artistId,attr,omitempty" json:"artistId,omitempty"`
 	MusicFolderID         uint        `gorm:"index" xml:"-" json:"musicFolderId,omitempty"`
 	Type                  string      `xml:"type,attr,omitempty" json:"type,omitempty"`
-	BookmarkPosition      int64       `xml:"bookmarkPosition,attr,omitempty" json:"bookmarkPosition,omitempty"`
+	BookmarkPosition      int64       `gorm:"-" xml:"bookmarkPosition,attr,omitempty" json:"bookmarkPosition,omitempty"`
 	OriginalWidth         int         `xml:"originalWidth,attr,omitempty" json:"originalWidth,omitempty"`
 	OriginalHeight        int         `xml:"originalHeight,attr,omitempty" json:"originalHeight,omitempty"`
 	Artists               []ArtistID3 `gorm:"many2many:song_artists;" xml:"-" json:"-"`
@@ -432,8 +432,8 @@ type Bookmark struct {
 }
 
 type PlayQueue struct {
-	Current   int       `xml:"current,attr,omitempty" json:"current,omitempty"`
-	Position  int64     `xml:"position,attr,omitempty" json:"position,omitempty"`
+	Current   string    `xml:"current,attr" json:"current"`
+	Position  int64     `xml:"position,attr" json:"position"`
 	Username  string    `xml:"username,attr" json:"username"`
 	Changed   time.Time `xml:"changed,attr" json:"changed"`
 	ChangedBy string    `xml:"changedBy,attr" json:"changedBy"`
