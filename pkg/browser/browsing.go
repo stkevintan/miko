@@ -35,15 +35,7 @@ func (b *Browser) getIndexesByTag(folderID uint, hasFolderId bool, ignoredArticl
 			continue
 		}
 
-		name := artist.Name
-		upperName := strings.ToUpper(name)
-		for _, article := range articles {
-			prefix := strings.ToUpper(article) + " "
-			if strings.HasPrefix(upperName, prefix) {
-				name = name[len(prefix):]
-				break
-			}
-		}
+		name := stripArticles(artist.Name, articles)
 
 		firstChar := strings.ToUpper(string([]rune(name)[0]))
 		indexMap[firstChar] = append(indexMap[firstChar], models.Artist{
@@ -75,15 +67,7 @@ func (b *Browser) getIndexesByFile(folderID uint, hasFolderId bool, ignoredArtic
 			continue
 		}
 
-		sortName := name
-		upperName := strings.ToUpper(sortName)
-		for _, article := range articles {
-			prefix := strings.ToUpper(article) + " "
-			if strings.HasPrefix(upperName, prefix) {
-				sortName = sortName[len(prefix):]
-				break
-			}
-		}
+		sortName := stripArticles(name, articles)
 
 		firstChar := strings.ToUpper(string([]rune(sortName)[0]))
 		indexMap[firstChar] = append(indexMap[firstChar], models.Artist{
@@ -225,15 +209,7 @@ func (b *Browser) GetArtists(ignoredArticles string) ([]models.IndexID3, error) 
 			continue
 		}
 
-		name := artist.Name
-		upperName := strings.ToUpper(name)
-		for _, article := range articles {
-			prefix := strings.ToUpper(article) + " "
-			if strings.HasPrefix(upperName, prefix) {
-				name = name[len(prefix):]
-				break
-			}
-		}
+		name := stripArticles(artist.Name, articles)
 
 		firstChar := strings.ToUpper(string([]rune(name)[0]))
 		indexMap[firstChar] = append(indexMap[firstChar], artist)
@@ -297,4 +273,15 @@ func (b *Browser) GetSong(id string) (*models.Child, error) {
 		return nil, err
 	}
 	return &song, nil
+}
+
+func stripArticles(name string, articles []string) string {
+	upperName := strings.ToUpper(name)
+	for _, article := range articles {
+		prefix := strings.ToUpper(article) + " "
+		if strings.HasPrefix(upperName, prefix) {
+			return name[len(prefix):]
+		}
+	}
+	return name
 }

@@ -194,12 +194,15 @@ func (s *Subsonic) handleGetSongsByGenre(w http.ResponseWriter, r *http.Request)
 	s.sendResponse(w, r, resp)
 }
 
-func (s *Subsonic) handleGetStarred(w http.ResponseWriter, r *http.Request) {
+func (s *Subsonic) getStarredItems(r *http.Request) ([]models.ArtistID3, []models.AlbumID3, []models.Child, error) {
 	br := di.MustInvoke[*browser.Browser](r.Context())
 	musicFolderId, err := getQueryInt[uint](r, "musicFolderId")
 	hasFolderId := err == nil
+	return br.GetStarredItems(musicFolderId, hasFolderId)
+}
 
-	artists, albums, songs, err := br.GetStarredItems(musicFolderId, hasFolderId)
+func (s *Subsonic) handleGetStarred(w http.ResponseWriter, r *http.Request) {
+	artists, albums, songs, err := s.getStarredItems(r)
 	if err != nil {
 		s.sendResponse(w, r, models.NewErrorResponse(0, err.Error()))
 		return
@@ -245,11 +248,7 @@ func (s *Subsonic) handleGetStarred(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Subsonic) handleGetStarred2(w http.ResponseWriter, r *http.Request) {
-	br := di.MustInvoke[*browser.Browser](r.Context())
-	musicFolderId, err := getQueryInt[uint](r, "musicFolderId")
-	hasFolderId := err == nil
-
-	artists, albums, songs, err := br.GetStarredItems(musicFolderId, hasFolderId)
+	artists, albums, songs, err := s.getStarredItems(r)
 	if err != nil {
 		s.sendResponse(w, r, models.NewErrorResponse(0, err.Error()))
 		return

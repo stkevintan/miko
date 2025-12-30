@@ -33,25 +33,7 @@ func (s *Subsonic) handleSearch(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Subsonic) handleSearch2(w http.ResponseWriter, r *http.Request) {
-	br := di.MustInvoke[*browser.Browser](r.Context())
-	query := r.URL.Query().Get("query")
-	query = strings.Trim(query, " \"'")
-
-	musicFolderId, err := getQueryInt[uint](r, "musicFolderId")
-	hasFolderId := err == nil
-
-	artists, albums, songs, err := br.Search(browser.SearchOptions{
-		Query:         query,
-		ArtistCount:   getQueryIntOrDefault(r, "artistCount", 20),
-		ArtistOffset:  getQueryIntOrDefault(r, "artistOffset", 0),
-		AlbumCount:    getQueryIntOrDefault(r, "albumCount", 20),
-		AlbumOffset:   getQueryIntOrDefault(r, "albumOffset", 0),
-		SongCount:     getQueryIntOrDefault(r, "songCount", 20),
-		SongOffset:    getQueryIntOrDefault(r, "songOffset", 0),
-		MusicFolderID: musicFolderId,
-		HasFolderID:   hasFolderId,
-	})
-
+	artists, albums, songs, err := s.search(r)
 	if err != nil {
 		s.sendResponse(w, r, models.NewErrorResponse(0, err.Error()))
 		return
@@ -97,25 +79,7 @@ func (s *Subsonic) handleSearch2(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Subsonic) handleSearch3(w http.ResponseWriter, r *http.Request) {
-	br := di.MustInvoke[*browser.Browser](r.Context())
-	query := r.URL.Query().Get("query")
-	query = strings.Trim(query, " \"'")
-
-	musicFolderId, err := getQueryInt[uint](r, "musicFolderId")
-	hasFolderId := err == nil
-
-	artists, albums, songs, err := br.Search(browser.SearchOptions{
-		Query:         query,
-		ArtistCount:   getQueryIntOrDefault(r, "artistCount", 20),
-		ArtistOffset:  getQueryIntOrDefault(r, "artistOffset", 0),
-		AlbumCount:    getQueryIntOrDefault(r, "albumCount", 20),
-		AlbumOffset:   getQueryIntOrDefault(r, "albumOffset", 0),
-		SongCount:     getQueryIntOrDefault(r, "songCount", 20),
-		SongOffset:    getQueryIntOrDefault(r, "songOffset", 0),
-		MusicFolderID: musicFolderId,
-		HasFolderID:   hasFolderId,
-	})
-
+	artists, albums, songs, err := s.search(r)
 	if err != nil {
 		s.sendResponse(w, r, models.NewErrorResponse(0, err.Error()))
 		return
@@ -128,4 +92,25 @@ func (s *Subsonic) handleSearch3(w http.ResponseWriter, r *http.Request) {
 		Song:   songs,
 	}
 	s.sendResponse(w, r, resp)
+}
+
+func (s *Subsonic) search(r *http.Request) ([]models.ArtistID3, []models.AlbumID3, []models.Child, error) {
+	br := di.MustInvoke[*browser.Browser](r.Context())
+	query := r.URL.Query().Get("query")
+	query = strings.Trim(query, " \"'")
+
+	musicFolderId, err := getQueryInt[uint](r, "musicFolderId")
+	hasFolderId := err == nil
+
+	return br.Search(browser.SearchOptions{
+		Query:         query,
+		ArtistCount:   getQueryIntOrDefault(r, "artistCount", 20),
+		ArtistOffset:  getQueryIntOrDefault(r, "artistOffset", 0),
+		AlbumCount:    getQueryIntOrDefault(r, "albumCount", 20),
+		AlbumOffset:   getQueryIntOrDefault(r, "albumOffset", 0),
+		SongCount:     getQueryIntOrDefault(r, "songCount", 20),
+		SongOffset:    getQueryIntOrDefault(r, "songOffset", 0),
+		MusicFolderID: musicFolderId,
+		HasFolderID:   hasFolderId,
+	})
 }

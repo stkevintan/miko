@@ -80,8 +80,12 @@ func (b *Browser) GetPlaylist(id uint) (*models.PlaylistWithSongs, error) {
 	}
 
 	var duration int
-	for _, song := range songs {
-		duration += song.Duration
+	if err := b.db.Table("children").
+		Joins("JOIN playlist_songs ON playlist_songs.song_id = children.id").
+		Where("playlist_songs.playlist_id = ?", id).
+		Select("COALESCE(SUM(children.duration), 0)").
+		Scan(&duration).Error; err != nil {
+		return nil, err
 	}
 
 	return &models.PlaylistWithSongs{
