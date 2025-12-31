@@ -2,7 +2,6 @@
 import { ref } from 'vue';
 import { useAuthStore } from '../stores/auth';
 import { useRouter } from 'vue-router';
-import { encryptPassword } from '../utils/crypto';
 import Card from 'primevue/card';
 import InputText from 'primevue/inputtext';
 import Password from 'primevue/password';
@@ -21,8 +20,7 @@ const handleLogin = async () => {
   error.value = '';
   loading.value = true;
   try {
-    const encrypted = encryptPassword(password.value);
-    await authStore.login(username.value, encrypted);
+    await authStore.login(username.value, password.value);
     router.push('/');
   } catch (err: any) {
     error.value = err.response?.data?.error || 'Login failed. Please check your credentials.';
