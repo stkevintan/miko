@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, onMounted } from 'vue';
+import { ref, onMounted, computed } from 'vue';
 import { useAuthStore } from '../stores/auth';
 import api from '../api';
 import Card from 'primevue/card';
@@ -50,7 +50,7 @@ onMounted(async () => {
   }
 });
 
-const roles = [
+const roles = computed(() => [
   { label: 'Admin', value: authStore.user?.adminRole },
   { label: 'Settings', value: authStore.user?.settingsRole },
   { label: 'Download', value: authStore.user?.downloadRole },
@@ -59,7 +59,7 @@ const roles = [
   { label: 'Stream', value: authStore.user?.streamRole },
   { label: 'Jukebox', value: authStore.user?.jukeboxRole },
   { label: 'Share', value: authStore.user?.shareRole },
-];
+]);
 </script>
 
 <template>

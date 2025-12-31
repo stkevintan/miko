@@ -7,6 +7,7 @@ import (
 	"github.com/stkevintan/miko/models"
 	"github.com/stkevintan/miko/pkg/crypto"
 	"github.com/stkevintan/miko/pkg/di"
+	"github.com/stkevintan/miko/pkg/log"
 	"gorm.io/gorm"
 )
 
@@ -26,7 +27,13 @@ func (h *Handler) handleLogin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if !crypto.VerifyPassword(ctx, user.Password, req.Password) {
+	verified, err := crypto.VerifyPassword(ctx, user.Password, req.Password)
+	if err != nil {
+		log.Error("Failed to verify password: %v", err)
+		JSON(w, http.StatusInternalServerError, models.ErrorResponse{Error: "Authentication error"})
+		return
+	}
+	if !verified {
 		JSON(w, http.StatusUnauthorized, models.ErrorResponse{Error: "Invalid username or password"})
 		return
 	}
@@ -78,12 +85,23 @@ func (h *Handler) handleChangePassword(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if !crypto.VerifyPassword(ctx, user.Password, req.OldPassword) {
+	verified, err := crypto.VerifyPassword(ctx, user.Password, req.OldPassword)
+	if err != nil {
+		log.Error("Failed to verify password: %v", err)
+		JSON(w, http.StatusInternalServerError, models.ErrorResponse{Error: "Authentication error"})
+		return
+	}
+	if !verified {
 		JSON(w, http.StatusUnauthorized, models.ErrorResponse{Error: "Invalid old password"})
 		return
 	}
 
-	passwordSecret := crypto.ResolvePasswordSecret(ctx)
+	passwordSecret, err := crypto.ResolvePasswordSecret(ctx)
+	if err != nil {
+		log.Error("Failed to resolve password secret: %v", err)
+		JSON(w, http.StatusInternalServerError, models.ErrorResponse{Error: "Configuration error"})
+		return
+	}
 	encryptedPassword, err := crypto.Encrypt(req.NewPassword, passwordSecret)
 	if err != nil {
 		JSON(w, http.StatusInternalServerError, models.ErrorResponse{Error: "Failed to encrypt password"})

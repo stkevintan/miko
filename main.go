@@ -91,9 +91,10 @@ func main() {
 	if count == 0 {
 		password := "adminpassword"
 		// Try to encrypt if secret is available
-		if secret := crypto.ResolvePasswordSecret(ctx); secret != nil {
-			if encrypted, err := crypto.Encrypt(password, secret); err == nil {
-				password = encrypted
+		if secret, err := crypto.ResolvePasswordSecret(ctx); err == nil {
+			password, err = crypto.Encrypt(password, secret)
+			if err != nil {
+				log.Fatalf("Failed to encrypt default admin password: %v", err)
 			}
 		}
 		defaultUser := models.User{
