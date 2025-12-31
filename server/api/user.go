@@ -26,7 +26,7 @@ func (h *Handler) handleLogin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if crypto.DecryptPassword(ctx, user.Password) != req.Password {
+	if !crypto.VerifyPassword(ctx, user.Password, req.Password) {
 		JSON(w, http.StatusUnauthorized, models.ErrorResponse{Error: "Invalid username or password"})
 		return
 	}
@@ -78,7 +78,7 @@ func (h *Handler) handleChangePassword(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if crypto.DecryptPassword(ctx, user.Password) != req.OldPassword {
+	if !crypto.VerifyPassword(ctx, user.Password, req.OldPassword) {
 		JSON(w, http.StatusUnauthorized, models.ErrorResponse{Error: "Invalid old password"})
 		return
 	}

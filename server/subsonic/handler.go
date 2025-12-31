@@ -1,7 +1,6 @@
 package subsonic
 
 import (
-	"crypto/md5"
 	"encoding/json"
 	"encoding/xml"
 	"fmt"
@@ -188,18 +187,15 @@ func (s *Subsonic) subsonicAuth(next http.Handler) http.Handler {
 			return
 		}
 
-		decryptedPassword := crypto.DecryptPassword(r.Context(), user.Password)
-
 		authenticated := false
 		if password != "" {
 			// Clear text password auth
-			if decryptedPassword == password {
+			if crypto.VerifyPassword(r.Context(), user.Password, password) {
 				authenticated = true
 			}
 		} else if token != "" && salt != "" {
 			// Token auth: t = md5(password + salt)
-			expectedToken := fmt.Sprintf("%x", md5.Sum([]byte(decryptedPassword+salt)))
-			if expectedToken == token {
+			if crypto.VerifySubsonicToken(r.Context(), user.Password, token, salt) {
 				authenticated = true
 			}
 		}

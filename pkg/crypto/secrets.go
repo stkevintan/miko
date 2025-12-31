@@ -2,6 +2,8 @@ package crypto
 
 import (
 	"context"
+	"crypto/md5"
+	"fmt"
 
 	"github.com/stkevintan/miko/config"
 	"github.com/stkevintan/miko/pkg/di"
@@ -42,4 +44,17 @@ func DecryptPassword(ctx context.Context, storedPassword string) string {
 		return storedPassword
 	}
 	return decrypted
+}
+
+// VerifyPassword verifies if the provided plain text password matches the stored password.
+func VerifyPassword(ctx context.Context, storedPassword, plainPassword string) bool {
+	return DecryptPassword(ctx, storedPassword) == plainPassword
+}
+
+// VerifySubsonicToken verifies the Subsonic token authentication.
+// token = md5(password + salt)
+func VerifySubsonicToken(ctx context.Context, storedPassword, token, salt string) bool {
+	decrypted := DecryptPassword(ctx, storedPassword)
+	expectedToken := fmt.Sprintf("%x", md5.Sum([]byte(decrypted+salt)))
+	return expectedToken == token
 }

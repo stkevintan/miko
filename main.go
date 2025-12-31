@@ -15,10 +15,10 @@ import (
 	"github.com/glebarez/sqlite"
 	"github.com/stkevintan/miko/config"
 	"github.com/stkevintan/miko/models"
-	"github.com/stkevintan/miko/pkg/auth"
 	"github.com/stkevintan/miko/pkg/bookmarks"
 	"github.com/stkevintan/miko/pkg/browser"
 	"github.com/stkevintan/miko/pkg/cookiecloud"
+	"github.com/stkevintan/miko/pkg/crypto"
 	"github.com/stkevintan/miko/pkg/di"
 	"github.com/stkevintan/miko/pkg/log"
 	"github.com/stkevintan/miko/pkg/scanner"
@@ -91,8 +91,8 @@ func main() {
 	if count == 0 {
 		password := "adminpassword"
 		// Try to encrypt if secret is available
-		if secret := auth.ResolvePasswordSecret(ctx); secret != nil {
-			if encrypted, err := auth.Encrypt(password, secret); err == nil {
+		if secret := crypto.ResolvePasswordSecret(ctx); secret != nil {
+			if encrypted, err := crypto.Encrypt(password, secret); err == nil {
 				password = encrypted
 			}
 		}
