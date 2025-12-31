@@ -1,16 +1,7 @@
 <script setup lang="ts">
-import { onMounted } from 'vue';
+import { useTheme } from './composables/useTheme';
 
-onMounted(() => {
-  const isDark = localStorage.getItem('theme') === 'dark' || 
-    (!localStorage.getItem('theme') && window.matchMedia('(prefers-color-scheme: dark)').matches);
-  
-  if (isDark) {
-    document.documentElement.classList.add('dark');
-  } else {
-    document.documentElement.classList.remove('dark');
-  }
-});
+useTheme();
 </script>
 
 <template>

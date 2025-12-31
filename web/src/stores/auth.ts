@@ -1,10 +1,21 @@
 import { defineStore } from 'pinia';
 import api from '../api';
-
+export interface User {
+  username: string
+  email?: string
+  adminRole: boolean
+  settingsRole: boolean
+  downloadRole: boolean
+  uploadRole: boolean
+  playlistRole: boolean
+  streamRole: boolean
+  jukeboxRole: boolean
+  shareRole: boolean
+}
 export const useAuthStore = defineStore('auth', {
   state: () => ({
     token: localStorage.getItem('token') || null,
-    user: null as any | null,
+    user: null as User | null,
   }),
   getters: {
     isAuthenticated: (state) => !!state.token,

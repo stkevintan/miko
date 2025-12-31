@@ -38,18 +38,9 @@ const handleLogout = () => {
   router.push('/login');
 };
 
-const isDark = ref(document.documentElement.classList.contains('dark'));
+import { useTheme } from '../composables/useTheme';
 
-const toggleDarkMode = () => {
-  isDark.value = !isDark.value;
-  if (isDark.value) {
-    document.documentElement.classList.add('dark');
-    localStorage.setItem('theme', 'dark');
-  } else {
-    document.documentElement.classList.remove('dark');
-    localStorage.setItem('theme', 'light');
-  }
-};
+const { isDark, toggleDarkMode } = useTheme();
 </script>
 
 <template>
