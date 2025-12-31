@@ -1,7 +1,6 @@
 package subsonic
 
 import (
-	"crypto/md5"
 	"encoding/json"
 	"encoding/xml"
 	"fmt"
@@ -10,7 +9,9 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"github.com/stkevintan/miko/models"
+	"github.com/stkevintan/miko/pkg/crypto"
 	"github.com/stkevintan/miko/pkg/di"
+	"github.com/stkevintan/miko/pkg/log"
 	"gorm.io/gorm"
 )
 
@@ -188,17 +189,19 @@ func (s *Subsonic) subsonicAuth(next http.Handler) http.Handler {
 		}
 
 		authenticated := false
+		var verified bool
+		var err error
 		if password != "" {
 			// Clear text password auth
-			if user.Password == password {
-				authenticated = true
-			}
+			verified, err = crypto.VerifyPassword(r.Context(), user.Password, password)
 		} else if token != "" && salt != "" {
 			// Token auth: t = md5(password + salt)
-			expectedToken := fmt.Sprintf("%x", md5.Sum([]byte(user.Password+salt)))
-			if expectedToken == token {
-				authenticated = true
-			}
+			verified, err = crypto.VerifySubsonicToken(r.Context(), user.Password, token, salt)
+		}
+		if err == nil && verified {
+			authenticated = true
+		} else if err != nil {
+			log.Error("Subsonic auth error: %v", err)
 		}
 
 		if !authenticated {

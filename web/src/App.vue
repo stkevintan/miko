@@ -1,21 +1,23 @@
 <script setup lang="ts">
-const year = new Date().getFullYear();
+import { useTheme } from './composables/useTheme';
+
+useTheme();
 </script>
 
 <template>
-    <main class="page">
-        <h1>miko-web</h1>
-        <p>Vite + Vue 3 + TypeScript</p>
-        <small>© {{ year }}</small>
-    </main>
+  <router-view />
 </template>
 
-<style scoped>
-.page {
-    min-height: 100vh;
-    display: grid;
-    place-content: center;
-    gap: 8px;
-    text-align: center;
+<style>
+#app {
+  font-family: Avenir, Helvetica, Arial, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  color: #2c3e50;
+}
+
+body {
+  margin: 0;
+  padding: 0;
 }
 </style>

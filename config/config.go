@@ -54,8 +54,9 @@ func (c *Config) Validate() error {
 }
 
 type ServerConfig struct {
-	Port      int    `json:"port" mapstructure:"port"`
-	JWTSecret string `json:"jwtSecret" mapstructure:"jwtSecret"`
+	Port           int    `json:"port" mapstructure:"port"`
+	JWTSecret      string `json:"jwtSecret" mapstructure:"jwtSecret"`
+	PasswordSecret string `json:"passwordSecret" mapstructure:"passwordSecret"`
 }
 
 type SubsonicConfig struct {
