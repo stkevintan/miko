@@ -15,6 +15,7 @@ import (
 	"github.com/glebarez/sqlite"
 	"github.com/stkevintan/miko/config"
 	"github.com/stkevintan/miko/models"
+	"github.com/stkevintan/miko/pkg/auth"
 	"github.com/stkevintan/miko/pkg/bookmarks"
 	"github.com/stkevintan/miko/pkg/browser"
 	"github.com/stkevintan/miko/pkg/cookiecloud"
@@ -83,9 +84,19 @@ func main() {
 	var count int64
 	db.Model(&models.User{}).Count(&count)
 	if count == 0 {
+		// Resolve password secret to encrypt default password
+		ctx := di.NewContext(context.Background())
+		di.Provide(ctx, cfg)
+		di.Provide(ctx, db)
+		passwordSecret := auth.ResolvePasswordSecret(ctx)
+		encryptedPassword, err := auth.Encrypt("adminpassword", passwordSecret)
+		if err != nil {
+			log.Fatalf("Failed to encrypt default password: %v", err)
+		}
+
 		defaultUser := models.User{
 			Username:  "admin",
-			Password:  "adminpassword",
+			Password:  encryptedPassword,
 			AdminRole: true,
 		}
 		if err := db.Create(&defaultUser).Error; err != nil {

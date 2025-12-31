@@ -1,10 +1,10 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue';
 import { useAuthStore } from '../stores/auth';
+import { encryptPassword } from '../utils/crypto';
 import api from '../api';
 import Card from 'primevue/card';
 import Button from 'primevue/button';
-import InputText from 'primevue/inputtext';
 import Password from 'primevue/password';
 import Message from 'primevue/message';
 import Tag from 'primevue/tag';
@@ -30,8 +30,8 @@ const handleChangePassword = async () => {
   loading.value = true;
   try {
     await api.post('/change-password', {
-      oldPassword: oldPassword.value,
-      newPassword: newPassword.value
+      oldPassword: encryptPassword(oldPassword.value),
+      newPassword: encryptPassword(newPassword.value)
     });
     success.value = 'Password changed successfully';
     oldPassword.value = '';
