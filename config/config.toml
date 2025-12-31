@@ -1,5 +1,9 @@
 [server]
 port = 8082
+# Secret used for encrypting passwords in the database. Better to set via environment variable MIKO_PASSWORD_SECRET
+passwordSecret = "your-32-character-secret-here"
+# Secret used for signing JWT tokens. Better to set via environment variable MIKO_JWT_SECRET
+jwtSecret = "your-32-character-jwt-secret-here"
 
 [provider]
 # Default platform to use when none is specified

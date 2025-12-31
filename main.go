@@ -15,6 +15,7 @@ import (
 	"github.com/glebarez/sqlite"
 	"github.com/stkevintan/miko/config"
 	"github.com/stkevintan/miko/models"
+	"github.com/stkevintan/miko/pkg/auth"
 	"github.com/stkevintan/miko/pkg/bookmarks"
 	"github.com/stkevintan/miko/pkg/browser"
 	"github.com/stkevintan/miko/pkg/cookiecloud"
@@ -79,13 +80,25 @@ func main() {
 		log.Fatalf("Failed to migrate database: %v", err)
 	}
 
+	// Initialize Injector
+	ctx := di.NewContext(context.Background())
+	di.Provide(ctx, cfg)
+	di.Provide(ctx, db)
+
 	// Create default user if none exists
 	var count int64
 	db.Model(&models.User{}).Count(&count)
 	if count == 0 {
+		password := "adminpassword"
+		// Try to encrypt if secret is available
+		if secret := auth.ResolvePasswordSecret(ctx); secret != nil {
+			if encrypted, err := auth.Encrypt(password, secret); err == nil {
+				password = encrypted
+			}
+		}
 		defaultUser := models.User{
 			Username:  "admin",
-			Password:  "adminpassword",
+			Password:  password,
 			AdminRole: true,
 		}
 		if err := db.Create(&defaultUser).Error; err != nil {
@@ -95,12 +108,7 @@ func main() {
 		}
 	}
 
-	// Initialize Injector
-	ctx := di.NewContext(context.Background())
-
 	// Register services
-	di.Provide(ctx, cfg)
-	di.Provide(ctx, db)
 	di.Provide(ctx, cfg.CookieCloud)
 	di.Provide(ctx, browser.New(db))
 	di.Provide(ctx, bookmarks.New(db))

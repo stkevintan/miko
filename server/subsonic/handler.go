@@ -10,6 +10,7 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"github.com/stkevintan/miko/models"
+	"github.com/stkevintan/miko/pkg/crypto"
 	"github.com/stkevintan/miko/pkg/di"
 	"gorm.io/gorm"
 )
@@ -187,15 +188,17 @@ func (s *Subsonic) subsonicAuth(next http.Handler) http.Handler {
 			return
 		}
 
+		decryptedPassword := crypto.DecryptPassword(r.Context(), user.Password)
+
 		authenticated := false
 		if password != "" {
 			// Clear text password auth
-			if user.Password == password {
+			if decryptedPassword == password {
 				authenticated = true
 			}
 		} else if token != "" && salt != "" {
 			// Token auth: t = md5(password + salt)
-			expectedToken := fmt.Sprintf("%x", md5.Sum([]byte(user.Password+salt)))
+			expectedToken := fmt.Sprintf("%x", md5.Sum([]byte(decryptedPassword+salt)))
 			if expectedToken == token {
 				authenticated = true
 			}
