@@ -36,10 +36,6 @@ func main() {
 		log.Fatalf("Failed to load config: %v", err)
 	}
 
-	if err := cfg.Validate(); err != nil {
-		log.Fatalf("Invalid configuration: %v", err)
-	}
-
 	// Initialize global logger from config.
 	log.Default = log.New(cfg.Log)
 
@@ -48,20 +44,15 @@ func main() {
 		log.Debug("Loaded config:\n%s", string(b))
 	}
 
-	// Initialize Database
-	var db *gorm.DB
-	if cfg.Database.Driver == "sqlite" {
-		// Ensure directory exists
-		dir := path.Dir(cfg.Database.DSN)
-		if err := os.MkdirAll(dir, 0755); err != nil {
-			log.Fatalf("Failed to create database directory: %v", err)
-		}
-		db, err = gorm.Open(sqlite.Open(cfg.Database.DSN), &gorm.Config{})
-		if err != nil {
-			log.Fatalf("Failed to connect to database: %v", err)
-		}
-	} else {
-		log.Fatalf("Unsupported database driver: %s", cfg.Database.Driver)
+	// Initialize Database only sqlite for now
+	// Ensure directory exists
+	dir := path.Dir(cfg.Database.DSN)
+	if err := os.MkdirAll(dir, 0755); err != nil {
+		log.Fatalf("Failed to create database directory: %v", err)
+	}
+	db, err := gorm.Open(sqlite.Open(cfg.Database.DSN), &gorm.Config{})
+	if err != nil {
+		log.Fatalf("Failed to connect to database: %v", err)
 	}
 
 	// Auto-migrate models
