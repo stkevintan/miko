@@ -65,6 +65,47 @@ func (s *Scanner) saveResults(resultChan <-chan scanResult, cacheDir string, num
 	imageWg.Wait()
 }
 
+func (s *Scanner) UpdateSongMetadata(child *models.Child) error {
+	t, err := tags.Read(child.Path)
+	if err != nil {
+		return err
+	}
+
+	ctx := &saveContext{
+		seenArtists:         make(map[string]bool),
+		seenGenres:          make(map[string]bool),
+		seenAlbumsWithCover: make(map[string]bool),
+		imageTasks:          make(chan imageTask, 1),
+		cacheDir:            GetCoverCacheDir(s.cfg),
+	}
+
+	var wg sync.WaitGroup
+	s.startImageWorkers(ctx, &wg, 1)
+
+	s.processMetadata(child, t, child.Path, ctx)
+
+	if err := s.db.Save(child).Error; err != nil {
+		return err
+	}
+
+	close(ctx.imageTasks)
+	wg.Wait()
+
+	return nil
+}
+
+func (s *Scanner) SaveCoverArt(coverArt string, data []byte) error {
+	if coverArt == "" {
+		return nil
+	}
+	cacheDir := GetCoverCacheDir(s.cfg)
+	if err := os.MkdirAll(cacheDir, 0755); err != nil {
+		return err
+	}
+	cachePath := filepath.Join(cacheDir, coverArt)
+	return os.WriteFile(cachePath, data, 0644)
+}
+
 func (s *Scanner) startImageWorkers(ctx *saveContext, wg *sync.WaitGroup, numWorkers int) {
 	for range numWorkers {
 		wg.Add(1)

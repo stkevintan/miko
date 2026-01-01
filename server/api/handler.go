@@ -70,6 +70,14 @@ func (h *Handler) RegisterRoutes(r chi.Router) {
 			r.Post("/cookiecloud/pull", h.handleCookiecloudPull)
 			r.Get("/download", h.handleDownload)
 			r.Get("/platform/{platform}/user", h.handlePlatformUser)
+
+			// Library
+			r.Get("/library/folders", h.handleGetLibraryFolders)
+			r.Get("/library/directory", h.handleGetLibraryDirectory)
+			r.Get("/library/coverArt", h.handleGetLibraryCoverArt)
+			r.Get("/library/song/tags", h.handleGetLibrarySongTags)
+			r.Post("/library/song/update", h.handleUpdateLibrarySong)
+			r.Post("/library/song/cover", h.handleUpdateLibrarySongCover)
 		})
 	})
 }

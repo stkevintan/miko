@@ -44,7 +44,7 @@ const { isDark, toggleDarkMode } = useTheme();
 </script>
 
 <template>
-  <div class="min-h-screen flex flex-col bg-surface-50 dark:bg-surface-950">
+  <div class="min-h-screen h-full flex flex-col bg-surface-50 dark:bg-surface-950">
     <!-- Topbar -->
     <header class="h-16 flex items-center justify-between px-6 bg-surface-0 dark:bg-surface-900 border-b border-surface-200 dark:border-surface-800 sticky top-0 z-50">
       <div class="flex items-center gap-2">
