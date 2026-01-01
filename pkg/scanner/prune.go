@@ -1,8 +1,11 @@
 package scanner
 
 import (
+	"os"
+	"path/filepath"
 	"sync"
 
+	"github.com/stkevintan/miko/models"
 	"github.com/stkevintan/miko/pkg/log"
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
@@ -103,6 +106,66 @@ func (s *Scanner) Prune(seenIDs *sync.Map) {
 
 	if err != nil {
 		log.Error("Failed to prune database: %v", err)
+	}
+
+	// 8. Prune unreferenced cover art files
+	s.pruneCoverArtCache()
+}
+
+func (s *Scanner) pruneCoverArtCache() {
+	cacheDir := GetCoverCacheDir(s.cfg)
+	entries, err := os.ReadDir(cacheDir)
+	if err != nil {
+		if !os.IsNotExist(err) {
+			log.Error("Failed to read cover art cache directory: %v", err)
+		}
+		return
+	}
+
+	referencedCovers := make(map[string]bool)
+
+	// Collect all referenced cover art IDs from the database
+	var covers []string
+	s.db.Model(&models.Child{}).Where("cover_art != ''").Pluck("cover_art", &covers)
+	for _, c := range covers {
+		referencedCovers[c] = true
+	}
+
+	covers = nil
+	s.db.Model(&models.AlbumID3{}).Where("cover_art != ''").Pluck("cover_art", &covers)
+	for _, c := range covers {
+		referencedCovers[c] = true
+	}
+
+	covers = nil
+	s.db.Model(&models.ArtistID3{}).Where("cover_art != ''").Pluck("cover_art", &covers)
+	for _, c := range covers {
+		referencedCovers[c] = true
+	}
+
+	covers = nil
+	s.db.Model(&models.Playlist{}).Where("cover_art != ''").Pluck("cover_art", &covers)
+	for _, c := range covers {
+		referencedCovers[c] = true
+	}
+
+	prunedCount := 0
+	for _, entry := range entries {
+		if entry.IsDir() {
+			continue
+		}
+		name := entry.Name()
+		if !referencedCovers[name] {
+			if err := os.Remove(filepath.Join(cacheDir, name)); err != nil {
+				log.Warn("Failed to remove unreferenced cover art %q: %v", name, err)
+			} else {
+				prunedCount++
+			}
+		}
+	}
+
+	if prunedCount > 0 {
+		log.Info("Pruned %d unreferenced cover art files from cache", prunedCount)
 	}
 }
 
