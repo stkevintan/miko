@@ -83,8 +83,8 @@ func (s *Subsonic) handleGetCoverArt(w http.ResponseWriter, r *http.Request) {
 	coverArt := ""
 	if strings.HasPrefix(id, "al-") || strings.HasPrefix(id, "ar-") {
 		coverArt = id
-		// child
-	} else if !strings.Contains(id, "-") {
+	} else {
+		// Treat any ID without a known prefix as a song ID
 		db := di.MustInvoke[*gorm.DB](r.Context())
 		var child models.Child
 		if err := db.Model(&models.Child{}).Select("id, cover_art").Where("id = ?", id).First(&child).Error; err != nil {

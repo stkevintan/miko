@@ -149,7 +149,9 @@ func (s *Scanner) handleAlbum(child *models.Child, t *tags.Tags, path string, ct
 
 	albumID := GenerateAlbumID(displayArtist, child.Album)
 	child.AlbumID = albumID
+	child.CoverArt = "al-" + albumID
 
+	// Create the album DB entry only once
 	if !ctx.seenAlbumsWithCover[albumID] {
 		created := time.Now()
 		if child.Created != nil {
@@ -160,7 +162,7 @@ func (s *Scanner) handleAlbum(child *models.Child, t *tags.Tags, path string, ct
 			Name:     child.Album,
 			Artist:   displayArtist,
 			Created:  created,
-			CoverArt: "al-" + albumID,
+			CoverArt: child.CoverArt,
 		}
 		if len(groupArtists) > 0 {
 			album.ArtistID = groupArtists[0].ID
@@ -168,10 +170,13 @@ func (s *Scanner) handleAlbum(child *models.Child, t *tags.Tags, path string, ct
 		}
 
 		s.db.Clauses(clause.OnConflict{UpdateAll: true}).Create(&album)
-		ctx.imageTasks <- imageTask{path: path, coverArt: album.CoverArt}
 		ctx.seenAlbumsWithCover[albumID] = true
 	}
-	child.CoverArt = "al-" + albumID
+
+	// Always queue an imageTask to attempt to cache cover art from this song.
+	// The worker will skip if the cached file already exists, so this is efficient
+	// and ensures cover art can be found from any song in the album.
+	ctx.imageTasks <- imageTask{path: path, coverArt: child.CoverArt}
 }
 
 func (s *Scanner) getArtistsFromNames(names []string, seen map[string]bool) []models.ArtistID3 {
