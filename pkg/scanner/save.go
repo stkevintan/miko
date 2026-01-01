@@ -168,10 +168,9 @@ func (s *Scanner) handleAlbum(child *models.Child, t *tags.Tags, path string, ct
 		}
 
 		s.db.Clauses(clause.OnConflict{UpdateAll: true}).Create(&album)
+		ctx.imageTasks <- imageTask{path: path, coverArt: album.CoverArt}
 		ctx.seenAlbumsWithCover[albumID] = true
 	}
-	// Queue an image task for every song in the album to ensure we get cover art from any song that has it
-	ctx.imageTasks <- imageTask{path: path, coverArt: "al-" + albumID}
 	child.CoverArt = "al-" + albumID
 }
 
