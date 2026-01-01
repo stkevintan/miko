@@ -36,6 +36,10 @@ func main() {
 		log.Fatalf("Failed to load config: %v", err)
 	}
 
+	if err := cfg.Validate(); err != nil {
+		log.Fatalf("Invalid configuration: %v", err)
+	}
+
 	// Initialize global logger from config.
 	log.Default = log.New(cfg.Log)
 
@@ -89,10 +93,7 @@ func main() {
 	var count int64
 	db.Model(&models.User{}).Count(&count)
 	if count == 0 {
-		secret, err := crypto.ResolvePasswordSecret(ctx)
-		if err != nil {
-			log.Fatalf("Failed to resolve password secret: %v", err)
-		}
+		secret := crypto.ResolvePasswordSecret(ctx)
 		password, err := crypto.Encrypt("adminpassword", secret)
 		if err != nil {
 			log.Fatalf("Failed to encrypt default admin password: %v", err)

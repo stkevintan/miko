@@ -28,10 +28,7 @@ func (h *Handler) GenerateToken(ctx context.Context, username string) (string, e
 	}
 
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
-	secret, err := crypto.ResolveJWTSecret(ctx)
-	if err != nil {
-		return "", err
-	}
+	secret := crypto.ResolveJWTSecret(ctx)
 	return token.SignedString(secret)
 }
 
@@ -53,7 +50,7 @@ func (h *Handler) jwtAuth(next http.Handler) http.Handler {
 		claims := &Claims{}
 
 		token, err := jwt.ParseWithClaims(tokenString, claims, func(token *jwt.Token) (interface{}, error) {
-			return crypto.ResolveJWTSecret(r.Context())
+			return crypto.ResolveJWTSecret(r.Context()), nil
 		})
 
 		if err != nil {

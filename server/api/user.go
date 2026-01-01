@@ -96,12 +96,7 @@ func (h *Handler) handleChangePassword(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	passwordSecret, err := crypto.ResolvePasswordSecret(ctx)
-	if err != nil {
-		log.Error("Failed to resolve password secret: %v", err)
-		JSON(w, http.StatusInternalServerError, models.ErrorResponse{Error: "Configuration error"})
-		return
-	}
+	passwordSecret := crypto.ResolvePasswordSecret(ctx)
 	encryptedPassword, err := crypto.Encrypt(req.NewPassword, passwordSecret)
 	if err != nil {
 		JSON(w, http.StatusInternalServerError, models.ErrorResponse{Error: "Failed to encrypt password"})

@@ -35,6 +35,9 @@ func (c *Config) Validate() error {
 	if c.Server == nil {
 		return errors.New("server config is required")
 	}
+	if err := c.Server.Validate(); err != nil {
+		return err
+	}
 	if c.Log == nil {
 		return errors.New("log config is required")
 	}
@@ -47,8 +50,14 @@ func (c *Config) Validate() error {
 	if c.Database == nil {
 		return errors.New("database config is required")
 	}
+	if err := c.Database.Validate(); err != nil {
+		return err
+	}
 	if c.Subsonic == nil {
 		return errors.New("subsonic config is required")
+	}
+	if err := c.Subsonic.Validate(); err != nil {
+		return err
 	}
 	return nil
 }
@@ -59,6 +68,19 @@ type ServerConfig struct {
 	PasswordSecret string `json:"passwordSecret" mapstructure:"passwordSecret"`
 }
 
+func (s *ServerConfig) Validate() error {
+	if s.Port <= 0 || s.Port > 65535 {
+		return errors.New("server.port must be between 1 and 65535")
+	}
+	if s.JWTSecret == "" {
+		return errors.New("server.jwtSecret is required")
+	}
+	if s.PasswordSecret == "" {
+		return errors.New("server.passwordSecret is required")
+	}
+	return nil
+}
+
 type SubsonicConfig struct {
 	Folders         []string `json:"folders" mapstructure:"folders"`
 	DataDir         string   `json:"dataDir" mapstructure:"dataDir"`
@@ -67,9 +89,29 @@ type SubsonicConfig struct {
 	IgnoredArticles string   `json:"ignoredArticles" mapstructure:"ignoredArticles"`
 }
 
+func (s *SubsonicConfig) Validate() error {
+	if s.DataDir == "" {
+		return errors.New("subsonic.dataDir is required")
+	}
+	return nil
+}
+
 type DatabaseConfig struct {
 	Driver string `json:"driver" mapstructure:"driver"`
 	DSN    string `json:"dsn" mapstructure:"dsn"`
+}
+
+func (d *DatabaseConfig) Validate() error {
+	if d.Driver == "" {
+		return errors.New("database.driver is required")
+	}
+	if d.Driver != "sqlite" {
+		return fmt.Errorf("unsupported database driver: %s", d.Driver)
+	}
+	if d.DSN == "" {
+		return errors.New("database.dsn is required")
+	}
+	return nil
 }
 
 // Load loads configuration from config files + environment variables with sensible defaults.
