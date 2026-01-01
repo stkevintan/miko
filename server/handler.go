@@ -93,9 +93,13 @@ func bridgeDI(parent context.Context) func(next http.Handler) http.Handler {
 			scopedDB := db.WithContext(r.Context())
 			di.Provide(reqCtx, scopedDB)
 
-			// Provide request-scoped services that depend on DB
-			di.Provide(reqCtx, browser.New(scopedDB))
-			di.Provide(reqCtx, bookmarks.New(scopedDB))
+			// Provide request-scoped services as factories (created only on demand)
+			di.ProvideFactory(reqCtx, func(ctx context.Context) *browser.Browser {
+				return browser.New(di.MustInvoke[*gorm.DB](ctx))
+			})
+			di.ProvideFactory(reqCtx, func(ctx context.Context) *bookmarks.Manager {
+				return bookmarks.New(di.MustInvoke[*gorm.DB](ctx))
+			})
 
 			next.ServeHTTP(w, r.WithContext(reqCtx))
 		})

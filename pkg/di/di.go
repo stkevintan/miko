@@ -9,6 +9,12 @@ import (
 
 type containerKey struct{}
 
+type factory[T any] struct {
+	fn   func(context.Context) T
+	once sync.Once
+	val  T
+}
+
 type container struct {
 	mu            sync.RWMutex
 	parent        *container
@@ -57,6 +63,18 @@ func Provide[T any](ctx context.Context, service T) {
 	c.services[reflect.TypeOf((*T)(nil)).Elem()] = service
 }
 
+// ProvideFactory registers a factory function that creates a service lazily on first access.
+// The factory is called only once per container, and the result is cached.
+func ProvideFactory[T any](ctx context.Context, fn func(context.Context) T) {
+	c, ok := ctx.Value(containerKey{}).(*container)
+	if !ok {
+		panic("di: context does not contain a container")
+	}
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.services[reflect.TypeOf((*T)(nil)).Elem()] = &factory[T]{fn: fn}
+}
+
 // ProvideNamed registers a named service in the container within the context.
 func ProvideNamed[T any](ctx context.Context, name string, service T) {
 	c, ok := ctx.Value(containerKey{}).(*container)
@@ -85,6 +103,13 @@ func Invoke[T any](ctx context.Context) (T, error) {
 		c.mu.RUnlock()
 
 		if ok {
+			// Check if it's a factory
+			if f, isFactory := s.(*factory[T]); isFactory {
+				f.once.Do(func() {
+					f.val = f.fn(ctx)
+				})
+				return f.val, nil
+			}
 			return s.(T), nil
 		}
 
