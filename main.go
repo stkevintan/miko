@@ -15,13 +15,10 @@ import (
 	"github.com/glebarez/sqlite"
 	"github.com/stkevintan/miko/config"
 	"github.com/stkevintan/miko/models"
-	"github.com/stkevintan/miko/pkg/bookmarks"
-	"github.com/stkevintan/miko/pkg/browser"
 	"github.com/stkevintan/miko/pkg/cookiecloud"
 	"github.com/stkevintan/miko/pkg/crypto"
 	"github.com/stkevintan/miko/pkg/di"
 	"github.com/stkevintan/miko/pkg/log"
-	"github.com/stkevintan/miko/pkg/scanner"
 	"github.com/stkevintan/miko/server"
 	"gorm.io/gorm"
 )
@@ -76,7 +73,10 @@ func main() {
 	}
 
 	// Initialize Injector
-	ctx := di.NewContext(context.Background())
+	appCtx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	ctx := di.NewContext(appCtx)
 	di.Provide(ctx, cfg)
 	di.Provide(ctx, db)
 
@@ -103,10 +103,6 @@ func main() {
 
 	// Register services
 	di.Provide(ctx, cfg.CookieCloud)
-	di.Provide(ctx, browser.New(db))
-	di.Provide(ctx, bookmarks.New(db))
-	// TODO: factory pattern for scanner with config
-	di.Provide(ctx, scanner.New(db, cfg))
 
 	// Initialize HTTP handler
 	h := server.New(ctx)
@@ -131,9 +127,10 @@ func main() {
 	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
 	<-quit
 	log.Println("Shutting down server...")
+	cancel()
 
 	// Create a deadline to wait for
-	ctx2, cancel2 := context.WithTimeout(ctx, 30*time.Second)
+	ctx2, cancel2 := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel2()
 
 	// Attempt graceful shutdown

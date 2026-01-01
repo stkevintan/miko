@@ -21,6 +21,8 @@ import (
 	"gorm.io/gorm"
 )
 
+var lrcRegex = regexp.MustCompile(`^\[(\d+):(\d+)\.(\d+)\](.*)$`)
+
 func (s *Subsonic) handleStream(w http.ResponseWriter, r *http.Request) {
 	id := r.URL.Query().Get("id")
 	if id == "" {
@@ -192,7 +194,6 @@ func (s *Subsonic) handleGetLyricsBySongId(w http.ResponseWriter, r *http.Reques
 
 	resp := models.NewResponse(models.ResponseStatusOK)
 
-	lrcRegex := regexp.MustCompile(`^\[(\d+):(\d+)\.(\d+)\](.*)$`)
 	rows := strings.Split(song.Lyrics, "\n")
 	lines := make([]models.LyricsLine, 0, len(rows))
 	synced := true

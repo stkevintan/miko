@@ -1,7 +1,6 @@
 package subsonic
 
 import (
-	"context"
 	"net/http"
 
 	"github.com/stkevintan/miko/config"
@@ -42,8 +41,8 @@ func (s *Subsonic) handleStartScan(w http.ResponseWriter, r *http.Request) {
 	var count int64
 	db.Model(&models.Child{}).Where("is_dir = ?", false).Count(&count)
 
-	// r.Context() may destroy on client disconnect, so create a new background context
-	ctx := di.Inherit(context.Background(), r.Context())
+	// Use app context so scan survives request disconnect but stops on app shutdown
+	ctx := di.Inherit(s.ctx, r.Context())
 	go sc.Scan(ctx, incremental)
 	resp := models.NewResponse(models.ResponseStatusOK)
 	resp.ScanStatus = &models.ScanStatus{

@@ -100,18 +100,11 @@ func (s *Subsonic) handleGetAlbumList(w http.ResponseWriter, r *http.Request) {
 func (s *Subsonic) handleGetNowPlaying(w http.ResponseWriter, r *http.Request) {
 	db := di.MustInvoke[*gorm.DB](r.Context())
 
-	tenMinutesAgo := time.Now().Add(-10 * time.Minute)
 	entries := make([]models.NowPlayingEntry, 0)
 
 	s.nowPlaying.Range(func(key, value interface{}) bool {
 		record, ok := value.(models.NowPlayingRecord)
 		if !ok {
-			return true
-		}
-
-		// Clean up records older than 10 minutes
-		if record.UpdatedAt.Before(tenMinutesAgo) {
-			s.nowPlaying.Delete(key)
 			return true
 		}
 

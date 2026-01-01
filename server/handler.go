@@ -9,10 +9,14 @@ import (
 	"github.com/go-chi/chi/v5/middleware"
 	"github.com/go-chi/cors"
 	"github.com/stkevintan/miko/config"
+	"github.com/stkevintan/miko/pkg/bookmarks"
+	"github.com/stkevintan/miko/pkg/browser"
 	"github.com/stkevintan/miko/pkg/di"
 	"github.com/stkevintan/miko/pkg/log"
+	"github.com/stkevintan/miko/pkg/scanner"
 	"github.com/stkevintan/miko/server/api"
 	"github.com/stkevintan/miko/server/subsonic"
+	"gorm.io/gorm"
 )
 
 // Handler contains HTTP handlers for our service
@@ -22,6 +26,12 @@ type Handler struct {
 
 // New creates a new handler instance
 func New(ctx context.Context) *Handler {
+	db := di.MustInvoke[*gorm.DB](ctx)
+	cfg := di.MustInvoke[*config.Config](ctx)
+
+	// Register global services
+	di.Provide(ctx, scanner.New(db, cfg))
+
 	return &Handler{
 		ctx: ctx,
 	}
@@ -62,7 +72,7 @@ func (h *Handler) Routes() http.Handler {
 	r.Use(bridgeDI(h.ctx))
 
 	// subsonic v1.16.1 API group
-	s := subsonic.New()
+	s := subsonic.New(h.ctx)
 	s.RegisterRoutes(chi.Router(r))
 
 	// API v1 group
@@ -77,6 +87,16 @@ func bridgeDI(parent context.Context) func(next http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			reqCtx := di.Inherit(r.Context(), parent)
+
+			// Provide request-scoped DB with context
+			db := di.MustInvoke[*gorm.DB](reqCtx)
+			scopedDB := db.WithContext(r.Context())
+			di.Provide(reqCtx, scopedDB)
+
+			// Provide request-scoped services that depend on DB
+			di.Provide(reqCtx, browser.New(scopedDB))
+			di.Provide(reqCtx, bookmarks.New(scopedDB))
+
 			next.ServeHTTP(w, r.WithContext(reqCtx))
 		})
 	}

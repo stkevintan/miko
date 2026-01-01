@@ -1,6 +1,7 @@
 package scanner
 
 import (
+	"context"
 	"os"
 	"path/filepath"
 	"time"
@@ -10,7 +11,7 @@ import (
 	"gorm.io/gorm/clause"
 )
 
-func (s *Scanner) saveResults(resultChan <-chan scanResult, cacheDir string) {
+func (s *Scanner) saveResults(ctx context.Context, resultChan <-chan scanResult, cacheDir string) {
 	seenArtists := make(map[string]bool)
 	seenGenres := make(map[string]bool)
 	seenAlbumsWithCover := make(map[string]bool)
@@ -18,7 +19,7 @@ func (s *Scanner) saveResults(resultChan <-chan scanResult, cacheDir string) {
 
 	flushChildren := func() {
 		if len(children) > 0 {
-			s.db.Clauses(clause.OnConflict{UpdateAll: true}).CreateInBatches(children, 100)
+			s.db.WithContext(ctx).Clauses(clause.OnConflict{UpdateAll: true}).CreateInBatches(children, 100)
 			children = children[:0]
 		}
 	}
@@ -33,7 +34,7 @@ func (s *Scanner) saveResults(resultChan <-chan scanResult, cacheDir string) {
 			}
 			if t.Artist != "" {
 				child.Artist = t.Artist
-				child.Artists = s.getArtistsFromNames(t.Artists, seenArtists)
+				child.Artists = s.getArtistsFromNames(ctx, t.Artists, seenArtists)
 				if len(child.Artists) > 0 {
 					child.ArtistID = child.Artists[0].ID
 				}
@@ -46,7 +47,7 @@ func (s *Scanner) saveResults(resultChan <-chan scanResult, cacheDir string) {
 			child.Year = t.Year
 			if t.Genre != "" {
 				child.Genre = t.Genre
-				child.Genres = s.getGenresFromNames(t.Genres, seenGenres)
+				child.Genres = s.getGenresFromNames(ctx, t.Genres, seenGenres)
 			}
 			if t.Lyrics != "" {
 				child.Lyrics = t.Lyrics
@@ -59,7 +60,7 @@ func (s *Scanner) saveResults(resultChan <-chan scanResult, cacheDir string) {
 				albumArtistStr := t.AlbumArtist
 				var albumArtists []models.ArtistID3
 				if albumArtistStr != "" {
-					albumArtists = s.getArtistsFromNames(t.AlbumArtists, seenArtists)
+					albumArtists = s.getArtistsFromNames(ctx, t.AlbumArtists, seenArtists)
 				}
 
 				groupArtist := child.Artist
@@ -100,14 +101,14 @@ func (s *Scanner) saveResults(resultChan <-chan scanResult, cacheDir string) {
 						}
 						hasCover = true
 					}
-					s.db.Clauses(clause.OnConflict{UpdateAll: true}).Create(&album)
+					s.db.WithContext(ctx).Clauses(clause.OnConflict{UpdateAll: true}).Create(&album)
 					seenAlbumsWithCover[albumID] = hasCover
 				} else if !hasCover && len(t.Image) > 0 {
 					// Handle case where first song had no cover but a later song does
 					coverArtID := "al-" + albumID
 					if err := os.WriteFile(filepath.Join(cacheDir, coverArtID), t.Image, 0644); err != nil {
 						log.Warn("Failed to write album cover to cache for album %s: %v", albumID, err)
-					} else if err := s.db.Model(&models.AlbumID3{}).Where("id = ?", albumID).Update("cover_art", coverArtID).Error; err != nil {
+					} else if err := s.db.WithContext(ctx).Model(&models.AlbumID3{}).Where("id = ?", albumID).Update("cover_art", coverArtID).Error; err != nil {
 						log.Warn("Failed to update album cover art in database for album %s: %v", albumID, err)
 					} else {
 						// Only update the cache if both file write and DB update succeed
@@ -140,7 +141,7 @@ func (s *Scanner) saveResults(resultChan <-chan scanResult, cacheDir string) {
 	flushChildren()
 }
 
-func (s *Scanner) getArtistsFromNames(names []string, seen map[string]bool) []models.ArtistID3 {
+func (s *Scanner) getArtistsFromNames(ctx context.Context, names []string, seen map[string]bool) []models.ArtistID3 {
 	var artists []models.ArtistID3
 	for _, name := range names {
 		artistID := GenerateArtistID(name)
@@ -150,7 +151,7 @@ func (s *Scanner) getArtistsFromNames(names []string, seen map[string]bool) []mo
 			CoverArt: "ar-" + artistID,
 		}
 		if !seen[artistID] {
-			s.db.Clauses(clause.OnConflict{UpdateAll: true}).Create(&artist)
+			s.db.WithContext(ctx).Clauses(clause.OnConflict{UpdateAll: true}).Create(&artist)
 			seen[artistID] = true
 		}
 		artists = append(artists, artist)
@@ -158,12 +159,12 @@ func (s *Scanner) getArtistsFromNames(names []string, seen map[string]bool) []mo
 	return artists
 }
 
-func (s *Scanner) getGenresFromNames(names []string, seen map[string]bool) []models.Genre {
+func (s *Scanner) getGenresFromNames(ctx context.Context, names []string, seen map[string]bool) []models.Genre {
 	var genres []models.Genre
 	for _, name := range names {
 		genre := models.Genre{Name: name}
 		if !seen[name] {
-			s.db.Clauses(clause.OnConflict{UpdateAll: true}).Create(&genre)
+			s.db.WithContext(ctx).Clauses(clause.OnConflict{UpdateAll: true}).Create(&genre)
 			seen[name] = true
 		}
 		genres = append(genres, genre)
