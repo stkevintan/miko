@@ -44,20 +44,15 @@ func main() {
 		log.Debug("Loaded config:\n%s", string(b))
 	}
 
-	// Initialize Database
-	var db *gorm.DB
-	if cfg.Database.Driver == "sqlite" {
-		// Ensure directory exists
-		dir := path.Dir(cfg.Database.DSN)
-		if err := os.MkdirAll(dir, 0755); err != nil {
-			log.Fatalf("Failed to create database directory: %v", err)
-		}
-		db, err = gorm.Open(sqlite.Open(cfg.Database.DSN), &gorm.Config{})
-		if err != nil {
-			log.Fatalf("Failed to connect to database: %v", err)
-		}
-	} else {
-		log.Fatalf("Unsupported database driver: %s", cfg.Database.Driver)
+	// Initialize Database only sqlite for now
+	// Ensure directory exists
+	dir := path.Dir(cfg.Database.DSN)
+	if err := os.MkdirAll(dir, 0755); err != nil {
+		log.Fatalf("Failed to create database directory: %v", err)
+	}
+	db, err := gorm.Open(sqlite.Open(cfg.Database.DSN), &gorm.Config{})
+	if err != nil {
+		log.Fatalf("Failed to connect to database: %v", err)
 	}
 
 	// Auto-migrate models
@@ -89,10 +84,7 @@ func main() {
 	var count int64
 	db.Model(&models.User{}).Count(&count)
 	if count == 0 {
-		secret, err := crypto.ResolvePasswordSecret(ctx)
-		if err != nil {
-			log.Fatalf("Failed to resolve password secret: %v", err)
-		}
+		secret := crypto.ResolvePasswordSecret(ctx)
 		password, err := crypto.Encrypt("adminpassword", secret)
 		if err != nil {
 			log.Fatalf("Failed to encrypt default admin password: %v", err)
