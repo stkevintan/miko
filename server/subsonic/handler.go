@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/http"
 	"sync"
+	"time"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/stkevintan/miko/models"
@@ -16,12 +17,30 @@ import (
 )
 
 type Subsonic struct {
-	nowPlaying sync.Map // key: string (username:clientName), value: models.NowPlayingRecord
+	nowPlaying sync.Map // key: string (username), value: models.NowPlayingRecord
 }
 
 func New() *Subsonic {
-	return &Subsonic{
+	s := &Subsonic{
 		nowPlaying: sync.Map{},
+	}
+	go s.cleanupNowPlaying()
+	return s
+}
+
+func (s *Subsonic) cleanupNowPlaying() {
+	ticker := time.NewTicker(1 * time.Minute)
+	defer ticker.Stop()
+
+	for range ticker.C {
+		now := time.Now()
+		s.nowPlaying.Range(func(key, value any) bool {
+			record := value.(models.NowPlayingRecord)
+			if now.Sub(record.UpdatedAt) > 10*time.Minute {
+				s.nowPlaying.Delete(key)
+			}
+			return true
+		})
 	}
 }
 
@@ -209,8 +228,7 @@ func (s *Subsonic) subsonicAuth(next http.Handler) http.Handler {
 			return
 		}
 
-		ctx := di.Inherit(r.Context())
-		di.Provide(ctx, models.Username(username))
-		next.ServeHTTP(w, r.WithContext(ctx))
+		di.Provide(r.Context(), models.Username(username))
+		next.ServeHTTP(w, r)
 	})
 }

@@ -70,7 +70,7 @@ func (s *Scanner) Scan(ctx context.Context, incremental bool) {
 			ID      string
 			Created *time.Time
 		}
-		s.db.Model(&models.Child{}).Select("id, created").Where("is_dir = ?", false).Find(&files)
+		s.db.WithContext(ctx).Model(&models.Child{}).Select("id, created").Where("is_dir = ?", false).Find(&files)
 		for _, f := range files {
 			if f.Created != nil {
 				existingFiles[f.ID] = *f.Created
@@ -180,13 +180,13 @@ func (s *Scanner) Scan(ctx context.Context, incremental bool) {
 	doneSaver := make(chan struct{})
 	go func() {
 		defer close(doneSaver)
-		s.saveResults(resultChan, cacheDir)
+		s.saveResults(ctx, resultChan, cacheDir)
 	}()
 
 	// Producer
 	for _, rootPath := range s.cfg.Subsonic.Folders {
 		var folder models.MusicFolder
-		s.db.Where(models.MusicFolder{Path: rootPath}).Attrs(models.MusicFolder{Name: filepath.Base(rootPath)}).FirstOrCreate(&folder)
+		s.db.WithContext(ctx).Where(models.MusicFolder{Path: rootPath}).Attrs(models.MusicFolder{Name: filepath.Base(rootPath)}).FirstOrCreate(&folder)
 
 		filepath.WalkDir(rootPath, func(path string, d fs.DirEntry, err error) error {
 			if err != nil {
@@ -208,7 +208,7 @@ func (s *Scanner) Scan(ctx context.Context, incremental bool) {
 	close(resultChan)
 	<-doneSaver
 
-	s.Prune(seenIDs)
+	s.Prune(ctx, seenIDs)
 
 	s.lastScanTime.Store(time.Now().Unix())
 	log.Info("Scan completed. Total files: %d", s.scanCount.Load())

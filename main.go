@@ -15,13 +15,10 @@ import (
 	"github.com/glebarez/sqlite"
 	"github.com/stkevintan/miko/config"
 	"github.com/stkevintan/miko/models"
-	"github.com/stkevintan/miko/pkg/bookmarks"
-	"github.com/stkevintan/miko/pkg/browser"
 	"github.com/stkevintan/miko/pkg/cookiecloud"
 	"github.com/stkevintan/miko/pkg/crypto"
 	"github.com/stkevintan/miko/pkg/di"
 	"github.com/stkevintan/miko/pkg/log"
-	"github.com/stkevintan/miko/pkg/scanner"
 	"github.com/stkevintan/miko/server"
 	"gorm.io/gorm"
 )
@@ -103,10 +100,6 @@ func main() {
 
 	// Register services
 	di.Provide(ctx, cfg.CookieCloud)
-	di.Provide(ctx, browser.New(db))
-	di.Provide(ctx, bookmarks.New(db))
-	// TODO: factory pattern for scanner with config
-	di.Provide(ctx, scanner.New(db, cfg))
 
 	// Initialize HTTP handler
 	h := server.New(ctx)

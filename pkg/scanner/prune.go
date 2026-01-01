@@ -1,6 +1,7 @@
 package scanner
 
 import (
+	"context"
 	"sync"
 
 	"github.com/stkevintan/miko/pkg/log"
@@ -8,10 +9,10 @@ import (
 	"gorm.io/gorm/clause"
 )
 
-func (s *Scanner) Prune(seenIDs *sync.Map) {
+func (s *Scanner) Prune(ctx context.Context, seenIDs *sync.Map) {
 	log.Info("Pruning deleted files and orphaned records...")
 
-	err := s.db.Transaction(func(tx *gorm.DB) error {
+	err := s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		// 1. Create a temporary table to store seen IDs
 		tx.Exec("CREATE TEMPORARY TABLE seen_ids (id TEXT PRIMARY KEY)")
 		defer tx.Exec("DROP TABLE seen_ids")
