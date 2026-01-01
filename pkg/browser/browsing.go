@@ -144,7 +144,7 @@ func (b *Browser) getDirectoryByTag(id string) (*models.Directory, error) {
 
 	// Try to find as album
 	var album models.AlbumID3
-	if err := b.db.Model(&models.AlbumID3{}).Select("id, name, starred").Where("id = ?", id).First(&album).Error; err == nil {
+	if err := b.db.Model(&models.AlbumID3{}).Select("id, name, starred, artist_id").Where("id = ?", id).First(&album).Error; err == nil {
 		// It's an album, return its songs
 		var songs []models.Child
 		b.db.Where("album_id = ?", album.ID).Order("disc_number, track").Find(&songs)

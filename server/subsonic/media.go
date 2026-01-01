@@ -180,7 +180,7 @@ func (s *Subsonic) handleGetLyricsBySongId(w http.ResponseWriter, r *http.Reques
 
 	db := di.MustInvoke[*gorm.DB](r.Context())
 	var song models.Child
-	if err := db.Model(&models.Child{}).Select("lyrics").Where("id = ?", id).First(&song).Error; err != nil {
+	if err := db.Model(&models.Child{}).Select("lyrics, artist, title").Where("id = ?", id).First(&song).Error; err != nil {
 		s.sendResponse(w, r, models.NewErrorResponse(70, "Lyrics not found"))
 		return
 	}
