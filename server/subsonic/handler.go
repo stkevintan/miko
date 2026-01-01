@@ -17,7 +17,7 @@ import (
 )
 
 type Subsonic struct {
-	nowPlaying sync.Map // key: string (username), value: models.NowPlayingRecord
+	nowPlaying sync.Map // key: string (username:clientName), value: models.NowPlayingRecord
 }
 
 func New() *Subsonic {
