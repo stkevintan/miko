@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/stkevintan/miko/models"
+	"github.com/stkevintan/miko/pkg/log"
 	"github.com/stkevintan/miko/pkg/tags"
 	"gorm.io/gorm/clause"
 )
@@ -82,7 +83,9 @@ func (s *Scanner) startImageWorkers(ctx *saveContext, wg *sync.WaitGroup, numWor
 				if err != nil || len(img) == 0 {
 					continue
 				}
-				os.WriteFile(p, img, 0644)
+				if err := os.WriteFile(p, img, 0644); err != nil {
+					log.Warn("Failed to write cover art to cache for %s: %v", t.coverArt, err)
+				}
 			}
 		}()
 	}
@@ -165,9 +168,10 @@ func (s *Scanner) handleAlbum(child *models.Child, t *tags.Tags, path string, ct
 		}
 
 		s.db.Clauses(clause.OnConflict{UpdateAll: true}).Create(&album)
-		ctx.imageTasks <- imageTask{path: path, coverArt: album.CoverArt}
 		ctx.seenAlbumsWithCover[albumID] = true
 	}
+	// Queue an image task for every song in the album to ensure we get cover art from any song that has it
+	ctx.imageTasks <- imageTask{path: path, coverArt: "al-" + albumID}
 	child.CoverArt = "al-" + albumID
 }
 
