@@ -18,7 +18,7 @@ func (b *Browser) GetIndexes(mode string, folderID uint, hasFolderId bool, ignor
 func (b *Browser) getIndexesByTag(folderID uint, hasFolderId bool, ignoredArticles string) ([]models.Index, error) {
 	indexMap := make(map[string][]models.Artist)
 	var artists []models.ArtistID3
-	query := b.db.Model(&models.ArtistID3{})
+	query := b.db.Model(&models.ArtistID3{}).Select("artist_id3.id, artist_id3.name")
 	query = query.Joins("JOIN song_artists ON song_artists.artist_id3_id = artist_id3.id").
 		Joins("JOIN children ON children.id = song_artists.child_id")
 	if hasFolderId {
@@ -50,7 +50,7 @@ func (b *Browser) getIndexesByTag(folderID uint, hasFolderId bool, ignoredArticl
 func (b *Browser) getIndexesByFile(folderID uint, hasFolderId bool, ignoredArticles string) ([]models.Index, error) {
 	indexMap := make(map[string][]models.Artist)
 	var children []models.Child
-	query := b.db.Where("is_dir = ?", true).Where("parent = ?", "")
+	query := b.db.Model(&models.Child{}).Select("id, title, is_dir, parent, music_folder_id").Where("is_dir = ?", true).Where("parent = ?", "")
 	if hasFolderId {
 		query = query.Where("music_folder_id = ?", folderID)
 	}
@@ -106,7 +106,7 @@ func (b *Browser) GetDirectory(mode string, id string) (*models.Directory, error
 func (b *Browser) getDirectoryByTag(id string) (*models.Directory, error) {
 	// Try to find as artist first
 	var artist models.ArtistID3
-	if err := b.db.Where("id = ?", id).First(&artist).Error; err == nil {
+	if err := b.db.Model(&models.ArtistID3{}).Select("id, name, starred").Where("id = ?", id).First(&artist).Error; err == nil {
 		// It's an artist, return their albums as directories
 		var albums []models.AlbumID3
 		b.db.Scopes(models.AlbumWithStats(false)).
@@ -144,7 +144,7 @@ func (b *Browser) getDirectoryByTag(id string) (*models.Directory, error) {
 
 	// Try to find as album
 	var album models.AlbumID3
-	if err := b.db.Where("id = ?", id).First(&album).Error; err == nil {
+	if err := b.db.Model(&models.AlbumID3{}).Select("id, name, starred").Where("id = ?", id).First(&album).Error; err == nil {
 		// It's an album, return its songs
 		var songs []models.Child
 		b.db.Where("album_id = ?", album.ID).Order("disc_number, track").Find(&songs)

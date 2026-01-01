@@ -220,7 +220,7 @@ func (s *Subsonic) handleDeletePlaylist(w http.ResponseWriter, r *http.Request) 
 	}
 
 	var p models.PlaylistRecord
-	if err := db.First(&p, id).Error; err != nil {
+	if err := db.Model(&models.PlaylistRecord{}).Select("id, owner").Where("id = ?", id).First(&p).Error; err != nil {
 		s.sendResponse(w, r, models.NewErrorResponse(70, "Playlist not found"))
 		return
 	}

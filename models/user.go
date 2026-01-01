@@ -25,7 +25,7 @@ type User struct {
 	Password         string         `xml:"-" json:"-"`
 	Email            string         `xml:"email,attr,omitempty" json:"email,omitempty"`
 	AdminRole        bool           `xml:"adminRole,attr" json:"adminRole"`
-	SubsonicSettings `gorm:"embedded" xml:",inline"`
+	SubsonicSettings `gorm:"embedded"`
 }
 
 func (u *User) prepare() {

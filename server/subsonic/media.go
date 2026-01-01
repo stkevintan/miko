@@ -30,7 +30,7 @@ func (s *Subsonic) handleStream(w http.ResponseWriter, r *http.Request) {
 
 	db := di.MustInvoke[*gorm.DB](r.Context())
 	var song models.Child
-	if err := db.Where("id = ?", id).First(&song).Error; err != nil {
+	if err := db.Model(&models.Child{}).Select("path, is_dir").Where("id = ?", id).First(&song).Error; err != nil {
 		s.sendResponse(w, r, models.NewErrorResponse(70, "Song not found"))
 		return
 	}
@@ -45,7 +45,7 @@ func (s *Subsonic) handleStream(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	log.Debug("Streaming file: %s (size: %d)", song.Path, song.Size)
+	log.Debug("Streaming file: %s", song.Path)
 	safeServeFile(w, r, song.Path)
 }
 
@@ -58,7 +58,7 @@ func (s *Subsonic) handleDownload(w http.ResponseWriter, r *http.Request) {
 
 	db := di.MustInvoke[*gorm.DB](r.Context())
 	var song models.Child
-	if err := db.Where("id = ?", id).First(&song).Error; err != nil {
+	if err := db.Model(&models.Child{}).Select("path").Where("id = ?", id).First(&song).Error; err != nil {
 		s.sendResponse(w, r, models.NewErrorResponse(70, "Song not found"))
 		return
 	}
@@ -98,18 +98,19 @@ func (s *Subsonic) handleGetCoverArt(w http.ResponseWriter, r *http.Request) {
 	if strings.HasPrefix(id, "al-") {
 		realID := id[3:]
 		var album models.AlbumID3
-		if err := db.Where("id = ?", realID).First(&album).Error; err == nil {
+		if err := db.Model(&models.AlbumID3{}).Select("id").Where("id = ?", realID).First(&album).Error; err == nil {
 			var firstSong models.Child
-			if err := db.Where("album_id = ?", album.ID).First(&firstSong).Error; err == nil {
+			if err := db.Model(&models.Child{}).Select("path").Where("album_id = ?", album.ID).First(&firstSong).Error; err == nil {
 				path = firstSong.Path
 			}
 		}
 	} else if strings.HasPrefix(id, "ar-") {
 		realID := id[3:]
 		var artist models.ArtistID3
-		if err := db.Where("id = ?", realID).First(&artist).Error; err == nil {
+		if err := db.Model(&models.ArtistID3{}).Select("id").Where("id = ?", realID).First(&artist).Error; err == nil {
 			var firstSong models.Child
 			if err := db.Table("children").
+				Select("children.id, children.path").
 				Joins("JOIN song_artists ON song_artists.child_id = children.id").
 				Where("song_artists.artist_id3_id = ?", artist.ID).
 				First(&firstSong).Error; err == nil {
@@ -118,7 +119,7 @@ func (s *Subsonic) handleGetCoverArt(w http.ResponseWriter, r *http.Request) {
 		}
 	} else {
 		var song models.Child
-		if err := db.Where("id = ?", id).First(&song).Error; err == nil {
+		if err := db.Select("id,path").Where("id = ?", id).First(&song).Error; err == nil {
 			path = song.Path
 		}
 	}
@@ -156,7 +157,7 @@ func (s *Subsonic) handleGetLyrics(w http.ResponseWriter, r *http.Request) {
 
 	db := di.MustInvoke[*gorm.DB](r.Context())
 	var song models.Child
-	if err := db.Where("artist = ? AND title = ?", artist, title).First(&song).Error; err != nil {
+	if err := db.Model(&models.Child{}).Select("artist, title, lyrics").Where("artist = ? AND title = ?", artist, title).First(&song).Error; err != nil {
 		s.sendResponse(w, r, models.NewErrorResponse(70, "Lyrics not found"))
 		return
 	}
@@ -179,7 +180,7 @@ func (s *Subsonic) handleGetLyricsBySongId(w http.ResponseWriter, r *http.Reques
 
 	db := di.MustInvoke[*gorm.DB](r.Context())
 	var song models.Child
-	if err := db.Where("id = ?", id).First(&song).Error; err != nil {
+	if err := db.Model(&models.Child{}).Select("lyrics").Where("id = ?", id).First(&song).Error; err != nil {
 		s.sendResponse(w, r, models.NewErrorResponse(70, "Lyrics not found"))
 		return
 	}
