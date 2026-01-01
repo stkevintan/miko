@@ -9,6 +9,11 @@ import (
 
 type containerKey struct{}
 
+// factory wraps a lazy initialization function for a service.
+// The factory function is called only once per container using sync.Once,
+// and subsequent calls return the cached value.
+// Factory functions must be thread-safe as they may be called concurrently
+// during the first access from multiple goroutines.
 type factory[T any] struct {
 	fn   func(context.Context) T
 	once sync.Once
