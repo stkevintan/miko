@@ -72,7 +72,7 @@ func (h *Handler) Routes() http.Handler {
 	r.Use(bridgeDI(h.ctx))
 
 	// subsonic v1.16.1 API group
-	s := subsonic.New()
+	s := subsonic.New(h.ctx)
 	s.RegisterRoutes(chi.Router(r))
 
 	// API v1 group

@@ -73,7 +73,10 @@ func main() {
 	}
 
 	// Initialize Injector
-	ctx := di.NewContext(context.Background())
+	appCtx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	ctx := di.NewContext(appCtx)
 	di.Provide(ctx, cfg)
 	di.Provide(ctx, db)
 
@@ -124,9 +127,10 @@ func main() {
 	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
 	<-quit
 	log.Println("Shutting down server...")
+	cancel()
 
 	// Create a deadline to wait for
-	ctx2, cancel2 := context.WithTimeout(ctx, 30*time.Second)
+	ctx2, cancel2 := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel2()
 
 	// Attempt graceful shutdown

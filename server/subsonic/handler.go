@@ -1,6 +1,7 @@
 package subsonic
 
 import (
+	"context"
 	"encoding/json"
 	"encoding/xml"
 	"fmt"
@@ -17,30 +18,41 @@ import (
 )
 
 type Subsonic struct {
+	ctx        context.Context
 	nowPlaying sync.Map // key: string (username:clientName), value: models.NowPlayingRecord
 }
 
-func New() *Subsonic {
+func New(ctx context.Context) *Subsonic {
 	s := &Subsonic{
+		ctx:        ctx,
 		nowPlaying: sync.Map{},
 	}
-	go s.cleanupNowPlaying()
+	go s.cleanupNowPlaying(ctx)
 	return s
 }
 
-func (s *Subsonic) cleanupNowPlaying() {
+func (s *Subsonic) cleanupNowPlaying(ctx context.Context) {
 	ticker := time.NewTicker(1 * time.Minute)
 	defer ticker.Stop()
 
-	for range ticker.C {
-		now := time.Now()
-		s.nowPlaying.Range(func(key, value any) bool {
-			record := value.(models.NowPlayingRecord)
-			if now.Sub(record.UpdatedAt) > 10*time.Minute {
-				s.nowPlaying.Delete(key)
-			}
-			return true
-		})
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			now := time.Now()
+			s.nowPlaying.Range(func(key, value any) bool {
+				record, ok := value.(models.NowPlayingRecord)
+				if !ok {
+					s.nowPlaying.Delete(key)
+					return true
+				}
+				if now.Sub(record.UpdatedAt) > 10*time.Minute {
+					s.nowPlaying.Delete(key)
+				}
+				return true
+			})
+		}
 	}
 }
 
