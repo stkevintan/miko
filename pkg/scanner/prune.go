@@ -1,18 +1,20 @@
 package scanner
 
 import (
-	"context"
+	"os"
+	"path/filepath"
 	"sync"
 
+	"github.com/stkevintan/miko/models"
 	"github.com/stkevintan/miko/pkg/log"
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
 )
 
-func (s *Scanner) Prune(ctx context.Context, seenIDs *sync.Map) {
+func (s *Scanner) Prune(seenIDs *sync.Map) {
 	log.Info("Pruning deleted files and orphaned records...")
 
-	err := s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+	err := s.db.Transaction(func(tx *gorm.DB) error {
 		// 1. Create a temporary table to store seen IDs
 		tx.Exec("CREATE TEMPORARY TABLE seen_ids (id TEXT PRIMARY KEY)")
 		defer tx.Exec("DROP TABLE seen_ids")
@@ -104,6 +106,57 @@ func (s *Scanner) Prune(ctx context.Context, seenIDs *sync.Map) {
 
 	if err != nil {
 		log.Error("Failed to prune database: %v", err)
+	}
+
+	// 8. Prune unreferenced cover art files
+	s.pruneCoverArtCache()
+}
+
+func (s *Scanner) pruneCoverArtCache() {
+	cacheDir := GetCoverCacheDir(s.cfg)
+	entries, err := os.ReadDir(cacheDir)
+	if err != nil {
+		if !os.IsNotExist(err) {
+			log.Error("Failed to read cover art cache directory: %v", err)
+		}
+		return
+	}
+
+	referencedCovers := make(map[string]bool)
+
+	// Collect all referenced cover art IDs from the database
+	collectCovers := func(model interface{}) {
+		var covers []string
+		if err := s.db.Model(model).Where("cover_art != ''").Pluck("cover_art", &covers).Error; err != nil {
+			log.Warn("Failed to pluck cover art for %T: %v", model, err)
+			return
+		}
+		for _, c := range covers {
+			referencedCovers[c] = true
+		}
+	}
+
+	collectCovers(&models.Child{})
+	collectCovers(&models.AlbumID3{})
+	collectCovers(&models.ArtistID3{})
+
+	prunedCount := 0
+	for _, entry := range entries {
+		if entry.IsDir() {
+			continue
+		}
+		name := entry.Name()
+		if !referencedCovers[name] {
+			if err := os.Remove(filepath.Join(cacheDir, name)); err != nil {
+				log.Warn("Failed to remove unreferenced cover art %q: %v", name, err)
+			} else {
+				prunedCount++
+			}
+		}
+	}
+
+	if prunedCount > 0 {
+		log.Info("Pruned %d unreferenced cover art files from cache", prunedCount)
 	}
 }
 

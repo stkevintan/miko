@@ -78,7 +78,7 @@ func main() {
 
 	ctx := di.NewContext(appCtx)
 	di.Provide(ctx, cfg)
-	di.Provide(ctx, db)
+	di.Provide(ctx, db.WithContext(appCtx))
 
 	// Create default user if none exists
 	var count int64

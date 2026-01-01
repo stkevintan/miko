@@ -36,7 +36,6 @@ type Tags struct {
 	Lyrics       string
 	Duration     int
 	Bitrate      int
-	Image        []byte
 }
 
 func Read(path string) (*Tags, error) {
@@ -91,11 +90,6 @@ func Read(path string) (*Tags, error) {
 	if props, err := taglib.ReadProperties(path); err == nil {
 		res.Duration = int(props.Length.Seconds())
 		res.Bitrate = int(props.Bitrate)
-	}
-
-	// Extract image data
-	if img, err := taglib.ReadImage(path); err == nil {
-		res.Image = img
 	}
 
 	return res, nil

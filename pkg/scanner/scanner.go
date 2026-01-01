@@ -41,6 +41,7 @@ type scanTask struct {
 }
 
 type scanResult struct {
+	path  string
 	child *models.Child
 	tags  *tags.Tags
 }
@@ -70,7 +71,7 @@ func (s *Scanner) Scan(ctx context.Context, incremental bool) {
 			ID      string
 			Created *time.Time
 		}
-		s.db.WithContext(ctx).Model(&models.Child{}).Select("id, created").Where("is_dir = ?", false).Find(&files)
+		s.db.Model(&models.Child{}).Select("id, created").Where("is_dir = ?", false).Find(&files)
 		for _, f := range files {
 			if f.Created != nil {
 				existingFiles[f.ID] = *f.Created
@@ -123,7 +124,7 @@ func (s *Scanner) Scan(ctx context.Context, incremental bool) {
 						Path:          task.path,
 						MusicFolderID: task.folder.ID,
 					}
-					resultChan <- scanResult{child: child}
+					resultChan <- scanResult{path: task.path, child: child}
 					continue
 				}
 
@@ -168,10 +169,10 @@ func (s *Scanner) Scan(ctx context.Context, incremental bool) {
 				t, err := tags.Read(task.path)
 				if err != nil {
 					// Still add the child even if tags fail
-					resultChan <- scanResult{child: child}
+					resultChan <- scanResult{path: task.path, child: child}
 					continue
 				}
-				resultChan <- scanResult{child: child, tags: t}
+				resultChan <- scanResult{path: task.path, child: child, tags: t}
 			}
 		}()
 	}
@@ -180,13 +181,13 @@ func (s *Scanner) Scan(ctx context.Context, incremental bool) {
 	doneSaver := make(chan struct{})
 	go func() {
 		defer close(doneSaver)
-		s.saveResults(ctx, resultChan, cacheDir)
+		s.saveResults(resultChan, cacheDir, numWorkers)
 	}()
 
 	// Producer
 	for _, rootPath := range s.cfg.Subsonic.Folders {
 		var folder models.MusicFolder
-		s.db.WithContext(ctx).Where(models.MusicFolder{Path: rootPath}).Attrs(models.MusicFolder{Name: filepath.Base(rootPath)}).FirstOrCreate(&folder)
+		s.db.Where(models.MusicFolder{Path: rootPath}).Attrs(models.MusicFolder{Name: filepath.Base(rootPath)}).FirstOrCreate(&folder)
 
 		filepath.WalkDir(rootPath, func(path string, d fs.DirEntry, err error) error {
 			if err != nil {
@@ -208,7 +209,7 @@ func (s *Scanner) Scan(ctx context.Context, incremental bool) {
 	close(resultChan)
 	<-doneSaver
 
-	s.Prune(ctx, seenIDs)
+	s.Prune(seenIDs)
 
 	s.lastScanTime.Store(time.Now().Unix())
 	log.Info("Scan completed. Total files: %d", s.scanCount.Load())
