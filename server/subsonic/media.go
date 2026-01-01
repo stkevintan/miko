@@ -81,7 +81,7 @@ func (s *Subsonic) handleGetCoverArt(w http.ResponseWriter, r *http.Request) {
 	}
 	// get album id
 	coverArt := ""
-	if strings.HasPrefix(id, "al-") {
+	if strings.HasPrefix(id, "al-") || strings.HasPrefix(id, "ar-") {
 		coverArt = id
 		// child
 	} else if !strings.Contains(id, "-") {

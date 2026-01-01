@@ -125,29 +125,20 @@ func (s *Scanner) pruneCoverArtCache() {
 	referencedCovers := make(map[string]bool)
 
 	// Collect all referenced cover art IDs from the database
-	var covers []string
-	s.db.Model(&models.Child{}).Where("cover_art != ''").Pluck("cover_art", &covers)
-	for _, c := range covers {
-		referencedCovers[c] = true
+	collectCovers := func(model interface{}) {
+		var covers []string
+		if err := s.db.Model(model).Where("cover_art != ''").Pluck("cover_art", &covers).Error; err != nil {
+			log.Warn("Failed to pluck cover art for %T: %v", model, err)
+			return
+		}
+		for _, c := range covers {
+			referencedCovers[c] = true
+		}
 	}
 
-	covers = nil
-	s.db.Model(&models.AlbumID3{}).Where("cover_art != ''").Pluck("cover_art", &covers)
-	for _, c := range covers {
-		referencedCovers[c] = true
-	}
-
-	covers = nil
-	s.db.Model(&models.ArtistID3{}).Where("cover_art != ''").Pluck("cover_art", &covers)
-	for _, c := range covers {
-		referencedCovers[c] = true
-	}
-
-	covers = nil
-	s.db.Model(&models.Playlist{}).Where("cover_art != ''").Pluck("cover_art", &covers)
-	for _, c := range covers {
-		referencedCovers[c] = true
-	}
+	collectCovers(&models.Child{})
+	collectCovers(&models.AlbumID3{})
+	collectCovers(&models.ArtistID3{})
 
 	prunedCount := 0
 	for _, entry := range entries {

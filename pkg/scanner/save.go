@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/stkevintan/miko/models"
+	"github.com/stkevintan/miko/pkg/log"
 	"github.com/stkevintan/miko/pkg/tags"
 	"gorm.io/gorm/clause"
 )
@@ -82,7 +83,9 @@ func (s *Scanner) startImageWorkers(ctx *saveContext, wg *sync.WaitGroup, numWor
 				if err != nil || len(img) == 0 {
 					continue
 				}
-				os.WriteFile(p, img, 0644)
+				if err := os.WriteFile(p, img, 0644); err != nil {
+					log.Warn("Failed to write cover art to cache for %s: %v", t.coverArt, err)
+				}
 			}
 		}()
 	}
