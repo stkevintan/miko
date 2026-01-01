@@ -42,8 +42,7 @@ func (s *Subsonic) handleStartScan(w http.ResponseWriter, r *http.Request) {
 	db.Model(&models.Child{}).Where("is_dir = ?", false).Count(&count)
 
 	// Use app context so scan survives request disconnect but stops on app shutdown
-	ctx := di.Inherit(s.ctx, r.Context())
-	go sc.Scan(ctx, incremental)
+	go sc.Scan(s.ctx, incremental)
 	resp := models.NewResponse(models.ResponseStatusOK)
 	resp.ScanStatus = &models.ScanStatus{
 		Scanning: true,

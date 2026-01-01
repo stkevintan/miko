@@ -17,7 +17,6 @@ import (
 	"github.com/stkevintan/miko/pkg/di"
 	"github.com/stkevintan/miko/pkg/log"
 	"github.com/stkevintan/miko/pkg/scanner"
-	"github.com/stkevintan/miko/pkg/tags"
 	"gorm.io/gorm"
 )
 
@@ -80,69 +79,36 @@ func (s *Subsonic) handleGetCoverArt(w http.ResponseWriter, r *http.Request) {
 		s.sendResponse(w, r, models.NewErrorResponse(10, "ID is required"))
 		return
 	}
+	// get album id
+	coverArt := ""
+	if strings.HasPrefix(id, "al-") {
+		coverArt = id
+		// child
+	} else if !strings.Contains(id, "-") {
+		db := di.MustInvoke[*gorm.DB](r.Context())
+		var child models.Child
+		if err := db.Model(&models.Child{}).Select("id, cover_art").Where("id = ?", id).First(&child).Error; err != nil {
+			s.sendResponse(w, r, models.NewErrorResponse(70, "Cover art not found"))
+			return
+		}
+		coverArt = child.CoverArt
+	}
+
+	if coverArt == "" {
+		s.sendResponse(w, r, models.NewErrorResponse(70, "Cover art not found"))
+		return
+	}
 
 	cfg := di.MustInvoke[*config.Config](r.Context())
 	cacheDir := scanner.GetCoverCacheDir(cfg)
 
 	// Try to serve from cache first
-	cachePath := filepath.Join(cacheDir, id)
-	if data, err := os.ReadFile(cachePath); err == nil && len(data) > 0 {
-		contentType := http.DetectContentType(data)
-		w.Header().Set("Content-Type", contentType)
-		w.WriteHeader(http.StatusOK)
-		w.Write(data)
+	cachePath := filepath.Join(cacheDir, coverArt)
+	if _, err := os.Stat(cachePath); err == nil {
+		// http.ServeFile(w, r, cachePath)
+		safeServeFile(w, r, cachePath)
 		return
 	}
-
-	db := di.MustInvoke[*gorm.DB](r.Context())
-
-	var path string
-	if strings.HasPrefix(id, "al-") {
-		realID := id[3:]
-		var album models.AlbumID3
-		if err := db.Model(&models.AlbumID3{}).Select("id").Where("id = ?", realID).First(&album).Error; err == nil {
-			var firstSong models.Child
-			if err := db.Model(&models.Child{}).Select("path").Where("album_id = ?", album.ID).First(&firstSong).Error; err == nil {
-				path = firstSong.Path
-			}
-		}
-	} else if strings.HasPrefix(id, "ar-") {
-		realID := id[3:]
-		var artist models.ArtistID3
-		if err := db.Model(&models.ArtistID3{}).Select("id").Where("id = ?", realID).First(&artist).Error; err == nil {
-			var firstSong models.Child
-			if err := db.Table("children").
-				Select("children.id, children.path").
-				Joins("JOIN song_artists ON song_artists.child_id = children.id").
-				Where("song_artists.artist_id3_id = ?", artist.ID).
-				First(&firstSong).Error; err == nil {
-				path = firstSong.Path
-			}
-		}
-	} else {
-		var song models.Child
-		if err := db.Select("id,path").Where("id = ?", id).First(&song).Error; err == nil {
-			path = song.Path
-		}
-	}
-
-	if path != "" {
-		if data, err := tags.ReadImage(path); err == nil && len(data) > 0 {
-			// Cache it for next time
-			if err := os.MkdirAll(cacheDir, 0755); err != nil {
-				log.Warn("Failed to create cover art cache directory %q: %v", cacheDir, err)
-			} else if err := os.WriteFile(filepath.Join(cacheDir, id), data, 0644); err != nil {
-				log.Warn("Failed to write cover art to cache for id %s: %v", id, err)
-			}
-
-			contentType := http.DetectContentType(data)
-			w.Header().Set("Content-Type", contentType)
-			w.WriteHeader(http.StatusOK)
-			w.Write(data)
-			return
-		}
-	}
-
 	// Fallback to a default cover or 404
 	w.WriteHeader(http.StatusNotFound)
 }
@@ -259,7 +225,8 @@ func (s *Subsonic) handleGetAvatar(w http.ResponseWriter, r *http.Request) {
 	for _, ext := range extensions {
 		avatarPath := filepath.Join(avatarDir, filename+ext)
 		if _, err := os.Stat(avatarPath); err == nil {
-			http.ServeFile(w, r, avatarPath)
+			// http.ServeFile(w, r, avatarPath)
+			safeServeFile(w, r, avatarPath)
 			return
 		} else if !os.IsNotExist(err) {
 			log.Error("Error accessing avatar %s: %v", avatarPath, err)
