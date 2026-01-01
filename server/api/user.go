@@ -22,7 +22,7 @@ func (h *Handler) handleLogin(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	db := di.MustInvoke[*gorm.DB](ctx)
 	var user models.User
-	if err := db.Where("username = ?", req.Username).First(&user).Error; err != nil {
+	if err := db.Model(&models.User{}).Select("username, password").Where("username = ?", req.Username).First(&user).Error; err != nil {
 		JSON(w, http.StatusUnauthorized, models.ErrorResponse{Error: "Invalid username or password"})
 		return
 	}
@@ -80,7 +80,7 @@ func (h *Handler) handleChangePassword(w http.ResponseWriter, r *http.Request) {
 	db := di.MustInvoke[*gorm.DB](ctx)
 
 	var user models.User
-	if err := db.Where("username = ?", string(username)).First(&user).Error; err != nil {
+	if err := db.Model(&models.User{}).Select("username, password").Where("username = ?", string(username)).First(&user).Error; err != nil {
 		JSON(w, http.StatusNotFound, models.ErrorResponse{Error: "User not found"})
 		return
 	}

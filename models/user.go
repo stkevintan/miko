@@ -24,8 +24,7 @@ type User struct {
 	Username         string         `gorm:"primaryKey" xml:"username,attr" json:"username"`
 	Password         string         `xml:"-" json:"-"`
 	Email            string         `xml:"email,attr,omitempty" json:"email,omitempty"`
-	AdminRole        bool           `xml:"adminRole,attr" json:"adminRole"`
-	SubsonicSettings `gorm:"embedded" xml:",inline"`
+	SubsonicSettings `gorm:"embedded"`
 }
 
 func (u *User) prepare() {
@@ -55,6 +54,7 @@ type SubsonicSettings struct {
 	SettingsRole        bool          `xml:"settingsRole,attr" json:"settingsRole"`
 	DownloadRole        bool          `gorm:"default:true" xml:"downloadRole,attr" json:"downloadRole"`
 	UploadRole          bool          `xml:"uploadRole,attr" json:"uploadRole"`
+	AdminRole           bool          `xml:"adminRole,attr" json:"adminRole"`
 	PlaylistRole        bool          `gorm:"default:true" xml:"playlistRole,attr" json:"playlistRole"`
 	CoverArtRole        bool          `gorm:"default:true" xml:"coverArtRole,attr" json:"coverArtRole"`
 	CommentRole         bool          `gorm:"default:true" xml:"commentRole,attr" json:"commentRole"`
@@ -66,4 +66,20 @@ type SubsonicSettings struct {
 	AvatarLastChanged   *time.Time    `xml:"avatarLastChanged,attr,omitempty" json:"avatarLastChanged,omitempty"`
 	MusicFolders        []MusicFolder `gorm:"many2many:user_music_folders;" xml:"-" json:"-"`
 	FolderIDs           []uint        `gorm:"-" xml:"folder,omitempty" json:"folder,omitempty"`
+}
+
+var AdminSettings = SubsonicSettings{
+	ScrobblingEnabled:   true,
+	DownloadRole:        true,
+	PlaylistRole:        true,
+	CoverArtRole:        true,
+	CommentRole:         true,
+	StreamRole:          true,
+	ShareRole:           true,
+	SettingsRole:        true,
+	UploadRole:          true,
+	AdminRole:           true,
+	PodcastRole:         true,
+	JukeboxRole:         true,
+	VideoConversionRole: true,
 }

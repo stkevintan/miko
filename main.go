@@ -89,18 +89,18 @@ func main() {
 	var count int64
 	db.Model(&models.User{}).Count(&count)
 	if count == 0 {
-		password := "adminpassword"
-		// Try to encrypt if secret is available
-		if secret, err := crypto.ResolvePasswordSecret(ctx); err == nil {
-			password, err = crypto.Encrypt(password, secret)
-			if err != nil {
-				log.Fatalf("Failed to encrypt default admin password: %v", err)
-			}
+		secret, err := crypto.ResolvePasswordSecret(ctx)
+		if err != nil {
+			log.Fatalf("Failed to resolve password secret: %v", err)
+		}
+		password, err := crypto.Encrypt("adminpassword", secret)
+		if err != nil {
+			log.Fatalf("Failed to encrypt default admin password: %v", err)
 		}
 		defaultUser := models.User{
-			Username:  "admin",
-			Password:  password,
-			AdminRole: true,
+			Username:         "admin",
+			Password:         password,
+			SubsonicSettings: models.AdminSettings,
 		}
 		if err := db.Create(&defaultUser).Error; err != nil {
 			log.Error("Failed to create default user: %v", err)

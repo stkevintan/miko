@@ -30,7 +30,7 @@ func (h *Handler) getApiRequestContext(r *http.Request) (context.Context, error)
 	ctx = di.Inherit(ctx)
 
 	var identity cookiecloud.Identity
-	if err := db.Where("username = ?", username).First(&identity).Error; err != nil {
+	if err := db.Model(&cookiecloud.Identity{}).Select("username, uuid, password").Where("username = ?", username).First(&identity).Error; err != nil {
 		return nil, fmt.Errorf("failed to find identity for user %s: %w", username, err)
 	}
 
