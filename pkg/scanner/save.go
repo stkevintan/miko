@@ -25,17 +25,17 @@ type saveContext struct {
 	cacheDir            string
 }
 
-func (s *Scanner) saveResults(resultChan <-chan scanResult, cacheDir string, numWorkers int) {
+func (s *Scanner) saveResults(resultChan <-chan scanResult, cacheDir string) {
 	ctx := &saveContext{
 		seenArtists:         make(map[string]bool),
 		seenGenres:          make(map[string]bool),
 		seenAlbumsWithCover: make(map[string]bool),
-		imageTasks:          make(chan imageTask, numWorkers*10),
+		imageTasks:          make(chan imageTask, s.numWorkers*10),
 		cacheDir:            cacheDir,
 	}
 
 	var imageWg sync.WaitGroup
-	s.startImageWorkers(ctx, &imageWg, numWorkers)
+	s.startImageWorkers(ctx, &imageWg, s.numWorkers)
 
 	var children []models.Child
 	flushChildren := func() {
@@ -63,35 +63,6 @@ func (s *Scanner) saveResults(resultChan <-chan scanResult, cacheDir string, num
 	flushChildren()
 	close(ctx.imageTasks)
 	imageWg.Wait()
-}
-
-func (s *Scanner) UpdateSongMetadata(child *models.Child) error {
-	t, err := tags.Read(child.Path)
-	if err != nil {
-		return err
-	}
-
-	ctx := &saveContext{
-		seenArtists:         make(map[string]bool),
-		seenGenres:          make(map[string]bool),
-		seenAlbumsWithCover: make(map[string]bool),
-		imageTasks:          make(chan imageTask, 1),
-		cacheDir:            GetCoverCacheDir(s.cfg),
-	}
-
-	var wg sync.WaitGroup
-	s.startImageWorkers(ctx, &wg, 1)
-
-	s.processMetadata(child, t, child.Path, ctx)
-
-	if err := s.db.Save(child).Error; err != nil {
-		return err
-	}
-
-	close(ctx.imageTasks)
-	wg.Wait()
-
-	return nil
 }
 
 func (s *Scanner) SaveCoverArt(coverArt string, data []byte) error {

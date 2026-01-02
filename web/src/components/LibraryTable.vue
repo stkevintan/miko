@@ -1,23 +1,38 @@
 <script setup lang="ts">
-import DataTable from 'primevue/datatable';
+import DataTable, { DataTableRowClickEvent } from 'primevue/datatable';
 import Column from 'primevue/column';
 import Button from 'primevue/button';
+import Divider from 'primevue/divider';
+import { Child } from '@/types/library';
 
 const props = defineProps<{
-  items: any[];
+  items: Child[];
   loading: boolean;
-  selectionMode: 'single' | 'multiple';
-  selection: any;
+  isSelectionMode: boolean;
+  selection: Child | Child[] | null;
+  scanningIds?: string[];
 }>();
 
 const emit = defineEmits<{
-  (e: 'update:selection', value: any): void;
-  (e: 'row-click', event: any): void;
-  (e: 'row-dblclick', event: any): void;
-  (e: 'edit', item: any): void;
-  (e: 'scrape', item: any): void;
-  (e: 'delete', item: any): void;
+  (e: 'update:selection', value: Child | Child[] | null): void;
+  (e: 'update:isSelectionMode', value: boolean): void;
+  (e: 'row-click', event: DataTableRowClickEvent<Child>): void;
+  (e: 'row-dblclick', event: DataTableRowClickEvent<Child>): void;
+  (e: 'edit', item: Child): void;
+  (e: 'scan', item: Child): void;
+  (e: 'scrape', item: Child): void;
+  (e: 'delete', item: Child): void;
+  (e: 'batch-scrape'): void;
+  (e: 'batch-delete'): void;
 }>();
+
+const toggleSelectionMode = () => {
+  emit('update:isSelectionMode', !props.isSelectionMode);
+};
+
+const clearSelection = () => {
+  emit('update:selection', props.isSelectionMode ? [] : null);
+};
 
 const formatDuration = (seconds: number) => {
   if (!seconds) return '-';
@@ -28,28 +43,72 @@ const formatDuration = (seconds: number) => {
 </script>
 
 <template>
-  <div class="flex-1 flex flex-col min-w-0 border border-surface-200 dark:border-surface-800 rounded-lg bg-surface-0 dark:bg-surface-900 overflow-hidden">
-    <DataTable 
-      :value="items" 
-      :loading="loading" 
-      scrollable
-      scrollHeight="flex"
-      resizableColumns
-      class="p-datatable-sm flex-1"
-      :selection="selection"
-      @update:selection="emit('update:selection', $event)"
-      :selectionMode="selectionMode"
-      dataKey="id"
-      @row-click="emit('row-click', $event)"
-      @row-dblclick="emit('row-dblclick', $event)"
-      paginator
-      :rows="50"
-      :rowsPerPageOptions="[20, 50, 100]"
-      paginatorTemplate="FirstPageLink PrevPageLink PageLinks NextPageLink LastPageLink CurrentPageReport RowsPerPageDropdown"
-      currentPageReportTemplate="{first} to {last} of {totalRecords}"
+    <!-- Action Bar -->
+    <div
+      class="flex items-center justify-between p-2 bg-surface-100 dark:bg-surface-800 border border-surface-200 dark:border-surface-700 rounded-lg shrink-0"
     >
-      <Column v-if="selectionMode === 'multiple'" selectionMode="multiple" headerStyle="width: 3rem"></Column>
-      <Column field="title" header="Name" headerStyle="padding-left: 1rem" bodyStyle="padding-left: 1rem">
+      <div class="flex items-center gap-2 px-2">
+        <Button
+          :icon="isSelectionMode ? 'pi pi-check-square' : 'pi pi-list'"
+          :label="isSelectionMode ? 'Selection Mode' : 'Browse Mode'"
+          size="small"
+          variant="text"
+          :severity="isSelectionMode ? 'primary' : 'secondary'"
+          @click="toggleSelectionMode"
+        />
+        <template v-if="isSelectionMode && Array.isArray(selection) && selection.length > 0">
+          <Divider layout="vertical" class="mx-0 h-4" />
+          <span class="text-sm font-medium">{{ selection.length }} selected</span>
+          <Button
+            icon="pi pi-times"
+            variant="text"
+            severity="secondary"
+            rounded
+            size="small"
+            @click="clearSelection"
+          />
+        </template>
+      </div>
+      <div v-if="isSelectionMode && Array.isArray(selection) && selection.length > 0" class="flex gap-2">
+        <Button
+          label="Scrape"
+          icon="pi pi-search"
+          size="small"
+          severity="secondary"
+          @click="emit('batch-scrape')"
+        />
+        <Button
+          label="Delete"
+          icon="pi pi-trash"
+          size="small"
+          severity="danger"
+          @click="emit('batch-delete')"
+        />
+      </div>
+    </div>
+
+    <div class="flex-1 flex flex-col min-w-0 border border-surface-200 dark:border-surface-800 rounded-lg bg-surface-0 dark:bg-surface-900 overflow-hidden">
+      <DataTable
+        :value="items" 
+        :loading="loading" 
+        scrollable
+        scrollHeight="flex"
+        resizableColumns
+        class="p-datatable-sm flex-1"
+        :selection="selection"
+        @update:selection="emit('update:selection', $event)"
+        :selectionMode="isSelectionMode ? 'multiple' : 'single'"
+        dataKey="id"
+        @row-click="emit('row-click', $event)"
+        @row-dblclick="emit('row-dblclick', $event)"
+        paginator
+        :rows="50"
+        :rowsPerPageOptions="[20, 50, 100]"
+        paginatorTemplate="FirstPageLink PrevPageLink PageLinks NextPageLink LastPageLink CurrentPageReport RowsPerPageDropdown"
+        currentPageReportTemplate="{first} to {last} of {totalRecords}"
+      >
+        <Column v-if="isSelectionMode" selectionMode="multiple" headerStyle="width: 3rem"></Column>
+        <Column field="title" header="Name" headerStyle="padding-left: 1rem" bodyStyle="padding-left: 1rem">
         <template #body="slotProps">
           <div class="flex items-center max-w-90">
             <i :class="slotProps.data.isDir ? 'pi pi-folder mr-2 text-yellow-500' : 'pi pi-file mr-2 text-blue-500'"></i>
@@ -74,6 +133,16 @@ const formatDuration = (seconds: number) => {
       <Column header="Actions" style="width: 9rem" frozen alignFrozen="right">
         <template #body="slotProps">
           <div class="flex gap-1 justify-end items-center">
+            <Button 
+              :icon="scanningIds?.includes(slotProps.data.id) ? 'pi pi-spin pi-spinner' : 'pi pi-refresh'" 
+              :disabled="scanningIds?.includes(slotProps.data.id)"
+              variant="text" 
+              severity="secondary" 
+              rounded 
+              size="small" 
+              @click.stop="emit('scan', slotProps.data)" 
+              v-tooltip="'Scan'" 
+            />
             <Button v-if="!slotProps.data.isDir" icon="pi pi-pencil" variant="text" severity="secondary" rounded size="small" @click.stop="emit('edit', slotProps.data)" v-tooltip="'Edit'" />
             <Button icon="pi pi-search" variant="text" severity="secondary" rounded size="small" @click.stop="emit('scrape', slotProps.data)" v-tooltip="'Scrape'" />
             <Button icon="pi pi-trash" variant="text" severity="danger" rounded size="small" @click.stop="emit('delete', slotProps.data)" v-tooltip="'Delete'" />

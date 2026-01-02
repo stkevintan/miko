@@ -15,10 +15,12 @@ import (
 	"gorm.io/gorm"
 )
 
-type Handler struct{}
+type Handler struct {
+	ctx context.Context
+}
 
-func New() *Handler {
-	return &Handler{}
+func New(ctx context.Context) *Handler {
+	return &Handler{ctx: ctx}
 }
 
 func (h *Handler) getApiRequestContext(r *http.Request) (context.Context, error) {
@@ -75,6 +77,9 @@ func (h *Handler) RegisterRoutes(r chi.Router) {
 			r.Get("/library/folders", h.handleGetLibraryFolders)
 			r.Get("/library/directory", h.handleGetLibraryDirectory)
 			r.Get("/library/coverArt", h.handleGetLibraryCoverArt)
+			r.Post("/library/scan", h.handleScanLibrary)
+			r.Post("/library/scan/all", h.handleScanAllLibrary)
+			r.Get("/library/scan/status", h.handleGetScanStatus)
 			r.Get("/library/song/tags", h.handleGetLibrarySongTags)
 			r.Post("/library/song/update", h.handleUpdateLibrarySong)
 			r.Post("/library/song/cover", h.handleUpdateLibrarySongCover)

@@ -76,7 +76,7 @@ func (h *Handler) Routes() http.Handler {
 	s.RegisterRoutes(chi.Router(r))
 
 	// API v1 group
-	apiHandler := api.New()
+	apiHandler := api.New(h.ctx)
 	apiHandler.RegisterRoutes(chi.Router(r))
 
 	return r

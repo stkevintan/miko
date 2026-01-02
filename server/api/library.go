@@ -72,8 +72,11 @@ func (h *Handler) handleUpdateLibrarySong(w http.ResponseWriter, r *http.Request
 
 	// Update database using scanner logic
 	sc := scanner.New(db, di.MustInvoke[*config.Config](r.Context()))
-	if err := sc.UpdateSongMetadata(&song); err != nil {
-		JSON(w, http.StatusInternalServerError, models.ErrorResponse{Error: "Failed to update metadata: " + err.Error()})
+	sc.ScanPath(r.Context(), song.Path)
+
+	// Fetch updated song
+	if err := db.Where("id = ?", req.ID).First(&song).Error; err != nil {
+		JSON(w, http.StatusInternalServerError, models.ErrorResponse{Error: "Failed to fetch updated song"})
 		return
 	}
 
@@ -209,4 +212,64 @@ func (h *Handler) handleGetLibraryCoverArt(w http.ResponseWriter, r *http.Reques
 	}
 
 	http.ServeFile(w, r, cachePath)
+}
+
+func (h *Handler) handleScanLibrary(w http.ResponseWriter, r *http.Request) {
+	var req struct {
+		ID string `json:"id"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		JSON(w, http.StatusBadRequest, models.ErrorResponse{Error: "Invalid request body"})
+		return
+	}
+
+	if req.ID == "" {
+		JSON(w, http.StatusBadRequest, models.ErrorResponse{Error: "ID is required"})
+		return
+	}
+
+	db := di.MustInvoke[*gorm.DB](r.Context())
+	var item models.Child
+	if err := db.Where("id = ?", req.ID).First(&item).Error; err != nil {
+		JSON(w, http.StatusNotFound, models.ErrorResponse{Error: "Item not found"})
+		return
+	}
+
+	sc := scanner.New(db, di.MustInvoke[*config.Config](r.Context()))
+	sc.ScanPath(r.Context(), item.Path)
+
+	// Fetch updated item
+	if err := db.Where("id = ?", req.ID).First(&item).Error; err == nil {
+		JSON(w, http.StatusOK, item)
+		return
+	}
+
+	JSON(w, http.StatusOK, map[string]string{"status": "ok"})
+}
+
+func (h *Handler) handleScanAllLibrary(w http.ResponseWriter, r *http.Request) {
+	db := di.MustInvoke[*gorm.DB](r.Context())
+	cfg := di.MustInvoke[*config.Config](r.Context())
+	sc := scanner.New(db, cfg)
+
+	// Use background context or app context if available to ensure scan continues
+	// For now, we'll just run it in a goroutine.
+	// In a real app, you'd want to manage this more carefully.
+	go sc.ScanAll(h.ctx, false)
+
+	JSON(w, http.StatusOK, map[string]string{"status": "scanning"})
+}
+
+func (h *Handler) handleGetScanStatus(w http.ResponseWriter, r *http.Request) {
+	db := di.MustInvoke[*gorm.DB](r.Context())
+	cfg := di.MustInvoke[*config.Config](r.Context())
+	sc := scanner.New(db, cfg)
+
+	var count int64
+	db.Model(&models.Child{}).Where("is_dir = ?", false).Count(&count)
+
+	JSON(w, http.StatusOK, map[string]interface{}{
+		"scanning": sc.IsScanning(),
+		"count":    count,
+	})
 }

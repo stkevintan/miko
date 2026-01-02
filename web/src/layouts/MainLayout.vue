@@ -39,8 +39,44 @@ const handleLogout = () => {
 };
 
 import { useTheme } from '../composables/useTheme';
+import api from '../api';
+import { onMounted, onUnmounted } from 'vue';
 
 const { isDark, toggleDarkMode } = useTheme();
+
+const isScanning = ref(false);
+const scanCount = ref(0);
+
+const checkScanStatus = async () => {
+  try {
+    const response = await api.get('/library/scan/status');
+    isScanning.value = response.data.scanning;
+    scanCount.value = response.data.count;
+  } catch (error) {
+    console.error('Failed to check scan status:', error);
+  }
+};
+
+let statusInterval: any;
+
+onMounted(() => {
+  checkScanStatus();
+  statusInterval = setInterval(checkScanStatus, 5000);
+});
+
+onUnmounted(() => {
+  if (statusInterval) clearInterval(statusInterval);
+});
+
+const startFullScan = async () => {
+  isScanning.value = true;
+  try {
+    await api.post('/library/scan/all');
+  } catch (error) {
+    console.error('Failed to start scan:', error);
+    isScanning.value = false;
+  }
+};
 </script>
 
 <template>
@@ -53,6 +89,15 @@ const { isDark, toggleDarkMode } = useTheme();
       </div>
       
       <div class="flex items-center gap-3">
+        <Button 
+          :icon="isScanning ? 'pi pi-spin pi-spinner' : 'pi pi-refresh'" 
+          v-tooltip="isScanning ? 'Scanning music folders...' : 'Start scan'"
+          variant="text" 
+          severity="secondary" 
+          size="small"
+          :disabled="isScanning"
+          @click="startFullScan"
+        />
         <Button 
           :icon="isDark ? 'pi pi-sun' : 'pi pi-moon'" 
           variant="text" 

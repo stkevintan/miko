@@ -6,16 +6,16 @@ import InputText from 'primevue/inputtext';
 import Divider from 'primevue/divider';
 import CoverArt from './CoverArt.vue';
 import api from '../api';
-import { useAuthStore } from '../stores/auth';
+import { Child } from '@/types/library';
 
 const props = defineProps<{
   visible: boolean;
-  item: any;
+  item: Child | null;
 }>();
 
 const emit = defineEmits<{
   (e: 'update:visible', value: boolean): void;
-  (e: 'save', updatedItem: any): void;
+  (e: 'save', updatedItem: Child): void;
 }>();
 
 const loading = ref(false);
@@ -144,7 +144,7 @@ const saveEdit = async () => {
           <div class="flex-1 flex flex-col gap-1">
             <InputText v-model="tag.key" placeholder="Tag Key (e.g. ARTIST)" class="w-full font-mono text-sm" />
           </div>
-          <div class="flex-[2] flex flex-col gap-1">
+          <div class="flex-2 flex flex-col gap-1">
             <InputText v-model="tag.value" placeholder="Tag Value" class="w-full text-sm" />
           </div>
           <Button icon="pi pi-trash" severity="danger" variant="text" rounded @click="removeTag(index)" />
