@@ -80,6 +80,8 @@ func (h *Handler) RegisterRoutes(r chi.Router) {
 			r.Post("/library/scan", h.handleScanLibrary)
 			r.Post("/library/scan/all", h.handleScanAllLibrary)
 			r.Get("/library/scan/status", h.handleGetScanStatus)
+			r.Post("/library/delete", h.handleDeleteLibraryItems)
+			r.Post("/library/song/scrape", h.handleScrapeLibrarySongs)
 			r.Get("/library/song/tags", h.handleGetLibrarySongTags)
 			r.Post("/library/song/update", h.handleUpdateLibrarySong)
 			r.Post("/library/song/cover", h.handleUpdateLibrarySongCover)

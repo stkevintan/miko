@@ -2,6 +2,7 @@
 import { ref } from 'vue';
 import { useRouter } from 'vue-router';
 import { useAuthStore } from '../stores/auth';
+import { useToast } from 'primevue/usetoast';
 import Button from 'primevue/button';
 import Menu from 'primevue/menu';
 import Avatar from 'primevue/avatar';
@@ -9,6 +10,7 @@ import Popover from 'primevue/popover';
 
 const authStore = useAuthStore();
 const router = useRouter();
+const toast = useToast();
 
 const menuItems = ref([
   {
@@ -72,8 +74,15 @@ const startFullScan = async () => {
   isScanning.value = true;
   try {
     await api.post('/library/scan/all');
-  } catch (error) {
+    toast.add({ severity: 'success', summary: 'Success', detail: 'Full library scan started', life: 3000 });
+  } catch (error: any) {
     console.error('Failed to start scan:', error);
+    toast.add({ 
+      severity: 'error', 
+      summary: 'Scan Failed', 
+      detail: error.response?.data?.error || error.message || 'Failed to start scan', 
+      life: 5000 
+    });
     isScanning.value = false;
   }
 };

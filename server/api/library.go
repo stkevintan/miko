@@ -1,7 +1,9 @@
 package api
 
 import (
+	"context"
 	"encoding/json"
+	"fmt"
 	"io"
 	"net/http"
 	"os"
@@ -12,6 +14,7 @@ import (
 	"github.com/stkevintan/miko/models"
 	"github.com/stkevintan/miko/pkg/browser"
 	"github.com/stkevintan/miko/pkg/di"
+	"github.com/stkevintan/miko/pkg/musicbrainz"
 	"github.com/stkevintan/miko/pkg/scanner"
 	"github.com/stkevintan/miko/pkg/tags"
 	"gorm.io/gorm"
@@ -272,4 +275,245 @@ func (h *Handler) handleGetScanStatus(w http.ResponseWriter, r *http.Request) {
 		"scanning": sc.IsScanning(),
 		"count":    count,
 	})
+}
+
+func (h *Handler) handleScrapeLibrarySongs(w http.ResponseWriter, r *http.Request) {
+	var req struct {
+		IDs []string `json:"ids"`
+		ID  string   `json:"id"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		JSON(w, http.StatusBadRequest, models.ErrorResponse{Error: "Invalid request body"})
+		return
+	}
+
+	ids := req.IDs
+	if req.ID != "" {
+		ids = append(ids, req.ID)
+	}
+
+	if len(ids) == 0 {
+		JSON(w, http.StatusBadRequest, models.ErrorResponse{Error: "ID or IDs are required"})
+		return
+	}
+
+	db := di.MustInvoke[*gorm.DB](r.Context())
+	cfg := di.MustInvoke[*config.Config](r.Context())
+	mb := musicbrainz.NewClient("Miko/1.0.0 (https://github.com/stkevintan/miko)")
+	sc := scanner.New(db, cfg)
+
+	var songs []models.Child
+	if err := db.Where("id IN ? AND is_dir = ?", ids, false).Find(&songs).Error; err != nil {
+		JSON(w, http.StatusInternalServerError, models.ErrorResponse{Error: "Failed to find songs: " + err.Error()})
+		return
+	}
+
+	for i := range songs {
+		_ = h.scrapeSong(r.Context(), db, mb, sc, &songs[i])
+	}
+
+	if req.ID != "" && len(songs) > 0 {
+		JSON(w, http.StatusOK, songs[0])
+	} else {
+		JSON(w, http.StatusOK, songs)
+	}
+}
+
+func (h *Handler) scrapeSong(ctx context.Context, db *gorm.DB, mb *musicbrainz.Client, sc *scanner.Scanner, song *models.Child) error {
+	searchResult, err := mb.SearchRecording(song.Artist, song.Album, song.Title)
+	if err != nil {
+		return fmt.Errorf("failed to search on MusicBrainz: %w", err)
+	}
+
+	// Get full details
+	recording, err := mb.GetRecording(searchResult.ID)
+	if err != nil {
+		// Fallback to search result if lookup fails
+		recording = searchResult
+	}
+
+	// Prepare tags for update
+	newTags := map[string][]string{
+		tags.Title:              {recording.Title},
+		tags.MusicBrainzTrackID: {recording.ID},
+	}
+
+	if len(recording.Artists) > 0 {
+		artists := make([]string, len(recording.Artists))
+		artistIDs := make([]string, len(recording.Artists))
+		for i, a := range recording.Artists {
+			artists[i] = a.Name
+			artistIDs[i] = a.ID
+		}
+		newTags[tags.Artists] = artists
+		newTags[tags.MusicBrainzArtistID] = artistIDs
+	}
+
+	if len(recording.ISRCs) > 0 {
+		newTags[tags.ISRC] = recording.ISRCs
+	}
+
+	// Genres and Tags
+	genres := make([]string, 0)
+	for _, g := range recording.Genres {
+		genres = append(genres, g.Name)
+	}
+	for _, t := range recording.Tags {
+		genres = append(genres, t.Name)
+	}
+	if len(genres) > 0 {
+		newTags[tags.Genre] = genres
+	}
+
+	// Relationships (Composer, Lyricist, etc.)
+	addUniqueTag := func(key string, value string) {
+		if value == "" {
+			return
+		}
+		for _, v := range newTags[key] {
+			if v == value {
+				return
+			}
+		}
+		newTags[key] = append(newTags[key], value)
+	}
+
+	for _, rel := range recording.Relations {
+		switch rel.Type {
+		case "composer":
+			addUniqueTag(tags.Composer, rel.Artist.Name)
+		case "lyricist":
+			addUniqueTag(tags.Lyricist, rel.Artist.Name)
+		case "producer":
+			addUniqueTag(tags.Producer, rel.Artist.Name)
+		}
+
+		// Check work relations for composer/lyricist if not found on recording
+		if rel.Work.Title != "" {
+			for _, wrel := range rel.Work.Relations {
+				switch wrel.Type {
+				case "composer":
+					addUniqueTag(tags.Composer, wrel.Artist.Name)
+				case "lyricist":
+					addUniqueTag(tags.Lyricist, wrel.Artist.Name)
+				}
+			}
+		}
+	}
+
+	if len(recording.Releases) > 0 {
+		release := recording.Releases[0]
+		// Try to find a release that matches the album name
+		if song.Album != "" {
+			for _, r := range recording.Releases {
+				if strings.EqualFold(r.Title, song.Album) {
+					release = r
+					break
+				}
+			}
+		}
+
+		newTags[tags.Album] = []string{release.Title}
+		newTags[tags.MusicBrainzAlbumID] = []string{release.ID}
+		newTags[tags.MusicBrainzReleaseGroupID] = []string{release.ReleaseGroup.ID}
+
+		if release.Status != "" {
+			newTags[tags.ReleaseStatus] = []string{release.Status}
+		}
+		if release.Country != "" {
+			newTags[tags.ReleaseCountry] = []string{release.Country}
+		}
+		if release.Barcode != "" {
+			newTags[tags.Barcode] = []string{release.Barcode}
+		}
+		if release.ReleaseGroup.Type != "" {
+			newTags[tags.ReleaseType] = []string{release.ReleaseGroup.Type}
+		}
+
+		if len(release.ArtistCredit) > 0 {
+			albumArtists := make([]string, len(release.ArtistCredit))
+			albumArtistIDs := make([]string, len(release.ArtistCredit))
+			for i, a := range release.ArtistCredit {
+				albumArtists[i] = a.Name
+				albumArtistIDs[i] = a.ID
+			}
+			newTags[tags.AlbumArtist] = albumArtists
+			newTags[tags.MusicBrainzAlbumArtistID] = albumArtistIDs
+		}
+
+		if release.Date != "" {
+			newTags[tags.Date] = []string{release.Date}
+		}
+
+		if len(release.Media) > 0 {
+			media := release.Media[0]
+			newTags[tags.DiscNumber] = []string{fmt.Sprintf("%d", media.Position)}
+			if media.Format != "" {
+				newTags[tags.Media] = []string{media.Format}
+			}
+			if len(media.Track) > 0 {
+				newTags[tags.TrackNumber] = []string{media.Track[0].Number}
+			}
+		}
+	}
+
+	// Update tags in file
+	if err := tags.Write(song.Path, newTags); err != nil {
+		return fmt.Errorf("failed to write tags to file: %w", err)
+	}
+
+	// Update database using scanner logic
+	sc.ScanPath(ctx, song.Path)
+
+	// Fetch updated song
+	if err := db.Where("id = ?", song.ID).First(song).Error; err != nil {
+		return fmt.Errorf("failed to fetch updated song: %w", err)
+	}
+
+	return nil
+}
+
+func (h *Handler) handleDeleteLibraryItems(w http.ResponseWriter, r *http.Request) {
+	var req struct {
+		IDs []string `json:"ids"`
+		ID  string   `json:"id"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		JSON(w, http.StatusBadRequest, models.ErrorResponse{Error: "Invalid request body"})
+		return
+	}
+
+	ids := req.IDs
+	if req.ID != "" {
+		ids = append(ids, req.ID)
+	}
+
+	if len(ids) == 0 {
+		JSON(w, http.StatusBadRequest, models.ErrorResponse{Error: "ID or IDs are required"})
+		return
+	}
+
+	db := di.MustInvoke[*gorm.DB](r.Context())
+	var items []models.Child
+	if err := db.Where("id IN ?", ids).Find(&items).Error; err != nil {
+		JSON(w, http.StatusInternalServerError, models.ErrorResponse{Error: "Failed to find items: " + err.Error()})
+		return
+	}
+
+	for _, item := range items {
+		// Delete from disk
+		if err := os.RemoveAll(item.Path); err != nil {
+			// Log error but continue with others
+			fmt.Printf("Failed to delete %s from disk: %v\n", item.Path, err)
+		}
+
+		// Delete from database
+		if item.IsDir {
+			db.Where("path LIKE ?", item.Path+"%").Delete(&models.Child{})
+		} else {
+			db.Delete(&item)
+		}
+	}
+
+	JSON(w, http.StatusOK, map[string]string{"status": "ok"})
 }

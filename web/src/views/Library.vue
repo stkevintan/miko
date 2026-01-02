@@ -1,6 +1,8 @@
 <script setup lang="ts">
 import { ref, onMounted, watch, computed } from "vue";
 import { useRoute, useRouter } from "vue-router";
+import { useToast } from "primevue/usetoast";
+import { useConfirm } from "primevue/useconfirm";
 import api from "../api";
 import Breadcrumb from "primevue/breadcrumb";
 import Card from "primevue/card";
@@ -13,6 +15,8 @@ import { DataTableRowClickEvent } from "primevue";
 
 const route = useRoute();
 const router = useRouter();
+const toast = useToast();
+const confirm = useConfirm();
 
 interface BreadCrumbItem {
     label: string;
@@ -30,6 +34,7 @@ const editDialogVisible = ref(false);
 const editingItem = ref<Child | null>(null);
 const refreshKey = ref(Date.now());
 const scanningIds = ref<string[]>([]);
+const scrapingIds = ref<string[]>([]);
 
 const selectionValue = computed({
     get: () =>
@@ -105,8 +110,15 @@ const scanFolder = async (folder: Folder) => {
     scanningIds.value.push(folder.directoryId);
     try {
         await api.post("/library/scan", { id: folder.directoryId });
-    } catch (error) {
+        toast.add({ severity: 'success', summary: 'Success', detail: 'Folder scan started', life: 3000 });
+    } catch (error: any) {
         console.error("Failed to scan folder:", error);
+        toast.add({ 
+            severity: 'error', 
+            summary: 'Scan Failed', 
+            detail: error.response?.data?.error || error.message || 'Failed to scan folder', 
+            life: 5000 
+        });
     } finally {
         scanningIds.value = scanningIds.value.filter(id => id !== folder.directoryId);
     }
@@ -154,6 +166,7 @@ const onMetadataSave = (updatedItem: Child) => {
         selectedSong.value = updatedItem;
     }
     refreshKey.value = Date.now();
+    toast.add({ severity: 'success', summary: 'Success', detail: 'Metadata updated successfully', life: 3000 });
 };
 
 const scanItem = async (item: Child) => {
@@ -171,29 +184,176 @@ const scanItem = async (item: Child) => {
             selectedSong.value = response.data;
         }
         refreshKey.value = Date.now();
-    } catch (error) {
+        toast.add({ severity: 'success', summary: 'Success', detail: 'Item scanned successfully', life: 3000 });
+    } catch (error: any) {
         console.error("Failed to scan item:", error);
+        toast.add({ 
+            severity: 'error', 
+            summary: 'Scan Failed', 
+            detail: error.response?.data?.error || error.message || 'Failed to scan item', 
+            life: 5000 
+        });
     } finally {
         scanningIds.value = scanningIds.value.filter(id => id !== item.id);
     }
 };
 
-const scrapeItem = (item: Child) => {
-    console.log("Scrape item:", item);
-    // TODO: Implement scrape logic
+const scrapeItem = async (item: Child) => {
+    scrapingIds.value.push(item.id);
+    try {
+        const response = await api.post("/library/song/scrape", { id: item.id });
+        // Update local state
+        if (currentDir.value) {
+            const index = currentDir.value.child.findIndex((c) => c.id === item.id);
+            if (index !== -1) {
+                currentDir.value.child[index] = response.data;
+            }
+        }
+        if (selectedSong.value?.id === item.id) {
+            selectedSong.value = response.data;
+        }
+        refreshKey.value = Date.now();
+        toast.add({ severity: 'success', summary: 'Success', detail: 'Metadata scraped successfully', life: 3000 });
+    } catch (error: any) {
+        console.error("Failed to scrape item:", error);
+        toast.add({ 
+            severity: 'error', 
+            summary: 'Scrape Failed', 
+            detail: error.response?.data?.error || error.message || 'Failed to scrape metadata', 
+            life: 5000 
+        });
+    } finally {
+        scrapingIds.value = scrapingIds.value.filter(id => id !== item.id);
+    }
 };
 
 const deleteItem = (item: Child) => {
-    console.log("Delete item:", item);
-    // TODO: Implement delete logic
+    confirm.require({
+        message: `Are you sure you want to delete "${item.title}"? This will delete the file from disk.`,
+        header: 'Confirm Deletion',
+        icon: 'pi pi-exclamation-triangle',
+        rejectProps: {
+            label: 'Cancel',
+            severity: 'secondary',
+            outlined: true
+        },
+        acceptProps: {
+            label: 'Delete',
+            severity: 'danger'
+        },
+        accept: async () => {
+            try {
+                await api.post("/library/delete", { id: item.id });
+                if (currentDir.value) {
+                    currentDir.value.child = currentDir.value.child.filter(c => c.id !== item.id);
+                }
+                if (selectedSong.value?.id === item.id) {
+                    selectedSong.value = null;
+                }
+                toast.add({ severity: 'success', summary: 'Success', detail: 'Item deleted successfully', life: 3000 });
+            } catch (error: any) {
+                console.error("Failed to delete item:", error);
+                toast.add({ 
+                    severity: 'error', 
+                    summary: 'Delete Failed', 
+                    detail: error.response?.data?.error || error.message || 'Failed to delete item', 
+                    life: 5000 
+                });
+            }
+        }
+    });
 };
 
 const batchScrape = () => {
-    console.log("Batch scrape:", selectedItems.value);
+    const itemsToScrape = selectedItems.value.filter(item => !item.isDir);
+    if (itemsToScrape.length === 0) return;
+
+    confirm.require({
+        message: `Are you sure you want to scrape metadata for ${itemsToScrape.length} songs? This will overwrite existing tags.`,
+        header: 'Confirm Batch Scrape',
+        icon: 'pi pi-search',
+        rejectProps: {
+            label: 'Cancel',
+            severity: 'secondary',
+            outlined: true
+        },
+        acceptProps: {
+            label: 'Scrape All',
+            severity: 'primary'
+        },
+        accept: async () => {
+            const ids = itemsToScrape.map(item => item.id);
+            // Add all to scrapingIds for visual feedback
+            ids.forEach(id => scrapingIds.value.push(id));
+            
+            try {
+                await api.post("/library/song/scrape", { ids });
+                
+                // Refresh the directory to get updated data
+                if (route.query.id) {
+                    await fetchDirectory(route.query.id as string);
+                }
+                
+                selectedItems.value = [];
+                toast.add({ severity: 'success', summary: 'Success', detail: `Scraped ${ids.length} items`, life: 3000 });
+            } catch (error: any) {
+                console.error("Batch scrape failed:", error);
+                toast.add({ 
+                    severity: 'error', 
+                    summary: 'Scrape Failed', 
+                    detail: error.response?.data?.error || error.message || 'Failed to scrape items', 
+                    life: 5000 
+                });
+            } finally {
+                // Remove all from scrapingIds
+                scrapingIds.value = scrapingIds.value.filter(id => !ids.includes(id));
+            }
+        }
+    });
 };
 
 const batchDelete = () => {
-    console.log("Batch delete:", selectedItems.value);
+    const itemsToDelete = selectedItems.value;
+    if (itemsToDelete.length === 0) return;
+
+    confirm.require({
+        message: `Are you sure you want to delete ${itemsToDelete.length} items? This will delete the files from disk.`,
+        header: 'Confirm Batch Deletion',
+        icon: 'pi pi-exclamation-triangle',
+        rejectProps: {
+            label: 'Cancel',
+            severity: 'secondary',
+            outlined: true
+        },
+        acceptProps: {
+            label: 'Delete All',
+            severity: 'danger'
+        },
+        accept: async () => {
+            const ids = itemsToDelete.map(item => item.id);
+            try {
+                await api.post("/library/delete", { ids });
+                
+                if (currentDir.value) {
+                    currentDir.value.child = currentDir.value.child.filter(c => !ids.includes(c.id));
+                }
+                if (selectedSong.value && ids.includes(selectedSong.value.id)) {
+                    selectedSong.value = null;
+                }
+                
+                selectedItems.value = [];
+                toast.add({ severity: 'success', summary: 'Success', detail: `Deleted ${ids.length} items`, life: 3000 });
+            } catch (error: any) {
+                console.error("Batch delete failed:", error);
+                toast.add({ 
+                    severity: 'error', 
+                    summary: 'Delete Failed', 
+                    detail: error.response?.data?.error || error.message || 'Failed to delete items', 
+                    life: 5000 
+                });
+            }
+        }
+    });
 };
 </script>
 
@@ -239,6 +399,7 @@ const batchDelete = () => {
                     :items="currentDir?.child || []"
                     :loading="loading"
                     :scanningIds="scanningIds"
+                    :scrapingIds="scrapingIds"
                     v-model:isSelectionMode="isSelectionMode"
                     v-model:selection="selectionValue"
                     @row-click="onRowClick"

@@ -11,6 +11,7 @@ const props = defineProps<{
   isSelectionMode: boolean;
   selection: Child | Child[] | null;
   scanningIds?: string[];
+  scrapingIds?: string[];
 }>();
 
 const emit = defineEmits<{
@@ -144,7 +145,17 @@ const formatDuration = (seconds: number) => {
               v-tooltip="'Scan'" 
             />
             <Button v-if="!slotProps.data.isDir" icon="pi pi-pencil" variant="text" severity="secondary" rounded size="small" @click.stop="emit('edit', slotProps.data)" v-tooltip="'Edit'" />
-            <Button icon="pi pi-search" variant="text" severity="secondary" rounded size="small" @click.stop="emit('scrape', slotProps.data)" v-tooltip="'Scrape'" />
+            <Button 
+              v-if="!slotProps.data.isDir" 
+              :icon="scrapingIds?.includes(slotProps.data.id) ? 'pi pi-spin pi-spinner' : 'pi pi-search'" 
+              :disabled="scrapingIds?.includes(slotProps.data.id)"
+              variant="text" 
+              severity="secondary" 
+              rounded 
+              size="small" 
+              @click.stop="emit('scrape', slotProps.data)" 
+              v-tooltip="'Scrape'" 
+            />
             <Button icon="pi pi-trash" variant="text" severity="danger" rounded size="small" @click.stop="emit('delete', slotProps.data)" v-tooltip="'Delete'" />
           </div>
         </template>

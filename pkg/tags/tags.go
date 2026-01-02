@@ -139,17 +139,16 @@ func Read(path string) (*Tags, error) {
 	if v, ok := t[taglib.Title]; ok && len(v) > 0 {
 		res.Title = v[0]
 	}
-	if v, ok := t[taglib.Artist]; ok && len(v) > 0 {
-		res.Artists = v
-		res.Artist = strings.Join(v, "; ")
-	}
+
 	// prefer Artists tag for multiple artists
 	if v, ok := t[taglib.Artists]; ok && len(v) > 0 {
 		res.Artists = v
-		if res.Artist == "" {
-			res.Artist = strings.Join(v, "; ")
-		}
+		res.Artist = strings.Join(v, "; ")
+	} else if v, ok := t[taglib.Artist]; ok && len(v) > 0 {
+		res.Artists = v
+		res.Artist = strings.Join(v, "; ")
 	}
+
 	if v, ok := t[taglib.Album]; ok && len(v) > 0 {
 		res.Album = v[0]
 	}

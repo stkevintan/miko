@@ -1,10 +1,14 @@
 <script setup lang="ts">
 import { useTheme } from './composables/useTheme';
+import Toast from 'primevue/toast';
+import ConfirmDialog from 'primevue/confirmdialog';
 
 useTheme();
 </script>
 
 <template>
+  <Toast />
+  <ConfirmDialog />
   <router-view />
 </template>
 

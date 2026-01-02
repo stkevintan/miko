@@ -9,6 +9,7 @@ import (
 	"github.com/stkevintan/miko/models"
 	"github.com/stkevintan/miko/pkg/log"
 	"github.com/stkevintan/miko/pkg/tags"
+	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
 )
 
@@ -17,25 +18,27 @@ type imageTask struct {
 	coverArt string
 }
 
-type saveContext struct {
-	seenArtists         map[string]bool
-	seenGenres          map[string]bool
-	seenAlbumsWithCover map[string]bool
-	imageTasks          chan imageTask
-	cacheDir            string
+type worker struct {
+	seenArtists map[string]bool
+	seenGenres  map[string]bool
+	seenAlbums  map[string]bool
+	imageTasks  chan imageTask
+	cacheDir    string
+	db          *gorm.DB
 }
 
 func (s *Scanner) saveResults(resultChan <-chan scanResult, cacheDir string) {
-	ctx := &saveContext{
-		seenArtists:         make(map[string]bool),
-		seenGenres:          make(map[string]bool),
-		seenAlbumsWithCover: make(map[string]bool),
-		imageTasks:          make(chan imageTask, s.numWorkers*10),
-		cacheDir:            cacheDir,
+	w := &worker{
+		seenArtists: make(map[string]bool),
+		seenGenres:  make(map[string]bool),
+		seenAlbums:  make(map[string]bool),
+		imageTasks:  make(chan imageTask, s.numWorkers*10),
+		cacheDir:    cacheDir,
+		db:          s.db,
 	}
 
 	var imageWg sync.WaitGroup
-	s.startImageWorkers(ctx, &imageWg, s.numWorkers)
+	w.startImageWorkers(&imageWg, s.numWorkers)
 
 	var children []models.Child
 	flushChildren := func() {
@@ -48,7 +51,7 @@ func (s *Scanner) saveResults(resultChan <-chan scanResult, cacheDir string) {
 	for res := range resultChan {
 		child := res.child
 		if res.tags != nil {
-			s.processMetadata(child, res.tags, res.path, ctx)
+			w.processMetadata(child, res.tags, res.path)
 		}
 
 		children = append(children, *child)
@@ -61,7 +64,7 @@ func (s *Scanner) saveResults(resultChan <-chan scanResult, cacheDir string) {
 	}
 
 	flushChildren()
-	close(ctx.imageTasks)
+	close(w.imageTasks)
 	imageWg.Wait()
 }
 
@@ -77,16 +80,16 @@ func (s *Scanner) SaveCoverArt(coverArt string, data []byte) error {
 	return os.WriteFile(cachePath, data, 0644)
 }
 
-func (s *Scanner) startImageWorkers(ctx *saveContext, wg *sync.WaitGroup, numWorkers int) {
+func (w *worker) startImageWorkers(wg *sync.WaitGroup, numWorkers int) {
 	for range numWorkers {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			for t := range ctx.imageTasks {
+			for t := range w.imageTasks {
 				if t.coverArt == "" {
 					continue
 				}
-				p := filepath.Join(ctx.cacheDir, t.coverArt)
+				p := filepath.Join(w.cacheDir, t.coverArt)
 				// if p exists, skip
 				if _, err := os.Stat(p); err == nil {
 					continue
@@ -103,13 +106,13 @@ func (s *Scanner) startImageWorkers(ctx *saveContext, wg *sync.WaitGroup, numWor
 	}
 }
 
-func (s *Scanner) processMetadata(child *models.Child, t *tags.Tags, path string, ctx *saveContext) {
+func (w *worker) processMetadata(child *models.Child, t *tags.Tags, path string) {
 	if t.Title != "" {
 		child.Title = t.Title
 	}
 	if t.Artist != "" {
 		child.Artist = t.Artist
-		child.Artists = s.getArtistsFromNames(t.Artists, ctx.seenArtists)
+		child.Artists = w.getArtistsFromNames(t.Artists)
 		if len(child.Artists) > 0 {
 			child.ArtistID = child.Artists[0].ID
 		}
@@ -122,7 +125,7 @@ func (s *Scanner) processMetadata(child *models.Child, t *tags.Tags, path string
 	child.Year = t.Year
 	if t.Genre != "" {
 		child.Genre = t.Genre
-		child.Genres = s.getGenresFromNames(t.Genres, ctx.seenGenres)
+		child.Genres = w.getGenresFromNames(t.Genres)
 	}
 	if t.Lyrics != "" {
 		child.Lyrics = t.Lyrics
@@ -132,19 +135,19 @@ func (s *Scanner) processMetadata(child *models.Child, t *tags.Tags, path string
 
 	// Album logic
 	if child.Album != "" {
-		s.handleAlbum(child, t, path, ctx)
+		w.handleAlbum(child, t, path)
 	} else {
 		// for child without album, use its own cover art
 		child.CoverArt = child.ID
-		ctx.imageTasks <- imageTask{path: path, coverArt: child.CoverArt}
+		w.imageTasks <- imageTask{path: path, coverArt: child.CoverArt}
 	}
 }
 
-func (s *Scanner) handleAlbum(child *models.Child, t *tags.Tags, path string, ctx *saveContext) {
+func (w *worker) handleAlbum(child *models.Child, t *tags.Tags, path string) {
 	albumArtistStr := t.AlbumArtist
 	var albumArtists []models.ArtistID3
 	if albumArtistStr != "" {
-		albumArtists = s.getArtistsFromNames(t.AlbumArtists, ctx.seenArtists)
+		albumArtists = w.getArtistsFromNames(t.AlbumArtists)
 	}
 
 	groupArtist := child.Artist
@@ -164,7 +167,7 @@ func (s *Scanner) handleAlbum(child *models.Child, t *tags.Tags, path string, ct
 	child.CoverArt = "al-" + albumID
 
 	// Create the album DB entry only once
-	if !ctx.seenAlbumsWithCover[albumID] {
+	if !w.seenAlbums[albumID] {
 		created := time.Now()
 		if child.Created != nil {
 			created = *child.Created
@@ -181,17 +184,17 @@ func (s *Scanner) handleAlbum(child *models.Child, t *tags.Tags, path string, ct
 			album.Artists = groupArtists
 		}
 
-		s.db.Clauses(clause.OnConflict{UpdateAll: true}).Create(&album)
-		ctx.seenAlbumsWithCover[albumID] = true
+		w.db.Clauses(clause.OnConflict{UpdateAll: true}).Create(&album)
+		w.seenAlbums[albumID] = true
 	}
 
 	// Always queue an imageTask to attempt to cache cover art from this song.
 	// The worker will skip if the cached file already exists, so this is efficient
 	// and ensures cover art can be found from any song in the album.
-	ctx.imageTasks <- imageTask{path: path, coverArt: child.CoverArt}
+	w.imageTasks <- imageTask{path: path, coverArt: child.CoverArt}
 }
 
-func (s *Scanner) getArtistsFromNames(names []string, seen map[string]bool) []models.ArtistID3 {
+func (w *worker) getArtistsFromNames(names []string) []models.ArtistID3 {
 	var artists []models.ArtistID3
 	for _, name := range names {
 		artistID := GenerateArtistID(name)
@@ -200,22 +203,22 @@ func (s *Scanner) getArtistsFromNames(names []string, seen map[string]bool) []mo
 			Name:     name,
 			CoverArt: "ar-" + artistID,
 		}
-		if !seen[artistID] {
-			s.db.Clauses(clause.OnConflict{UpdateAll: true}).Create(&artist)
-			seen[artistID] = true
+		if !w.seenArtists[artistID] {
+			w.db.Clauses(clause.OnConflict{UpdateAll: true}).Create(&artist)
+			w.seenArtists[artistID] = true
 		}
 		artists = append(artists, artist)
 	}
 	return artists
 }
 
-func (s *Scanner) getGenresFromNames(names []string, seen map[string]bool) []models.Genre {
+func (w *worker) getGenresFromNames(names []string) []models.Genre {
 	var genres []models.Genre
 	for _, name := range names {
 		genre := models.Genre{Name: name}
-		if !seen[name] {
-			s.db.Clauses(clause.OnConflict{UpdateAll: true}).Create(&genre)
-			seen[name] = true
+		if !w.seenGenres[name] {
+			w.db.Clauses(clause.OnConflict{UpdateAll: true}).Create(&genre)
+			w.seenGenres[name] = true
 		}
 		genres = append(genres, genre)
 	}
