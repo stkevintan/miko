@@ -109,7 +109,7 @@ const selectFolder = (folder: Folder) => {
 const scanFolder = async (folder: Folder) => {
     scanningIds.value.push(folder.directoryId);
     try {
-        await api.post("/library/scan", { id: folder.directoryId });
+        await api.post("/library/scan", { ids: [folder.directoryId] });
         toast.add({ severity: 'success', summary: 'Success', detail: 'Folder scan started', life: 3000 });
     } catch (error: any) {
         console.error("Failed to scan folder:", error);
@@ -121,6 +121,24 @@ const scanFolder = async (folder: Folder) => {
         });
     } finally {
         scanningIds.value = scanningIds.value.filter(id => id !== folder.directoryId);
+    }
+};
+
+const scrapeFolder = async (folder: Folder) => {
+    scrapingIds.value.push(folder.directoryId);
+    try {
+        await api.post("/library/song/scrape", { ids: [folder.directoryId] });
+        toast.add({ severity: 'success', summary: 'Success', detail: 'Folder scrape started', life: 3000 });
+    } catch (error: any) {
+        console.error("Failed to scrape folder:", error);
+        toast.add({ 
+            severity: 'error', 
+            summary: 'Scrape Failed', 
+            detail: error.response?.data?.error || error.message || 'Failed to scrape folder', 
+            life: 5000 
+        });
+    } finally {
+        scrapingIds.value = scrapingIds.value.filter(id => id !== folder.directoryId);
     }
 };
 
@@ -169,21 +187,26 @@ const onMetadataSave = (updatedItem: Child) => {
     toast.add({ severity: 'success', summary: 'Success', detail: 'Metadata updated successfully', life: 3000 });
 };
 
+const handleUpdatedIds = async (updatedIds: string[]) => {
+    // Refresh the directory to get updated data if any of the updated IDs are in the current view
+    if (currentDir.value && updatedIds.some(id => currentDir.value?.child.some(c => c.id === id))) {
+        await fetchDirectory(route.query.id as string || "");
+    }
+    
+    // Update selected song if it was affected
+    if (selectedSong.value && updatedIds.includes(selectedSong.value.id)) {
+        const res = await api.get(`/library/song?id=${selectedSong.value.id}`);
+        selectedSong.value = res.data;
+    }
+
+    refreshKey.value = Date.now();
+};
+
 const scanItem = async (item: Child) => {
     scanningIds.value.push(item.id);
     try {
-        const response = await api.post("/library/scan", { id: item.id });
-        // Update local state
-        if (currentDir.value) {
-            const index = currentDir.value.child.findIndex((c) => c.id === item.id);
-            if (index !== -1) {
-                currentDir.value.child[index] = response.data;
-            }
-        }
-        if (selectedSong.value?.id === item.id) {
-            selectedSong.value = response.data;
-        }
-        refreshKey.value = Date.now();
+        const response = await api.post("/library/scan", { ids: [item.id] });
+        await handleUpdatedIds(response.data as string[]);
         toast.add({ severity: 'success', summary: 'Success', detail: 'Item scanned successfully', life: 3000 });
     } catch (error: any) {
         console.error("Failed to scan item:", error);
@@ -201,18 +224,8 @@ const scanItem = async (item: Child) => {
 const scrapeItem = async (item: Child) => {
     scrapingIds.value.push(item.id);
     try {
-        const response = await api.post("/library/song/scrape", { id: item.id });
-        // Update local state
-        if (currentDir.value) {
-            const index = currentDir.value.child.findIndex((c) => c.id === item.id);
-            if (index !== -1) {
-                currentDir.value.child[index] = response.data;
-            }
-        }
-        if (selectedSong.value?.id === item.id) {
-            selectedSong.value = response.data;
-        }
-        refreshKey.value = Date.now();
+        const response = await api.post("/library/song/scrape", { ids: [item.id] });
+        await handleUpdatedIds(response.data as string[]);
         toast.add({ severity: 'success', summary: 'Success', detail: 'Metadata scraped successfully', life: 3000 });
     } catch (error: any) {
         console.error("Failed to scrape item:", error);
@@ -227,38 +240,45 @@ const scrapeItem = async (item: Child) => {
     }
 };
 
-const deleteItem = (item: Child) => {
+const batchScan = () => {
+    const itemsToScan = selectedItems.value;
+    if (itemsToScan.length === 0) return;
+
     confirm.require({
-        message: `Are you sure you want to delete "${item.title}"? This will delete the file from disk.`,
-        header: 'Confirm Deletion',
-        icon: 'pi pi-exclamation-triangle',
+        message: `Are you sure you want to scan ${itemsToScan.length} items?`,
+        header: 'Confirm Batch Scan',
+        icon: 'pi pi-refresh',
         rejectProps: {
             label: 'Cancel',
             severity: 'secondary',
             outlined: true
         },
         acceptProps: {
-            label: 'Delete',
-            severity: 'danger'
+            label: 'Scan All',
+            severity: 'primary'
         },
         accept: async () => {
+            const ids = itemsToScan.map(item => item.id);
+            // Add all to scanningIds for visual feedback
+            ids.forEach(id => scanningIds.value.push(id));
+            
             try {
-                await api.post("/library/delete", { id: item.id });
-                if (currentDir.value) {
-                    currentDir.value.child = currentDir.value.child.filter(c => c.id !== item.id);
-                }
-                if (selectedSong.value?.id === item.id) {
-                    selectedSong.value = null;
-                }
-                toast.add({ severity: 'success', summary: 'Success', detail: 'Item deleted successfully', life: 3000 });
+                const response = await api.post("/library/scan", { ids });
+                await handleUpdatedIds(response.data as string[]);
+                
+                selectedItems.value = [];
+                toast.add({ severity: 'success', summary: 'Success', detail: `Scanned ${ids.length} items`, life: 3000 });
             } catch (error: any) {
-                console.error("Failed to delete item:", error);
+                console.error("Batch scan failed:", error);
                 toast.add({ 
                     severity: 'error', 
-                    summary: 'Delete Failed', 
-                    detail: error.response?.data?.error || error.message || 'Failed to delete item', 
+                    summary: 'Scan Failed', 
+                    detail: error.response?.data?.error || error.message || 'Failed to scan items', 
                     life: 5000 
                 });
+            } finally {
+                // Remove all from scanningIds
+                scanningIds.value = scanningIds.value.filter(id => !ids.includes(id));
             }
         }
     });
@@ -287,13 +307,10 @@ const batchScrape = () => {
             ids.forEach(id => scrapingIds.value.push(id));
             
             try {
-                await api.post("/library/song/scrape", { ids });
+                const response = await api.post("/library/song/scrape", { ids });
+                await handleUpdatedIds(response.data as string[]);
                 
-                // Refresh the directory to get updated data
-                if (route.query.id) {
-                    await fetchDirectory(route.query.id as string);
-                }
-                
+                // Update selected items if they were affected (though they are usually cleared after batch)
                 selectedItems.value = [];
                 toast.add({ severity: 'success', summary: 'Success', detail: `Scraped ${ids.length} items`, life: 3000 });
             } catch (error: any) {
@@ -307,50 +324,6 @@ const batchScrape = () => {
             } finally {
                 // Remove all from scrapingIds
                 scrapingIds.value = scrapingIds.value.filter(id => !ids.includes(id));
-            }
-        }
-    });
-};
-
-const batchDelete = () => {
-    const itemsToDelete = selectedItems.value;
-    if (itemsToDelete.length === 0) return;
-
-    confirm.require({
-        message: `Are you sure you want to delete ${itemsToDelete.length} items? This will delete the files from disk.`,
-        header: 'Confirm Batch Deletion',
-        icon: 'pi pi-exclamation-triangle',
-        rejectProps: {
-            label: 'Cancel',
-            severity: 'secondary',
-            outlined: true
-        },
-        acceptProps: {
-            label: 'Delete All',
-            severity: 'danger'
-        },
-        accept: async () => {
-            const ids = itemsToDelete.map(item => item.id);
-            try {
-                await api.post("/library/delete", { ids });
-                
-                if (currentDir.value) {
-                    currentDir.value.child = currentDir.value.child.filter(c => !ids.includes(c.id));
-                }
-                if (selectedSong.value && ids.includes(selectedSong.value.id)) {
-                    selectedSong.value = null;
-                }
-                
-                selectedItems.value = [];
-                toast.add({ severity: 'success', summary: 'Success', detail: `Deleted ${ids.length} items`, life: 3000 });
-            } catch (error: any) {
-                console.error("Batch delete failed:", error);
-                toast.add({ 
-                    severity: 'error', 
-                    summary: 'Delete Failed', 
-                    detail: error.response?.data?.error || error.message || 'Failed to delete items', 
-                    life: 5000 
-                });
             }
         }
     });
@@ -373,16 +346,28 @@ const batchDelete = () => {
                     <template #title>
                         <div class="flex justify-between items-center">
                             <span>{{ folder.name }}</span>
-                            <Button
-                                :icon="scanningIds.includes(folder.directoryId) ? 'pi pi-spin pi-spinner' : 'pi pi-refresh'"
-                                :disabled="scanningIds.includes(folder.directoryId)"
-                                severity="secondary"
-                                variant="text"
-                                rounded
-                                size="small"
-                                @click.stop="scanFolder(folder)"
-                                v-tooltip="'Scan Folder'"
-                            />
+                            <div class="flex gap-1">
+                                <Button
+                                    :icon="scrapingIds.includes(folder.directoryId) ? 'pi pi-spin pi-spinner' : 'pi pi-search-plus'"
+                                    :disabled="scrapingIds.includes(folder.directoryId)"
+                                    severity="secondary"
+                                    variant="text"
+                                    rounded
+                                    size="small"
+                                    @click.stop="scrapeFolder(folder)"
+                                    v-tooltip="'Scrape Folder'"
+                                />
+                                <Button
+                                    :icon="scanningIds.includes(folder.directoryId) ? 'pi pi-spin pi-spinner' : 'pi pi-refresh'"
+                                    :disabled="scanningIds.includes(folder.directoryId)"
+                                    severity="secondary"
+                                    variant="text"
+                                    rounded
+                                    size="small"
+                                    @click.stop="scanFolder(folder)"
+                                    v-tooltip="'Scan Folder'"
+                                />
+                            </div>
                         </div>
                     </template>
                     <template #content>
@@ -404,12 +389,10 @@ const batchDelete = () => {
                     v-model:selection="selectionValue"
                     @row-click="onRowClick"
                     @row-dblclick="(e) => navigate(e.data)"
-                    @edit="editItem"
                     @scan="scanItem"
                     @scrape="scrapeItem"
-                    @delete="deleteItem"
+                    @batch-scan="batchScan"
                     @batch-scrape="batchScrape"
-                    @batch-delete="batchDelete"
                 />
             </div>
 
@@ -419,6 +402,7 @@ const batchDelete = () => {
                     :item="selectedSong"
                     :refreshKey="refreshKey"
                     @navigate="navigate"
+                    @edit="editItem"
                 />
             </div>
         </div>

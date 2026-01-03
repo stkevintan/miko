@@ -9,6 +9,7 @@ import (
 	"os"
 	"os/signal"
 	"path"
+	"path/filepath"
 	"syscall"
 	"time"
 
@@ -101,6 +102,9 @@ func main() {
 		}
 	}
 
+	// Sync music folders from config
+	syncMusicFolders(db, cfg)
+
 	// Register services
 	di.Provide(ctx, cfg.CookieCloud)
 
@@ -139,4 +143,21 @@ func main() {
 	}
 
 	log.Println("Server exited")
+}
+
+func syncMusicFolders(db *gorm.DB, cfg *config.Config) {
+	var currentPaths []string
+	for _, rawPath := range cfg.Subsonic.Folders {
+		path := filepath.ToSlash(filepath.Clean(rawPath))
+		var folder models.MusicFolder
+		db.Where(models.MusicFolder{Path: path}).Attrs(models.MusicFolder{Name: filepath.Base(path)}).FirstOrCreate(&folder)
+		currentPaths = append(currentPaths, path)
+	}
+
+	// Remove folders that are no longer in config
+	if len(currentPaths) > 0 {
+		db.Where("path NOT IN ?", currentPaths).Delete(&models.MusicFolder{})
+	} else {
+		db.Where("1 = 1").Delete(&models.MusicFolder{})
+	}
 }

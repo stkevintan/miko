@@ -11,6 +11,7 @@ const props = defineProps<{
 
 const emit = defineEmits<{
     (e: "navigate", item: Child): void;
+    (e: "edit", item: Child): void;
 }>();
 
 const formatSize = (bytes: number) => {
@@ -124,6 +125,13 @@ const formatSize = (bytes: number) => {
                         {{ item.path }}
                     </div>
                 </div>
+                <Button
+                    label="Edit Metadata"
+                    icon="pi pi-pencil"
+                    class="w-full mt-2"
+                    severity="contrast"
+                    @click="emit('edit', item)"
+                />
             </div>
         </div>
         <div v-else class="flex flex-col gap-4">

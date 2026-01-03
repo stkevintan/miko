@@ -29,6 +29,7 @@ func (h *Handler) getApiRequestContext(r *http.Request) (context.Context, error)
 	db := di.MustInvoke[*gorm.DB](ctx)
 	cfg := di.MustInvoke[*config.Config](ctx)
 
+	// create a sub context to provide scoped dependencies
 	ctx = di.Inherit(ctx)
 
 	var identity cookiecloud.Identity
@@ -76,11 +77,12 @@ func (h *Handler) RegisterRoutes(r chi.Router) {
 			// Library
 			r.Get("/library/folders", h.handleGetLibraryFolders)
 			r.Get("/library/directory", h.handleGetLibraryDirectory)
+			r.Get("/library/song", h.handleGetLibrarySong)
 			r.Get("/library/coverArt", h.handleGetLibraryCoverArt)
 			r.Post("/library/scan", h.handleScanLibrary)
 			r.Post("/library/scan/all", h.handleScanAllLibrary)
-			r.Get("/library/scan/status", h.handleGetScanStatus)
-			r.Post("/library/delete", h.handleDeleteLibraryItems)
+			r.Get("/library/status", h.handleGetStatus)
+			r.Post("/library/song/scrape/all", h.handleScrapeAllLibrarySongs)
 			r.Post("/library/song/scrape", h.handleScrapeLibrarySongs)
 			r.Get("/library/song/tags", h.handleGetLibrarySongTags)
 			r.Post("/library/song/update", h.handleUpdateLibrarySong)

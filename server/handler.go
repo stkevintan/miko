@@ -14,6 +14,7 @@ import (
 	"github.com/stkevintan/miko/pkg/di"
 	"github.com/stkevintan/miko/pkg/log"
 	"github.com/stkevintan/miko/pkg/scanner"
+	"github.com/stkevintan/miko/pkg/scraper"
 	"github.com/stkevintan/miko/server/api"
 	"github.com/stkevintan/miko/server/subsonic"
 	"gorm.io/gorm"
@@ -30,7 +31,9 @@ func New(ctx context.Context) *Handler {
 	cfg := di.MustInvoke[*config.Config](ctx)
 
 	// Register global services
-	di.Provide(ctx, scanner.New(db, cfg))
+	s := scanner.New(db, cfg)
+	di.Provide(ctx, s)
+	di.Provide(ctx, scraper.New(db, cfg, s))
 
 	return &Handler{
 		ctx: ctx,

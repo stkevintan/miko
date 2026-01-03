@@ -1,90 +1,32 @@
 package musicbrainz
 
 import (
-	"encoding/json"
+	"context"
 	"fmt"
-	"net/http"
-	"net/url"
 	"time"
+
+	"github.com/go-resty/resty/v2"
 )
 
 const baseURL = "https://musicbrainz.org/ws/2"
 
 type Client struct {
-	httpClient *http.Client
-	userAgent  string
+	restyClient *resty.Client
 }
 
-func NewClient(userAgent string) *Client {
+func NewClient() *Client {
+	client := resty.New().
+		SetBaseURL(baseURL).
+		SetHeader("User-Agent", "Miko/1.0.0 (https://github.com/stkevintan/miko)").
+		SetTimeout(10*time.Second).
+		SetHeader("Accept", "application/json")
+
 	return &Client{
-		httpClient: &http.Client{
-			Timeout: 10 * time.Second,
-		},
-		userAgent: userAgent,
+		restyClient: client,
 	}
 }
 
-type Recording struct {
-	ID      string   `json:"id"`
-	Title   string   `json:"title"`
-	Length  int      `json:"length"`
-	ISRCs   []string `json:"isrcs"`
-	Artists []struct {
-		ID   string `json:"id"`
-		Name string `json:"name"`
-	} `json:"artist-credit"`
-	Releases []struct {
-		ID      string `json:"id"`
-		Title   string `json:"title"`
-		Date    string `json:"date"`
-		Status  string `json:"status"`
-		Country string `json:"country"`
-		Barcode string `json:"barcode"`
-		Media   []struct {
-			Format string `json:"format"`
-			Track  []struct {
-				Number string `json:"number"`
-			} `json:"track"`
-			TrackCount int `json:"track-count"`
-			Position   int `json:"position"`
-		} `json:"media"`
-		ReleaseGroup struct {
-			ID   string `json:"id"`
-			Type string `json:"primary-type"`
-		} `json:"release-group"`
-		ArtistCredit []struct {
-			ID   string `json:"id"`
-			Name string `json:"name"`
-		} `json:"artist-credit"`
-	} `json:"releases"`
-	Tags []struct {
-		Name string `json:"name"`
-	} `json:"tags"`
-	Genres []struct {
-		Name string `json:"name"`
-	} `json:"genres"`
-	Relations []struct {
-		Type   string `json:"type"`
-		Artist struct {
-			Name string `json:"name"`
-		} `json:"artist"`
-		Work struct {
-			Title     string `json:"title"`
-			Relations []struct {
-				Type   string `json:"type"`
-				Artist struct {
-					Name string `json:"name"`
-				} `json:"artist"`
-			} `json:"relations"`
-		} `json:"work"`
-	} `json:"relations"`
-}
-
-type SearchResponse struct {
-	Recordings []Recording `json:"recordings"`
-}
-
-func (c *Client) SearchRecording(artist, album, title string) (*Recording, error) {
+func (c *Client) SearchRecording(ctx context.Context, artist, album, title string) (*Recording, error) {
 	query := ""
 	if artist != "" {
 		query += fmt.Sprintf("artist:\"%s\" ", artist)
@@ -96,28 +38,20 @@ func (c *Client) SearchRecording(artist, album, title string) (*Recording, error
 		query += fmt.Sprintf("recording:\"%s\" ", title)
 	}
 
-	u, _ := url.Parse(baseURL + "/recording/")
-	q := u.Query()
-	q.Set("query", query)
-	q.Set("fmt", "json")
-	u.RawQuery = q.Encode()
+	var sr SearchResponse
+	resp, err := c.restyClient.R().
+		SetContext(ctx).
+		SetQueryParam("query", query).
+		SetQueryParam("fmt", "json").
+		SetResult(&sr).
+		Get("/recording/")
 
-	req, _ := http.NewRequest("GET", u.String(), nil)
-	req.Header.Set("User-Agent", c.userAgent)
-
-	resp, err := c.httpClient.Do(req)
 	if err != nil {
 		return nil, err
 	}
-	defer resp.Body.Close()
 
-	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("musicbrainz api error: %s", resp.Status)
-	}
-
-	var sr SearchResponse
-	if err := json.NewDecoder(resp.Body).Decode(&sr); err != nil {
-		return nil, err
+	if !resp.IsSuccess() {
+		return nil, fmt.Errorf("musicbrainz api error: %s", resp.Status())
 	}
 
 	if len(sr.Recordings) == 0 {
@@ -128,29 +62,21 @@ func (c *Client) SearchRecording(artist, album, title string) (*Recording, error
 	return &sr.Recordings[0], nil
 }
 
-func (c *Client) GetRecording(id string) (*Recording, error) {
-	u, _ := url.Parse(baseURL + "/recording/" + id)
-	q := u.Query()
-	q.Set("inc", "artist-credits+releases+isrcs+media+release-groups+tags+genres+artist-rels+work-rels")
-	q.Set("fmt", "json")
-	u.RawQuery = q.Encode()
+func (c *Client) GetRecording(ctx context.Context, id string) (*Recording, error) {
+	var r Recording
+	resp, err := c.restyClient.R().
+		SetContext(ctx).
+		SetQueryParam("inc", "artist-credits+releases+isrcs+media+release-groups+tags+genres+artist-rels+work-rels").
+		SetQueryParam("fmt", "json").
+		SetResult(&r).
+		Get("/recording/" + id)
 
-	req, _ := http.NewRequest("GET", u.String(), nil)
-	req.Header.Set("User-Agent", c.userAgent)
-
-	resp, err := c.httpClient.Do(req)
 	if err != nil {
 		return nil, err
 	}
-	defer resp.Body.Close()
 
-	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("musicbrainz api error: %s", resp.Status)
-	}
-
-	var r Recording
-	if err := json.NewDecoder(resp.Body).Decode(&r); err != nil {
-		return nil, err
+	if !resp.IsSuccess() {
+		return nil, fmt.Errorf("musicbrainz api error: %s", resp.Status())
 	}
 
 	return &r, nil

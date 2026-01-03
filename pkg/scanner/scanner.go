@@ -2,7 +2,7 @@ package scanner
 
 import (
 	"context"
-	"io/fs"
+	"fmt"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -14,6 +14,7 @@ import (
 	"github.com/stkevintan/miko/config"
 	"github.com/stkevintan/miko/models"
 	"github.com/stkevintan/miko/pkg/log"
+	"github.com/stkevintan/miko/pkg/shared"
 	"github.com/stkevintan/miko/pkg/tags"
 	"gorm.io/gorm"
 )
@@ -25,6 +26,7 @@ type Scanner struct {
 	scanCount    atomic.Int64
 	lastScanTime atomic.Int64
 	numWorkers   int
+	walker       *shared.Walker
 }
 
 func New(db *gorm.DB, cfg *config.Config) *Scanner {
@@ -32,14 +34,8 @@ func New(db *gorm.DB, cfg *config.Config) *Scanner {
 		db:         db,
 		cfg:        cfg,
 		numWorkers: max(runtime.NumCPU(), 4),
+		walker:     shared.NewWalker(db, cfg),
 	}
-}
-
-type ScanTask struct {
-	Path     string
-	RootPath string
-	Folder   models.MusicFolder
-	D        fs.DirEntry
 }
 
 type scanResult struct {
@@ -65,35 +61,16 @@ func (s *Scanner) ScanAll(ctx context.Context, incremental bool) {
 		return
 	}
 
-	taskChan := make(chan ScanTask, s.numWorkers*10)
-	done := make(chan struct{})
-	go func() {
-		defer close(taskChan)
-		// Producer
-		for _, rootPath := range s.cfg.Subsonic.Folders {
-			var folder models.MusicFolder
-			s.db.Where(models.MusicFolder{Path: rootPath}).Attrs(models.MusicFolder{Name: filepath.Base(rootPath)}).FirstOrCreate(&folder)
+	taskChan, err := s.walker.WalkAllRoots(ctx)
+	if err != nil {
+		log.Warn("ScanAll failed: %v", err)
+		return
+	}
 
-			filepath.WalkDir(rootPath, func(path string, d fs.DirEntry, err error) error {
-				if err != nil {
-					log.Warn("Error accessing path %q: %v", path, err)
-					return nil
-				}
-				select {
-				case <-ctx.Done():
-					return filepath.SkipAll
-				case <-done:
-					return filepath.SkipAll
-				default:
-				}
-				taskChan <- ScanTask{Path: path, RootPath: rootPath, Folder: folder, D: d}
-				return nil
-			})
-		}
-	}()
-
-	seenIDs := s.scan(ctx, incremental, taskChan)
-	close(done)
+	seenIDs, err := s.Scan(ctx, incremental, taskChan)
+	if err != nil {
+		log.Warn("ScanAll failed: %v", err)
+	}
 
 	if seenIDs != nil {
 		s.Prune(seenIDs)
@@ -103,50 +80,23 @@ func (s *Scanner) ScanAll(ctx context.Context, incremental bool) {
 	log.Info("Scan completed. Total files: %d", s.scanCount.Load())
 }
 
-func (s *Scanner) ScanPath(ctx context.Context, path string) {
-	var rootPath string
-	for _, folder := range s.cfg.Subsonic.Folders {
-		if strings.HasPrefix(path, folder) {
-			rootPath = folder
-			break
-		}
+func (s *Scanner) ScanPath(ctx context.Context, id string) (*sync.Map, error) {
+	if s.IsScanning() {
+		return nil, fmt.Errorf("scan already in progress")
 	}
 
-	if rootPath == "" {
-		log.Warn("Path %q is not in any music folder", path)
-		return
+	taskChan, err := s.walker.WalkByID(ctx, id)
+	if err != nil {
+		log.Warn("ScanPath failed: %v", err)
+		return nil, err
 	}
 
-	var folder models.MusicFolder
-	s.db.Where(models.MusicFolder{Path: rootPath}).First(&folder)
-
-	taskChan := make(chan ScanTask, s.numWorkers)
-	done := make(chan struct{})
-	go func() {
-		defer close(taskChan)
-		filepath.WalkDir(path, func(p string, d fs.DirEntry, err error) error {
-			if err != nil {
-				return nil
-			}
-			select {
-			case <-ctx.Done():
-				return filepath.SkipAll
-			case <-done:
-				return filepath.SkipAll
-			default:
-			}
-			taskChan <- ScanTask{Path: p, RootPath: rootPath, Folder: folder, D: d}
-			return nil
-		})
-	}()
-
-	s.scan(ctx, false, taskChan)
-	close(done)
+	return s.Scan(ctx, false, taskChan)
 }
 
-func (s *Scanner) scan(ctx context.Context, incremental bool, taskChan <-chan ScanTask) *sync.Map {
+func (s *Scanner) Scan(ctx context.Context, incremental bool, taskChan <-chan shared.WalkTask) (*sync.Map, error) {
 	if !s.isScanning.CompareAndSwap(false, true) {
-		return nil
+		return nil, fmt.Errorf("scan already in progress")
 	}
 	s.scanCount.Store(0)
 	defer s.isScanning.Store(false)
@@ -168,8 +118,7 @@ func (s *Scanner) scan(ctx context.Context, incremental bool, taskChan <-chan Sc
 
 	cacheDir := GetCoverCacheDir(s.cfg)
 	if err := os.MkdirAll(cacheDir, 0755); err != nil {
-		log.Error("Failed to create cache directory %q: %v", cacheDir, err)
-		return nil
+		return nil, fmt.Errorf("failed to create cover cache dir: %w", err)
 	}
 
 	seenIDs := &sync.Map{}
@@ -188,14 +137,8 @@ func (s *Scanner) scan(ctx context.Context, incremental bool, taskChan <-chan Sc
 					return
 				default:
 				}
-				relPath, err := filepath.Rel(task.RootPath, task.Path)
-				if err != nil {
-					log.Warn("Failed to get relative path for %q: %v", task.Path, err)
-					continue
-				}
-				id := GenerateID(task.RootPath, relPath)
-				parentID := GetParentID(task.RootPath, relPath)
-
+				id := GenerateID(task.Path, task.Folder)
+				parentID := GetParentID(task.Path, task.Folder)
 				if task.D.IsDir() {
 					seenIDs.Store(id, true)
 					child := &models.Child{
@@ -211,7 +154,7 @@ func (s *Scanner) scan(ctx context.Context, incremental bool, taskChan <-chan Sc
 				}
 
 				// File processing
-				if !IsAudioFile(task.Path) {
+				if !shared.IsAudioFile(task.Path) {
 					continue
 				}
 
@@ -242,8 +185,8 @@ func (s *Scanner) scan(ctx context.Context, incremental bool, taskChan <-chan Sc
 					Size:          info.Size(),
 					Suffix:        strings.TrimPrefix(filepath.Ext(task.Path), "."),
 					ContentType:   contentType,
-					MusicFolderID: task.Folder.ID,
 					Created:       &modTime, // Corresponds to file modification time for incremental scans.
+					MusicFolderID: task.Folder.ID,
 					// TODO: Add audiobook support
 					Type: "music",
 				}
@@ -270,5 +213,5 @@ func (s *Scanner) scan(ctx context.Context, incremental bool, taskChan <-chan Sc
 	close(resultChan)
 	<-doneSaver
 
-	return seenIDs
+	return seenIDs, nil
 }

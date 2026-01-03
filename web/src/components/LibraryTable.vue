@@ -19,12 +19,10 @@ const emit = defineEmits<{
   (e: 'update:isSelectionMode', value: boolean): void;
   (e: 'row-click', event: DataTableRowClickEvent<Child>): void;
   (e: 'row-dblclick', event: DataTableRowClickEvent<Child>): void;
-  (e: 'edit', item: Child): void;
   (e: 'scan', item: Child): void;
   (e: 'scrape', item: Child): void;
-  (e: 'delete', item: Child): void;
+  (e: 'batch-scan'): void;
   (e: 'batch-scrape'): void;
-  (e: 'batch-delete'): void;
 }>();
 
 const toggleSelectionMode = () => {
@@ -72,18 +70,18 @@ const formatDuration = (seconds: number) => {
       </div>
       <div v-if="isSelectionMode && Array.isArray(selection) && selection.length > 0" class="flex gap-2">
         <Button
+          label="Scan"
+          icon="pi pi-refresh"
+          size="small"
+          severity="secondary"
+          @click="emit('batch-scan')"
+        />
+        <Button
           label="Scrape"
           icon="pi pi-search"
           size="small"
           severity="secondary"
           @click="emit('batch-scrape')"
-        />
-        <Button
-          label="Delete"
-          icon="pi pi-trash"
-          size="small"
-          severity="danger"
-          @click="emit('batch-delete')"
         />
       </div>
     </div>
@@ -131,7 +129,7 @@ const formatDuration = (seconds: number) => {
           </span>
         </template>
       </Column>
-      <Column header="Actions" style="width: 9rem" frozen alignFrozen="right">
+      <Column header="Actions" style="width: 4rem" frozen alignFrozen="right">
         <template #body="slotProps">
           <div class="flex gap-1 justify-end items-center">
             <Button 
@@ -144,9 +142,7 @@ const formatDuration = (seconds: number) => {
               @click.stop="emit('scan', slotProps.data)" 
               v-tooltip="'Scan'" 
             />
-            <Button v-if="!slotProps.data.isDir" icon="pi pi-pencil" variant="text" severity="secondary" rounded size="small" @click.stop="emit('edit', slotProps.data)" v-tooltip="'Edit'" />
             <Button 
-              v-if="!slotProps.data.isDir" 
               :icon="scrapingIds?.includes(slotProps.data.id) ? 'pi pi-spin pi-spinner' : 'pi pi-search'" 
               :disabled="scrapingIds?.includes(slotProps.data.id)"
               variant="text" 
@@ -156,7 +152,6 @@ const formatDuration = (seconds: number) => {
               @click.stop="emit('scrape', slotProps.data)" 
               v-tooltip="'Scrape'" 
             />
-            <Button icon="pi pi-trash" variant="text" severity="danger" rounded size="small" @click.stop="emit('delete', slotProps.data)" v-tooltip="'Delete'" />
           </div>
         </template>
       </Column>

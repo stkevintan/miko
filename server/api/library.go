@@ -1,9 +1,7 @@
 package api
 
 import (
-	"context"
 	"encoding/json"
-	"fmt"
 	"io"
 	"net/http"
 	"os"
@@ -14,8 +12,8 @@ import (
 	"github.com/stkevintan/miko/models"
 	"github.com/stkevintan/miko/pkg/browser"
 	"github.com/stkevintan/miko/pkg/di"
-	"github.com/stkevintan/miko/pkg/musicbrainz"
 	"github.com/stkevintan/miko/pkg/scanner"
+	"github.com/stkevintan/miko/pkg/scraper"
 	"github.com/stkevintan/miko/pkg/tags"
 	"gorm.io/gorm"
 )
@@ -74,8 +72,8 @@ func (h *Handler) handleUpdateLibrarySong(w http.ResponseWriter, r *http.Request
 	}
 
 	// Update database using scanner logic
-	sc := scanner.New(db, di.MustInvoke[*config.Config](r.Context()))
-	sc.ScanPath(r.Context(), song.Path)
+	sc := di.MustInvoke[*scanner.Scanner](r.Context())
+	sc.ScanPath(r.Context(), song.ID)
 
 	// Fetch updated song
 	if err := db.Where("id = ?", req.ID).First(&song).Error; err != nil {
@@ -125,7 +123,7 @@ func (h *Handler) handleUpdateLibrarySongCover(w http.ResponseWriter, r *http.Re
 	}
 
 	// Update cache using scanner logic
-	sc := scanner.New(db, di.MustInvoke[*config.Config](r.Context()))
+	sc := di.MustInvoke[*scanner.Scanner](r.Context())
 	if err := sc.SaveCoverArt(song.CoverArt, data); err != nil {
 		// Log error but don't fail the request
 	}
@@ -135,28 +133,29 @@ func (h *Handler) handleUpdateLibrarySongCover(w http.ResponseWriter, r *http.Re
 
 func (h *Handler) handleGetLibraryFolders(w http.ResponseWriter, r *http.Request) {
 	db := di.MustInvoke[*gorm.DB](r.Context())
-	cfg := di.MustInvoke[*config.Config](r.Context())
 
 	type FolderWithID struct {
 		models.MusicFolder
 		DirectoryID string `json:"directoryId"`
 	}
 
-	var folders []FolderWithID
-	for _, path := range cfg.Subsonic.Folders {
-		var folder models.MusicFolder
-		db.Where(models.MusicFolder{Path: path}).Attrs(models.MusicFolder{Name: filepath.Base(path)}).FirstOrCreate(&folder)
+	var folders []models.MusicFolder
+	if err := db.Find(&folders).Error; err != nil {
+		JSON(w, http.StatusInternalServerError, models.ErrorResponse{Error: "Failed to fetch folders"})
+		return
+	}
 
+	var result []FolderWithID
+	for _, folder := range folders {
 		var child models.Child
-		db.Select("id").Where("path = ? AND is_dir = ?", path, true).First(&child)
-
-		folders = append(folders, FolderWithID{
+		db.Select("id, is_dir").Where("path = ? AND is_dir = ?", folder.Path, true).First(&child)
+		result = append(result, FolderWithID{
 			MusicFolder: folder,
 			DirectoryID: child.ID,
 		})
 	}
 
-	JSON(w, http.StatusOK, folders)
+	JSON(w, http.StatusOK, result)
 }
 
 func (h *Handler) handleGetLibraryDirectory(w http.ResponseWriter, r *http.Request) {
@@ -219,68 +218,72 @@ func (h *Handler) handleGetLibraryCoverArt(w http.ResponseWriter, r *http.Reques
 
 func (h *Handler) handleScanLibrary(w http.ResponseWriter, r *http.Request) {
 	var req struct {
-		ID string `json:"id"`
+		IDs []string `json:"ids"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		JSON(w, http.StatusBadRequest, models.ErrorResponse{Error: "Invalid request body"})
 		return
 	}
 
-	if req.ID == "" {
-		JSON(w, http.StatusBadRequest, models.ErrorResponse{Error: "ID is required"})
+	if len(req.IDs) == 0 {
+		JSON(w, http.StatusBadRequest, models.ErrorResponse{Error: "IDs are required"})
 		return
 	}
 
-	db := di.MustInvoke[*gorm.DB](r.Context())
-	var item models.Child
-	if err := db.Where("id = ?", req.ID).First(&item).Error; err != nil {
-		JSON(w, http.StatusNotFound, models.ErrorResponse{Error: "Item not found"})
-		return
+	sc := di.MustInvoke[*scanner.Scanner](r.Context())
+	updatedIds := make([]string, 0, len(req.IDs))
+
+	for _, id := range req.IDs {
+		if seenIds, err := sc.ScanPath(r.Context(), id); err == nil {
+			seenIds.Range(func(key, value any) bool {
+				songID := key.(string)
+				updatedIds = append(updatedIds, songID)
+				return true
+			})
+		}
 	}
 
-	sc := scanner.New(db, di.MustInvoke[*config.Config](r.Context()))
-	sc.ScanPath(r.Context(), item.Path)
-
-	// Fetch updated item
-	if err := db.Where("id = ?", req.ID).First(&item).Error; err == nil {
-		JSON(w, http.StatusOK, item)
-		return
-	}
-
-	JSON(w, http.StatusOK, map[string]string{"status": "ok"})
+	JSON(w, http.StatusOK, updatedIds)
 }
 
 func (h *Handler) handleScanAllLibrary(w http.ResponseWriter, r *http.Request) {
-	db := di.MustInvoke[*gorm.DB](r.Context())
-	cfg := di.MustInvoke[*config.Config](r.Context())
-	sc := scanner.New(db, cfg)
+	sc := di.MustInvoke[*scanner.Scanner](r.Context())
+	incremental := r.URL.Query().Get("incremental") == "true"
 
 	// Use background context or app context if available to ensure scan continues
 	// For now, we'll just run it in a goroutine.
 	// In a real app, you'd want to manage this more carefully.
-	go sc.ScanAll(h.ctx, false)
+	go sc.ScanAll(h.ctx, incremental)
 
 	JSON(w, http.StatusOK, map[string]string{"status": "scanning"})
 }
 
-func (h *Handler) handleGetScanStatus(w http.ResponseWriter, r *http.Request) {
+func (h *Handler) handleGetStatus(w http.ResponseWriter, r *http.Request) {
 	db := di.MustInvoke[*gorm.DB](r.Context())
-	cfg := di.MustInvoke[*config.Config](r.Context())
-	sc := scanner.New(db, cfg)
+	sc := di.MustInvoke[*scanner.Scanner](r.Context())
+	sp := di.MustInvoke[*scraper.Scraper](r.Context())
 
 	var count int64
 	db.Model(&models.Child{}).Where("is_dir = ?", false).Count(&count)
 
 	JSON(w, http.StatusOK, map[string]interface{}{
 		"scanning": sc.IsScanning(),
+		"scraping": sp.IsScraping(),
 		"count":    count,
 	})
+}
+
+func (h *Handler) handleScrapeAllLibrarySongs(w http.ResponseWriter, r *http.Request) {
+	sp := di.MustInvoke[*scraper.Scraper](r.Context())
+
+	go sp.ScrapeAll(h.ctx)
+
+	JSON(w, http.StatusOK, map[string]string{"status": "scraping"})
 }
 
 func (h *Handler) handleScrapeLibrarySongs(w http.ResponseWriter, r *http.Request) {
 	var req struct {
 		IDs []string `json:"ids"`
-		ID  string   `json:"id"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		JSON(w, http.StatusBadRequest, models.ErrorResponse{Error: "Invalid request body"})
@@ -288,232 +291,46 @@ func (h *Handler) handleScrapeLibrarySongs(w http.ResponseWriter, r *http.Reques
 	}
 
 	ids := req.IDs
-	if req.ID != "" {
-		ids = append(ids, req.ID)
-	}
 
 	if len(ids) == 0 {
-		JSON(w, http.StatusBadRequest, models.ErrorResponse{Error: "ID or IDs are required"})
+		JSON(w, http.StatusBadRequest, models.ErrorResponse{Error: "ids are required"})
+		return
+	}
+
+	sp := di.MustInvoke[*scraper.Scraper](r.Context())
+	updatedIds := make([]string, 0, len(ids))
+
+	for _, id := range ids {
+		// scrap then scan to update DB
+		if seenIds, err := sp.ScrapePath(r.Context(), id); err == nil {
+			seenIds.Range(func(key, value any) bool {
+				songID := key.(string)
+				updatedIds = append(updatedIds, songID)
+				return true
+			})
+		}
+	}
+
+	JSON(w, http.StatusOK, updatedIds)
+}
+
+func (h *Handler) handleGetLibrarySong(w http.ResponseWriter, r *http.Request) {
+	id := r.URL.Query().Get("id")
+	if id == "" {
+		JSON(w, http.StatusBadRequest, models.ErrorResponse{Error: "ID is required"})
 		return
 	}
 
 	db := di.MustInvoke[*gorm.DB](r.Context())
-	cfg := di.MustInvoke[*config.Config](r.Context())
-	mb := musicbrainz.NewClient("Miko/1.0.0 (https://github.com/stkevintan/miko)")
-	sc := scanner.New(db, cfg)
-
-	var songs []models.Child
-	if err := db.Where("id IN ? AND is_dir = ?", ids, false).Find(&songs).Error; err != nil {
-		JSON(w, http.StatusInternalServerError, models.ErrorResponse{Error: "Failed to find songs: " + err.Error()})
-		return
-	}
-
-	for i := range songs {
-		_ = h.scrapeSong(r.Context(), db, mb, sc, &songs[i])
-	}
-
-	if req.ID != "" && len(songs) > 0 {
-		JSON(w, http.StatusOK, songs[0])
-	} else {
-		JSON(w, http.StatusOK, songs)
-	}
-}
-
-func (h *Handler) scrapeSong(ctx context.Context, db *gorm.DB, mb *musicbrainz.Client, sc *scanner.Scanner, song *models.Child) error {
-	searchResult, err := mb.SearchRecording(song.Artist, song.Album, song.Title)
-	if err != nil {
-		return fmt.Errorf("failed to search on MusicBrainz: %w", err)
-	}
-
-	// Get full details
-	recording, err := mb.GetRecording(searchResult.ID)
-	if err != nil {
-		// Fallback to search result if lookup fails
-		recording = searchResult
-	}
-
-	// Prepare tags for update
-	newTags := map[string][]string{
-		tags.Title:              {recording.Title},
-		tags.MusicBrainzTrackID: {recording.ID},
-	}
-
-	if len(recording.Artists) > 0 {
-		artists := make([]string, len(recording.Artists))
-		artistIDs := make([]string, len(recording.Artists))
-		for i, a := range recording.Artists {
-			artists[i] = a.Name
-			artistIDs[i] = a.ID
-		}
-		newTags[tags.Artists] = artists
-		newTags[tags.MusicBrainzArtistID] = artistIDs
-	}
-
-	if len(recording.ISRCs) > 0 {
-		newTags[tags.ISRC] = recording.ISRCs
-	}
-
-	// Genres and Tags
-	genres := make([]string, 0)
-	for _, g := range recording.Genres {
-		genres = append(genres, g.Name)
-	}
-	for _, t := range recording.Tags {
-		genres = append(genres, t.Name)
-	}
-	if len(genres) > 0 {
-		newTags[tags.Genre] = genres
-	}
-
-	// Relationships (Composer, Lyricist, etc.)
-	addUniqueTag := func(key string, value string) {
-		if value == "" {
-			return
-		}
-		for _, v := range newTags[key] {
-			if v == value {
-				return
-			}
-		}
-		newTags[key] = append(newTags[key], value)
-	}
-
-	for _, rel := range recording.Relations {
-		switch rel.Type {
-		case "composer":
-			addUniqueTag(tags.Composer, rel.Artist.Name)
-		case "lyricist":
-			addUniqueTag(tags.Lyricist, rel.Artist.Name)
-		case "producer":
-			addUniqueTag(tags.Producer, rel.Artist.Name)
-		}
-
-		// Check work relations for composer/lyricist if not found on recording
-		if rel.Work.Title != "" {
-			for _, wrel := range rel.Work.Relations {
-				switch wrel.Type {
-				case "composer":
-					addUniqueTag(tags.Composer, wrel.Artist.Name)
-				case "lyricist":
-					addUniqueTag(tags.Lyricist, wrel.Artist.Name)
-				}
-			}
-		}
-	}
-
-	if len(recording.Releases) > 0 {
-		release := recording.Releases[0]
-		// Try to find a release that matches the album name
-		if song.Album != "" {
-			for _, r := range recording.Releases {
-				if strings.EqualFold(r.Title, song.Album) {
-					release = r
-					break
-				}
-			}
-		}
-
-		newTags[tags.Album] = []string{release.Title}
-		newTags[tags.MusicBrainzAlbumID] = []string{release.ID}
-		newTags[tags.MusicBrainzReleaseGroupID] = []string{release.ReleaseGroup.ID}
-
-		if release.Status != "" {
-			newTags[tags.ReleaseStatus] = []string{release.Status}
-		}
-		if release.Country != "" {
-			newTags[tags.ReleaseCountry] = []string{release.Country}
-		}
-		if release.Barcode != "" {
-			newTags[tags.Barcode] = []string{release.Barcode}
-		}
-		if release.ReleaseGroup.Type != "" {
-			newTags[tags.ReleaseType] = []string{release.ReleaseGroup.Type}
-		}
-
-		if len(release.ArtistCredit) > 0 {
-			albumArtists := make([]string, len(release.ArtistCredit))
-			albumArtistIDs := make([]string, len(release.ArtistCredit))
-			for i, a := range release.ArtistCredit {
-				albumArtists[i] = a.Name
-				albumArtistIDs[i] = a.ID
-			}
-			newTags[tags.AlbumArtist] = albumArtists
-			newTags[tags.MusicBrainzAlbumArtistID] = albumArtistIDs
-		}
-
-		if release.Date != "" {
-			newTags[tags.Date] = []string{release.Date}
-		}
-
-		if len(release.Media) > 0 {
-			media := release.Media[0]
-			newTags[tags.DiscNumber] = []string{fmt.Sprintf("%d", media.Position)}
-			if media.Format != "" {
-				newTags[tags.Media] = []string{media.Format}
-			}
-			if len(media.Track) > 0 {
-				newTags[tags.TrackNumber] = []string{media.Track[0].Number}
-			}
-		}
-	}
-
-	// Update tags in file
-	if err := tags.Write(song.Path, newTags); err != nil {
-		return fmt.Errorf("failed to write tags to file: %w", err)
-	}
-
-	// Update database using scanner logic
-	sc.ScanPath(ctx, song.Path)
-
-	// Fetch updated song
-	if err := db.Where("id = ?", song.ID).First(song).Error; err != nil {
-		return fmt.Errorf("failed to fetch updated song: %w", err)
-	}
-
-	return nil
-}
-
-func (h *Handler) handleDeleteLibraryItems(w http.ResponseWriter, r *http.Request) {
-	var req struct {
-		IDs []string `json:"ids"`
-		ID  string   `json:"id"`
-	}
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		JSON(w, http.StatusBadRequest, models.ErrorResponse{Error: "Invalid request body"})
-		return
-	}
-
-	ids := req.IDs
-	if req.ID != "" {
-		ids = append(ids, req.ID)
-	}
-
-	if len(ids) == 0 {
-		JSON(w, http.StatusBadRequest, models.ErrorResponse{Error: "ID or IDs are required"})
-		return
-	}
-
-	db := di.MustInvoke[*gorm.DB](r.Context())
-	var items []models.Child
-	if err := db.Where("id IN ?", ids).Find(&items).Error; err != nil {
-		JSON(w, http.StatusInternalServerError, models.ErrorResponse{Error: "Failed to find items: " + err.Error()})
-		return
-	}
-
-	for _, item := range items {
-		// Delete from disk
-		if err := os.RemoveAll(item.Path); err != nil {
-			// Log error but continue with others
-			fmt.Printf("Failed to delete %s from disk: %v\n", item.Path, err)
-		}
-
-		// Delete from database
-		if item.IsDir {
-			db.Where("path LIKE ?", item.Path+"%").Delete(&models.Child{})
+	var song models.Child
+	if err := db.Where("id = ?", id).First(&song).Error; err != nil {
+		if err == gorm.ErrRecordNotFound {
+			JSON(w, http.StatusNotFound, models.ErrorResponse{Error: "Song not found"})
 		} else {
-			db.Delete(&item)
+			JSON(w, http.StatusInternalServerError, models.ErrorResponse{Error: "Failed to fetch song: " + err.Error()})
 		}
+		return
 	}
 
-	JSON(w, http.StatusOK, map[string]string{"status": "ok"})
+	JSON(w, http.StatusOK, song)
 }
