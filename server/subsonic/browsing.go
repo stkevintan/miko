@@ -2,7 +2,6 @@ package subsonic
 
 import (
 	"net/http"
-	"path/filepath"
 
 	"github.com/stkevintan/miko/config"
 	"github.com/stkevintan/miko/models"
@@ -14,14 +13,11 @@ import (
 
 func (s *Subsonic) handleGetMusicFolders(w http.ResponseWriter, r *http.Request) {
 	db := di.MustInvoke[*gorm.DB](r.Context())
-	cfg := di.MustInvoke[*config.Config](r.Context())
 
 	var folders []models.MusicFolder
-	// Ensure folders from config are in DB
-	for _, path := range cfg.Subsonic.Folders {
-		var folder models.MusicFolder
-		db.Where(models.MusicFolder{Path: path}).Attrs(models.MusicFolder{Name: filepath.Base(path)}).FirstOrCreate(&folder)
-		folders = append(folders, folder)
+	if err := db.Find(&folders).Error; err != nil {
+		s.sendResponse(w, r, models.NewErrorResponse(0, "Failed to fetch music folders"))
+		return
 	}
 
 	resp := models.NewResponse(models.ResponseStatusOK)

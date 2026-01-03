@@ -63,7 +63,7 @@ const roles = computed(() => [
 </script>
 
 <template>
-  <div class="max-w-4xl mx-auto flex flex-col gap-6">
+  <div class="max-w-4xl mx-auto flex flex-col gap-6 h-full overflow-y-auto">
     <h1 class="text-3xl font-bold text-surface-900 dark:text-surface-0">Profile</h1>
 
     <div class="grid grid-cols-1 md:grid-cols-3 gap-6">

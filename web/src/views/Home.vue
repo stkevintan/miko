@@ -6,7 +6,7 @@ const authStore = useAuthStore();
 </script>
 
 <template>
-  <div class="flex flex-col gap-6">
+  <div class="flex flex-col gap-6 h-full overflow-y-auto">
     <div class="flex items-center justify-between">
       <h1 class="text-3xl font-bold text-surface-900 dark:text-surface-0">Dashboard</h1>
     </div>

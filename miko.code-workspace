@@ -1,0 +1,15 @@
+{
+	"folders": [
+		{
+			"path": ".",
+			"name": "service",
+		},
+		{
+			"path": "./web",
+			"name": "web"
+		}
+	],
+	"settings": {
+		"typescript.tsdk": "web/node_modules/typescript/lib",
+	}
+}

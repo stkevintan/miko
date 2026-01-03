@@ -5,15 +5,11 @@ import (
 	"fmt"
 	"mime"
 	"path/filepath"
-	"strings"
 
 	"github.com/stkevintan/miko/config"
+	"github.com/stkevintan/miko/models"
+	"github.com/stkevintan/miko/pkg/shared"
 )
-
-func IsAudioFile(path string) bool {
-	ext := strings.ToLower(filepath.Ext(path))
-	return ext == ".mp3" || ext == ".flac" || ext == ".m4a" || ext == ".wav"
-}
 
 func GetContentType(path string) string {
 	ext := filepath.Ext(path)
@@ -24,8 +20,18 @@ func GetContentType(path string) string {
 	return contentType
 }
 
-func GenerateID(rootPath, relPath string) string {
-	return fmt.Sprintf("%x", md5.Sum([]byte(rootPath+relPath)))
+func GetCoverCacheDir(cfg *config.Config) string {
+	return filepath.Join(cfg.Subsonic.DataDir, "cache", "covers")
+}
+
+func GenerateID(path string, folder models.MusicFolder) string {
+	// path and folder.Path are already normalized
+	rel, err := filepath.Rel(folder.Path, path)
+	if err != nil {
+		rel = path
+	}
+	rel = filepath.ToSlash(rel)
+	return fmt.Sprintf("%x", md5.Sum([]byte(fmt.Sprintf("%d:%s", folder.ID, rel))))
 }
 
 func GenerateAlbumID(artist, album string) string {
@@ -33,21 +39,18 @@ func GenerateAlbumID(artist, album string) string {
 }
 
 func GenerateArtistID(name string) string {
-	return GenerateHash(name)
+	return shared.GenerateHash(name)
 }
 
-func GenerateHash(data string) string {
-	return fmt.Sprintf("%x", md5.Sum([]byte(data)))
-}
-
-func GetParentID(rootPath, relPath string) string {
-	if relPath == "." {
+func GetParentID(path string, folder models.MusicFolder) string {
+	// path and folder.Path are already normalized
+	if path == folder.Path {
 		return ""
 	}
-	parent := filepath.Dir(relPath)
-	return GenerateID(rootPath, parent)
-}
 
-func GetCoverCacheDir(cfg *config.Config) string {
-	return filepath.Join(cfg.Subsonic.DataDir, "cache", "covers")
+	dir := filepath.ToSlash(filepath.Dir(path))
+	if dir == path {
+		return ""
+	}
+	return GenerateID(dir, folder)
 }
