@@ -3,6 +3,7 @@ package musicbrainz
 import (
 	"context"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/go-resty/resty/v2"
@@ -27,15 +28,19 @@ func NewClient() *Client {
 }
 
 func (c *Client) SearchRecording(ctx context.Context, artist, album, title string) (*Recording, error) {
+	newQuery := func(key, val string) string {
+		escaped := strings.ReplaceAll(val, "\"", "\\\"")
+		return fmt.Sprintf("%s:\"%s\" ", key, escaped)
+	}
 	query := ""
 	if artist != "" {
-		query += fmt.Sprintf("artist:\"%s\" ", artist)
+		query += newQuery("artist", artist)
 	}
 	if album != "" {
-		query += fmt.Sprintf("release:\"%s\" ", album)
+		query += newQuery("release", album)
 	}
 	if title != "" {
-		query += fmt.Sprintf("recording:\"%s\" ", title)
+		query += newQuery("recording", title)
 	}
 
 	var sr SearchResponse

@@ -12,6 +12,7 @@ import (
 	"github.com/stkevintan/miko/models"
 	"github.com/stkevintan/miko/pkg/browser"
 	"github.com/stkevintan/miko/pkg/di"
+	"github.com/stkevintan/miko/pkg/log"
 	"github.com/stkevintan/miko/pkg/scanner"
 	"github.com/stkevintan/miko/pkg/scraper"
 	"github.com/stkevintan/miko/pkg/tags"
@@ -125,7 +126,7 @@ func (h *Handler) handleUpdateLibrarySongCover(w http.ResponseWriter, r *http.Re
 	// Update cache using scanner logic
 	sc := di.MustInvoke[*scanner.Scanner](r.Context())
 	if err := sc.SaveCoverArt(song.CoverArt, data); err != nil {
-		// Log error but don't fail the request
+		log.Warn("Failed to save cover art for %s: %v", id, err)
 	}
 
 	JSON(w, http.StatusOK, song)
@@ -146,13 +147,26 @@ func (h *Handler) handleGetLibraryFolders(w http.ResponseWriter, r *http.Request
 	}
 
 	var result []FolderWithID
-	for _, folder := range folders {
-		var child models.Child
-		db.Select("id, is_dir").Where("path = ? AND is_dir = ?", folder.Path, true).First(&child)
-		result = append(result, FolderWithID{
-			MusicFolder: folder,
-			DirectoryID: child.ID,
-		})
+	if len(folders) > 0 {
+		paths := make([]string, len(folders))
+		for i, f := range folders {
+			paths[i] = f.Path
+		}
+
+		var children []models.Child
+		db.Select("id, path").Where("path IN ? AND is_dir = ?", paths, true).Find(&children)
+
+		pathMap := make(map[string]string)
+		for _, c := range children {
+			pathMap[c.Path] = c.ID
+		}
+
+		for _, folder := range folders {
+			result = append(result, FolderWithID{
+				MusicFolder: folder,
+				DirectoryID: pathMap[folder.Path],
+			})
+		}
 	}
 
 	JSON(w, http.StatusOK, result)
@@ -234,13 +248,16 @@ func (h *Handler) handleScanLibrary(w http.ResponseWriter, r *http.Request) {
 	updatedIds := make([]string, 0, len(req.IDs))
 
 	for _, id := range req.IDs {
-		if seenIds, err := sc.ScanPath(r.Context(), id); err == nil {
-			seenIds.Range(func(key, value any) bool {
-				songID := key.(string)
-				updatedIds = append(updatedIds, songID)
-				return true
-			})
+		seenIds, err := sc.ScanPath(r.Context(), id)
+		if err != nil {
+			log.Warn("Failed to scan path %s: %v", id, err)
+			continue
 		}
+		seenIds.Range(func(key, value any) bool {
+			songID := key.(string)
+			updatedIds = append(updatedIds, songID)
+			return true
+		})
 	}
 
 	JSON(w, http.StatusOK, updatedIds)
@@ -302,13 +319,16 @@ func (h *Handler) handleScrapeLibrarySongs(w http.ResponseWriter, r *http.Reques
 
 	for _, id := range ids {
 		// scrap then scan to update DB
-		if seenIds, err := sp.ScrapePath(r.Context(), id); err == nil {
-			seenIds.Range(func(key, value any) bool {
-				songID := key.(string)
-				updatedIds = append(updatedIds, songID)
-				return true
-			})
+		seenIds, err := sp.ScrapePath(r.Context(), id)
+		if err != nil {
+			log.Warn("Failed to scrape path %s: %v", id, err)
+			continue
 		}
+		seenIds.Range(func(key, value any) bool {
+			songID := key.(string)
+			updatedIds = append(updatedIds, songID)
+			return true
+		})
 	}
 
 	JSON(w, http.StatusOK, updatedIds)

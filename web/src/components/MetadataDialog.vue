@@ -4,6 +4,7 @@ import Dialog from 'primevue/dialog';
 import Button from 'primevue/button';
 import InputText from 'primevue/inputtext';
 import Divider from 'primevue/divider';
+import { useToast } from 'primevue/usetoast';
 import CoverArt from './CoverArt.vue';
 import api from '../api';
 import { Child } from '@/types/library';
@@ -18,6 +19,7 @@ const emit = defineEmits<{
   (e: 'save', updatedItem: Child): void;
 }>();
 
+const toast = useToast();
 const loading = ref(false);
 const saving = ref(false);
 const editingTags = ref<Array<{key: string, value: string}>>([]);
@@ -36,7 +38,7 @@ const fetchTags = async () => {
     coverFile.value = null;
     coverPreview.value = null;
   } catch (error) {
-    console.error('Failed to fetch tags:', error);
+    toast.add({ severity: 'error', summary: 'Error', detail: 'Failed to fetch tags', life: 3000 });
   } finally {
     loading.value = false;
   }
@@ -98,10 +100,11 @@ const saveEdit = async () => {
       refreshKey.value = Date.now();
     }
     
+    toast.add({ severity: 'success', summary: 'Success', detail: 'Metadata updated successfully', life: 3000 });
     emit('save', updatedItem);
     emit('update:visible', false);
   } catch (error) {
-    console.error('Failed to save edit:', error);
+    toast.add({ severity: 'error', summary: 'Error', detail: 'Failed to save metadata', life: 3000 });
   } finally {
     saving.value = false;
   }

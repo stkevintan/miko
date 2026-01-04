@@ -52,26 +52,27 @@ const isScanning = ref(false);
 const isScraping = ref(false);
 const scanCount = ref(0);
 
-const checkScanStatus = async () => {
+const checkStatus = async () => {
   try {
     const response = await api.get('/library/status');
     isScanning.value = response.data.scanning;
     isScraping.value = response.data.scraping;
     scanCount.value = response.data.count;
   } catch (error) {
-    console.error('Failed to check scan status:', error);
+    console.error('Failed to fetch status:', error);
+    // Silent fail for status check to avoid spamming UI
   }
 };
 
-let statusInterval: any;
+let statusInterval: number;
 
 onMounted(() => {
-  checkScanStatus();
-  statusInterval = setInterval(checkScanStatus, 5000);
+  checkStatus();
+  statusInterval = window.setInterval(checkStatus, 5000);
 });
 
 onUnmounted(() => {
-  if (statusInterval) clearInterval(statusInterval);
+  if (statusInterval) window.clearInterval(statusInterval);
 });
 
 const scanMenu = ref();
@@ -103,7 +104,6 @@ const startScan = async (incremental: boolean) => {
       life: 3000 
     });
   } catch (error: any) {
-    console.error('Failed to start scan:', error);
     toast.add({ 
       severity: 'error', 
       summary: 'Scan Failed', 
@@ -120,7 +120,6 @@ const startFullScrape = async () => {
     await api.post('/library/song/scrape/all');
     toast.add({ severity: 'success', summary: 'Success', detail: 'Full library scrape started', life: 3000 });
   } catch (error: any) {
-    console.error('Failed to start scrape:', error);
     toast.add({ 
       severity: 'error', 
       summary: 'Scrape Failed', 

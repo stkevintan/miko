@@ -50,7 +50,7 @@ func (b *Browser) getIndexesByTag(folderID uint, hasFolderId bool, ignoredArticl
 func (b *Browser) getIndexesByFile(folderID uint, hasFolderId bool, ignoredArticles string) ([]models.Index, error) {
 	indexMap := make(map[string][]models.Artist)
 	var children []models.Child
-	query := b.db.Model(&models.Child{}).Select("id, title, is_dir, parent").Where("is_dir = ?", true).Where("parent = ?", "")
+	query := b.db.Model(&models.Child{}).Select("id, title, is_dir, parent, music_folder_id").Where("is_dir = ?", true).Where("parent = ?", "")
 	if hasFolderId {
 		query = query.Where("music_folder_id = ?", folderID)
 	}
