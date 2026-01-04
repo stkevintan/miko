@@ -4,6 +4,7 @@ import MainLayout from '../layouts/MainLayout.vue';
 import Home from '../views/Home.vue';
 import Login from '../views/Login.vue';
 import Profile from '../views/Profile.vue';
+import Library from '../views/Library.vue';
 
 const router = createRouter({
   history: createWebHistory(),
@@ -17,6 +18,11 @@ const router = createRouter({
           path: '',
           name: 'home',
           component: Home,
+        },
+        {
+          path: 'library',
+          name: 'library',
+          component: Library,
         },
         {
           path: 'profile',

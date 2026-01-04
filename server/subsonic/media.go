@@ -17,6 +17,7 @@ import (
 	"github.com/stkevintan/miko/pkg/di"
 	"github.com/stkevintan/miko/pkg/log"
 	"github.com/stkevintan/miko/pkg/scanner"
+	"github.com/stkevintan/miko/pkg/shared"
 	"gorm.io/gorm"
 )
 
@@ -219,7 +220,7 @@ func (s *Subsonic) handleGetAvatar(w http.ResponseWriter, r *http.Request) {
 	cfg := di.MustInvoke[*config.Config](r.Context())
 	avatarDir := filepath.Join(cfg.Subsonic.DataDir, "avatars")
 
-	filename := scanner.GenerateHash(username)
+	filename := shared.GenerateHash(username)
 
 	extensions := []string{".jpg", ".png"}
 	for _, ext := range extensions {

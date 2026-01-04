@@ -32,6 +32,6 @@ folders = ["${HOME}/Music"]
 dataDir = "${HOME}/.miko/data"
 # default mode of scanning: "full" or "inc"
 scanMode = "inc"
-# how to index music files: by "tag" or "filepath"
-browseMode = "tag"
+# default mode of scraping: "full" or "inc"
+scrapeMode = "inc"
 ignoredArticles = "The El La Los Las Le Les"

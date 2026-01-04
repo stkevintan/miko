@@ -218,6 +218,8 @@ type Directory struct {
 	AverageRating float64    `xml:"averageRating,attr,omitempty" json:"averageRating,omitempty"`
 	PlayCount     int64      `xml:"playCount,attr,omitempty" json:"playCount,omitempty"`
 	Child         []Child    `xml:"child" json:"child"`
+	TotalCount    int64      `xml:"-" json:"totalCount"`
+	Parents       []Child    `xml:"-" json:"parents,omitempty"`
 }
 
 type Child struct {

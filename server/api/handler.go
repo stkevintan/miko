@@ -15,10 +15,12 @@ import (
 	"gorm.io/gorm"
 )
 
-type Handler struct{}
+type Handler struct {
+	ctx context.Context
+}
 
-func New() *Handler {
-	return &Handler{}
+func New(ctx context.Context) *Handler {
+	return &Handler{ctx: ctx}
 }
 
 func (h *Handler) getApiRequestContext(r *http.Request) (context.Context, error) {
@@ -27,6 +29,7 @@ func (h *Handler) getApiRequestContext(r *http.Request) (context.Context, error)
 	db := di.MustInvoke[*gorm.DB](ctx)
 	cfg := di.MustInvoke[*config.Config](ctx)
 
+	// create a sub context to provide scoped dependencies
 	ctx = di.Inherit(ctx)
 
 	var identity cookiecloud.Identity
@@ -70,6 +73,20 @@ func (h *Handler) RegisterRoutes(r chi.Router) {
 			r.Post("/cookiecloud/pull", h.handleCookiecloudPull)
 			r.Get("/download", h.handleDownload)
 			r.Get("/platform/{platform}/user", h.handlePlatformUser)
+
+			// Library
+			r.Get("/library/folders", h.handleGetLibraryFolders)
+			r.Get("/library/directory", h.handleGetLibraryDirectory)
+			r.Get("/library/song", h.handleGetLibrarySong)
+			r.Get("/library/coverArt", h.handleGetLibraryCoverArt)
+			r.Post("/library/scan", h.handleScanLibrary)
+			r.Post("/library/scan/all", h.handleScanAllLibrary)
+			r.Get("/library/status", h.handleGetStatus)
+			r.Post("/library/song/scrape/all", h.handleScrapeAllLibrarySongs)
+			r.Post("/library/song/scrape", h.handleScrapeLibrarySongs)
+			r.Get("/library/song/tags", h.handleGetLibrarySongTags)
+			r.Post("/library/song/update", h.handleUpdateLibrarySong)
+			r.Post("/library/song/cover", h.handleUpdateLibrarySongCover)
 		})
 	})
 }

@@ -1,0 +1,6 @@
+{
+    // exclude web folder in favor of using the multi-root workspace
+    "files.exclude": {
+        "**/web": true
+    }
+}

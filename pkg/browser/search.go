@@ -34,16 +34,19 @@ func (b *Browser) Search(opts SearchOptions) ([]models.ArtistID3, []models.Album
 		Limit(opts.SongCount).Offset(opts.SongOffset)
 
 	if opts.HasFolderID {
-		artistQuery = artistQuery.Joins("JOIN song_artists ON song_artists.artist_id3_id = artist_id3.id").
-			Joins("JOIN children ON children.id = song_artists.child_id").
-			Where("children.music_folder_id = ?", opts.MusicFolderID).
-			Group("artist_id3.id")
+		var folder models.MusicFolder
+		if err := b.db.First(&folder, opts.MusicFolderID).Error; err == nil {
+			artistQuery = artistQuery.Joins("JOIN song_artists ON song_artists.artist_id3_id = artist_id3.id").
+				Joins("JOIN children ON children.id = song_artists.child_id").
+				Where("children.music_folder_id = ?", opts.MusicFolderID).
+				Group("artist_id3.id")
 
-		albumQuery = albumQuery.Joins("JOIN children ON children.album_id = album_id3.id").
-			Where("children.music_folder_id = ?", opts.MusicFolderID).
-			Group("album_id3.id")
+			albumQuery = albumQuery.Joins("JOIN children ON children.album_id = album_id3.id").
+				Where("children.music_folder_id = ?", opts.MusicFolderID).
+				Group("album_id3.id")
 
-		songQuery = songQuery.Where("music_folder_id = ?", opts.MusicFolderID)
+			songQuery = songQuery.Where("music_folder_id = ?", opts.MusicFolderID)
+		}
 	}
 
 	artistQuery.Find(&artists)

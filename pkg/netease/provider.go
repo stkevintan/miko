@@ -30,7 +30,7 @@ type NMProvider struct {
 var _ provider.Provider = (*NMProvider)(nil)
 
 // NewProvider creates a new NMProvider for multiple songs (returns concrete type)
-func NewProvider(jar cookiecloud.CookieJar) (*NMProvider, error) {
+func NewProvider(jar cookiecloud.CookieJar) (provider.Provider, error) {
 	cli, err := NewClient(jar)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create API client: %w", err)

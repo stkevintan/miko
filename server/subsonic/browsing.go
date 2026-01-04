@@ -2,7 +2,6 @@ package subsonic
 
 import (
 	"net/http"
-	"path/filepath"
 
 	"github.com/stkevintan/miko/config"
 	"github.com/stkevintan/miko/models"
@@ -14,14 +13,11 @@ import (
 
 func (s *Subsonic) handleGetMusicFolders(w http.ResponseWriter, r *http.Request) {
 	db := di.MustInvoke[*gorm.DB](r.Context())
-	cfg := di.MustInvoke[*config.Config](r.Context())
 
 	var folders []models.MusicFolder
-	// Ensure folders from config are in DB
-	for _, path := range cfg.Subsonic.Folders {
-		var folder models.MusicFolder
-		db.Where(models.MusicFolder{Path: path}).Attrs(models.MusicFolder{Name: filepath.Base(path)}).FirstOrCreate(&folder)
-		folders = append(folders, folder)
+	if err := db.Find(&folders).Error; err != nil {
+		s.sendResponse(w, r, models.NewErrorResponse(0, "Failed to fetch music folders"))
+		return
 	}
 
 	resp := models.NewResponse(models.ResponseStatusOK)
@@ -39,7 +35,7 @@ func (s *Subsonic) handleGetIndexes(w http.ResponseWriter, r *http.Request) {
 	folderID, err := getQueryInt[uint](r, "musicFolderId")
 	hasFolderId := err == nil
 
-	indexes, err := br.GetIndexes(cfg.Subsonic.BrowseMode, folderID, hasFolderId, cfg.Subsonic.IgnoredArticles)
+	indexes, err := br.GetIndexes(folderID, hasFolderId, cfg.Subsonic.IgnoredArticles)
 	if err != nil {
 		s.sendResponse(w, r, models.NewErrorResponse(0, "Failed to query indexes: "+err.Error()))
 		return
@@ -60,10 +56,9 @@ func (s *Subsonic) handleGetMusicDirectory(w http.ResponseWriter, r *http.Reques
 		s.sendResponse(w, r, models.NewErrorResponse(10, "ID is required"))
 		return
 	}
-	cfg := di.MustInvoke[*config.Config](r.Context())
 	br := di.MustInvoke[*browser.Browser](r.Context())
 
-	dir, err := br.GetDirectory(cfg.Subsonic.BrowseMode, id)
+	dir, err := br.GetDirectory(id, 0, 0)
 	if err != nil {
 		if err == gorm.ErrRecordNotFound {
 			s.sendResponse(w, r, models.NewErrorResponse(70, "Directory not found"))
