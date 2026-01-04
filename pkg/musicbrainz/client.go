@@ -13,6 +13,7 @@ const baseURL = "https://musicbrainz.org/ws/2"
 
 type Client struct {
 	restyClient *resty.Client
+	limiter     <-chan time.Time
 }
 
 func NewClient() *Client {
@@ -20,14 +21,29 @@ func NewClient() *Client {
 		SetBaseURL(baseURL).
 		SetHeader("User-Agent", "Miko/1.0.0 (https://github.com/stkevintan/miko)").
 		SetTimeout(10*time.Second).
-		SetHeader("Accept", "application/json")
+		SetHeader("Accept", "application/json").
+		// Add retry logic for 503 errors
+		SetRetryCount(3).
+		SetRetryWaitTime(2 * time.Second).
+		SetRetryMaxWaitTime(10 * time.Second).
+		AddRetryCondition(func(r *resty.Response, err error) bool {
+			return r.StatusCode() == 503
+		})
 
 	return &Client{
 		restyClient: client,
+		// MusicBrainz allows 1 request per second for non-authenticated users
+		limiter: time.Tick(1100 * time.Millisecond),
 	}
 }
 
 func (c *Client) SearchRecording(ctx context.Context, artist, album, title string) (*Recording, error) {
+	select {
+	case <-c.limiter:
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	}
+
 	newQuery := func(key, val string) string {
 		escaped := strings.ReplaceAll(val, "\"", "\\\"")
 		return fmt.Sprintf("%s:\"%s\" ", key, escaped)
@@ -68,6 +84,12 @@ func (c *Client) SearchRecording(ctx context.Context, artist, album, title strin
 }
 
 func (c *Client) GetRecording(ctx context.Context, id string) (*Recording, error) {
+	select {
+	case <-c.limiter:
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	}
+
 	var r Recording
 	resp, err := c.restyClient.R().
 		SetContext(ctx).

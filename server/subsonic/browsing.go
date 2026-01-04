@@ -35,7 +35,7 @@ func (s *Subsonic) handleGetIndexes(w http.ResponseWriter, r *http.Request) {
 	folderID, err := getQueryInt[uint](r, "musicFolderId")
 	hasFolderId := err == nil
 
-	indexes, err := br.GetIndexes(cfg.Subsonic.BrowseMode, folderID, hasFolderId, cfg.Subsonic.IgnoredArticles)
+	indexes, err := br.GetIndexes(folderID, hasFolderId, cfg.Subsonic.IgnoredArticles)
 	if err != nil {
 		s.sendResponse(w, r, models.NewErrorResponse(0, "Failed to query indexes: "+err.Error()))
 		return
@@ -56,10 +56,9 @@ func (s *Subsonic) handleGetMusicDirectory(w http.ResponseWriter, r *http.Reques
 		s.sendResponse(w, r, models.NewErrorResponse(10, "ID is required"))
 		return
 	}
-	cfg := di.MustInvoke[*config.Config](r.Context())
 	br := di.MustInvoke[*browser.Browser](r.Context())
 
-	dir, err := br.GetDirectory(cfg.Subsonic.BrowseMode, id)
+	dir, err := br.GetDirectory(id, 0, 0)
 	if err != nil {
 		if err == gorm.ErrRecordNotFound {
 			s.sendResponse(w, r, models.NewErrorResponse(70, "Directory not found"))

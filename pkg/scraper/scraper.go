@@ -9,6 +9,7 @@ import (
 
 	"github.com/stkevintan/miko/config"
 	"github.com/stkevintan/miko/models"
+	"github.com/stkevintan/miko/pkg/log"
 	"github.com/stkevintan/miko/pkg/musicbrainz"
 	"github.com/stkevintan/miko/pkg/scanner"
 	"github.com/stkevintan/miko/pkg/shared"
@@ -22,6 +23,7 @@ type Scraper struct {
 	db         *gorm.DB
 	isScraping atomic.Bool
 	scanner    *scanner.Scanner
+	cfg        *config.Config
 }
 
 func New(db *gorm.DB, cfg *config.Config, s *scanner.Scanner) *Scraper {
@@ -30,6 +32,7 @@ func New(db *gorm.DB, cfg *config.Config, s *scanner.Scanner) *Scraper {
 		walker:  shared.NewWalker(db, cfg),
 		mb:      musicbrainz.NewClient(),
 		scanner: s,
+		cfg:     cfg,
 	}
 }
 
@@ -37,29 +40,33 @@ func (c *Scraper) IsScraping() bool {
 	return c.isScraping.Load()
 }
 
-func (c *Scraper) ScrapePath(ctx context.Context, id string) (*sync.Map, error) {
+func (c *Scraper) ScrapePath(ctx context.Context, id string, mode string) (*sync.Map, error) {
 	taskChan, err := c.walker.WalkByID(ctx, id)
 	if err != nil {
 		return nil, err
 	}
 
-	return c.scrape(ctx, taskChan)
+	return c.scrape(ctx, taskChan, mode)
 }
 
-func (c *Scraper) ScrapeAll(ctx context.Context) (*sync.Map, error) {
+func (c *Scraper) ScrapeAll(ctx context.Context, mode string) (*sync.Map, error) {
 	taskChan, err := c.walker.WalkAllRoots(ctx)
 	if err != nil {
 		return nil, err
 	}
 
-	return c.scrape(ctx, taskChan)
+	return c.scrape(ctx, taskChan, mode)
 }
 
-func (c *Scraper) scrape(ctx context.Context, taskChan <-chan shared.WalkTask) (*sync.Map, error) {
+func (c *Scraper) scrape(ctx context.Context, taskChan <-chan shared.WalkTask, mode string) (*sync.Map, error) {
 	if !c.isScraping.CompareAndSwap(false, true) {
 		return nil, fmt.Errorf("scrape already in progress")
 	}
 	defer c.isScraping.Store(false)
+
+	if mode == "" {
+		mode = c.cfg.Subsonic.ScrapeMode
+	}
 
 	var tasks []shared.WalkTask
 	for task := range taskChan {
@@ -77,8 +84,23 @@ func (c *Scraper) scrape(ctx context.Context, taskChan <-chan shared.WalkTask) (
 			continue
 		}
 
+		// Incremental scrape: skip if already has MusicBrainz Track ID
+		if mode == "inc" {
+			if currentTags, err := tags.ReadAll(song.Path); err == nil {
+				if trackIDs, ok := currentTags[tags.MusicBrainzTrackID]; ok && len(trackIDs) > 0 && trackIDs[0] != "" {
+					log.Info("[Inc mode] Skipping song with existing MusicBrainz Track ID: %s", song.Path)
+					continue
+				}
+			}
+		}
+
+		log.Info("Scraping metadata for song: %s", song.Path)
+
 		if err := c.ScrapeSong(ctx, &song); err != nil {
+			log.Error("Failed to scrape song %s: %v", song.Path, err)
 			continue
+		} else {
+			log.Info("Successfully scraped song: %s", song.Path)
 		}
 	}
 

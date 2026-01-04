@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 
 	"github.com/stkevintan/miko/config"
@@ -178,9 +179,13 @@ func (h *Handler) handleGetLibraryDirectory(w http.ResponseWriter, r *http.Reque
 		JSON(w, http.StatusBadRequest, models.ErrorResponse{Error: "ID is required"})
 		return
 	}
+
+	offset, _ := strconv.Atoi(r.URL.Query().Get("offset"))
+	limit, _ := strconv.Atoi(r.URL.Query().Get("limit"))
+
 	br := di.MustInvoke[*browser.Browser](r.Context())
 
-	dir, err := br.GetDirectory("file", id)
+	dir, err := br.GetDirectory(id, offset, limit)
 	if err != nil {
 		if err == gorm.ErrRecordNotFound {
 			JSON(w, http.StatusNotFound, models.ErrorResponse{Error: "Directory not found"})
@@ -292,15 +297,17 @@ func (h *Handler) handleGetStatus(w http.ResponseWriter, r *http.Request) {
 
 func (h *Handler) handleScrapeAllLibrarySongs(w http.ResponseWriter, r *http.Request) {
 	sp := di.MustInvoke[*scraper.Scraper](r.Context())
+	mode := r.URL.Query().Get("mode")
 
-	go sp.ScrapeAll(h.ctx)
+	go sp.ScrapeAll(h.ctx, mode)
 
 	JSON(w, http.StatusOK, map[string]string{"status": "scraping"})
 }
 
 func (h *Handler) handleScrapeLibrarySongs(w http.ResponseWriter, r *http.Request) {
 	var req struct {
-		IDs []string `json:"ids"`
+		IDs  []string `json:"ids"`
+		Mode string   `json:"mode"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		JSON(w, http.StatusBadRequest, models.ErrorResponse{Error: "Invalid request body"})
@@ -308,6 +315,7 @@ func (h *Handler) handleScrapeLibrarySongs(w http.ResponseWriter, r *http.Reques
 	}
 
 	ids := req.IDs
+	mode := req.Mode
 
 	if len(ids) == 0 {
 		JSON(w, http.StatusBadRequest, models.ErrorResponse{Error: "ids are required"})
@@ -319,7 +327,7 @@ func (h *Handler) handleScrapeLibrarySongs(w http.ResponseWriter, r *http.Reques
 
 	for _, id := range ids {
 		// scrap then scan to update DB
-		seenIds, err := sp.ScrapePath(r.Context(), id)
+		seenIds, err := sp.ScrapePath(r.Context(), id, mode)
 		if err != nil {
 			log.Warn("Failed to scrape path %s: %v", id, err)
 			continue

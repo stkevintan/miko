@@ -5,49 +5,10 @@ import (
 	"strings"
 
 	"github.com/stkevintan/miko/models"
-	"gorm.io/gorm"
+	"github.com/stkevintan/miko/pkg/log"
 )
 
-func (b *Browser) GetIndexes(mode string, folderID uint, hasFolderId bool, ignoredArticles string) ([]models.Index, error) {
-	if mode == "tag" {
-		return b.getIndexesByTag(folderID, hasFolderId, ignoredArticles)
-	}
-	return b.getIndexesByFile(folderID, hasFolderId, ignoredArticles)
-}
-
-func (b *Browser) getIndexesByTag(folderID uint, hasFolderId bool, ignoredArticles string) ([]models.Index, error) {
-	indexMap := make(map[string][]models.Artist)
-	var artists []models.ArtistID3
-	query := b.db.Model(&models.ArtistID3{}).Select("artist_id3.id, artist_id3.name")
-	query = query.Joins("JOIN song_artists ON song_artists.artist_id3_id = artist_id3.id").
-		Joins("JOIN children ON children.id = song_artists.child_id")
-	if hasFolderId {
-		query = query.Where("children.music_folder_id = ?", folderID)
-	}
-	if err := query.Group("artist_id3.id").Find(&artists).Error; err != nil {
-		return nil, err
-	}
-
-	articles := strings.Fields(ignoredArticles)
-
-	for _, artist := range artists {
-		if artist.Name == "" {
-			continue
-		}
-
-		name := stripArticles(artist.Name, articles)
-
-		firstChar := strings.ToUpper(string([]rune(name)[0]))
-		indexMap[firstChar] = append(indexMap[firstChar], models.Artist{
-			ID:   artist.ID,
-			Name: artist.Name,
-		})
-	}
-
-	return b.mapToIndexes(indexMap), nil
-}
-
-func (b *Browser) getIndexesByFile(folderID uint, hasFolderId bool, ignoredArticles string) ([]models.Index, error) {
+func (b *Browser) GetIndexes(folderID uint, hasFolderId bool, ignoredArticles string) ([]models.Index, error) {
 	indexMap := make(map[string][]models.Artist)
 	var children []models.Child
 	query := b.db.Model(&models.Child{}).Select("id, title, is_dir, parent, music_folder_id").Where("is_dir = ?", true).Where("parent = ?", "")
@@ -96,80 +57,53 @@ func (b *Browser) mapToIndexes(indexMap map[string][]models.Artist) []models.Ind
 	return indexes
 }
 
-func (b *Browser) GetDirectory(mode string, id string) (*models.Directory, error) {
-	if mode == "tag" {
-		return b.getDirectoryByTag(id)
-	}
-	return b.getDirectoryByFile(id)
-}
-
-func (b *Browser) getDirectoryByTag(id string) (*models.Directory, error) {
-	// Try to find as artist first
-	var artist models.ArtistID3
-	if err := b.db.Model(&models.ArtistID3{}).Select("id, name, starred").Where("id = ?", id).First(&artist).Error; err == nil {
-		// It's an artist, return their albums as directories
-		var albums []models.AlbumID3
-		b.db.Scopes(models.AlbumWithStats(false)).
-			Joins("JOIN album_artists ON album_artists.album_id3_id = album_id3.id").
-			Where("album_artists.artist_id3_id = ?", artist.ID).
-			Order("album_id3.year DESC, album_id3.name ASC").
-			Find(&albums)
-
-		children := make([]models.Child, len(albums))
-		for i, a := range albums {
-			children[i] = models.Child{
-				ID:        a.ID,
-				Parent:    artist.ID,
-				IsDir:     true,
-				Title:     a.Name,
-				Artist:    a.Artist,
-				ArtistID:  a.ArtistID,
-				CoverArt:  a.CoverArt,
-				Duration:  a.Duration,
-				PlayCount: a.PlayCount,
-				Starred:   a.Starred,
-				Year:      a.Year,
-				Genre:     a.Genre,
-				Created:   &a.Created,
-			}
-		}
-
-		return &models.Directory{
-			ID:      artist.ID,
-			Name:    artist.Name,
-			Starred: artist.Starred,
-			Child:   children,
-		}, nil
-	}
-
-	// Try to find as album
-	var album models.AlbumID3
-	if err := b.db.Model(&models.AlbumID3{}).Select("id, name, starred, artist_id").Where("id = ?", id).First(&album).Error; err == nil {
-		// It's an album, return its songs
-		var songs []models.Child
-		b.db.Where("album_id = ?", album.ID).Order("disc_number, track").Find(&songs)
-
-		return &models.Directory{
-			ID:      album.ID,
-			Parent:  album.ArtistID,
-			Name:    album.Name,
-			Starred: album.Starred,
-			Child:   songs,
-		}, nil
-	}
-	return nil, gorm.ErrRecordNotFound
-}
-
-func (b *Browser) getDirectoryByFile(id string) (*models.Directory, error) {
+func (b *Browser) GetDirectory(id string, offset, limit int) (*models.Directory, error) {
+	log.Debug("GetDirectory %s %d %d", id, offset, limit)
 	var dir models.Child
 	if err := b.db.Where("id = ? AND is_dir = ?", id, true).First(&dir).Error; err != nil {
+		log.Debug("GetDirectory dir not found: %s", id)
 		return nil, err
 	}
+	log.Debug("GetDirectory found dir: %s (%s)", dir.Title, dir.Path)
 
 	var children []models.Child
-	b.db.Where("parent = ?", dir.ID).
-		Order("is_dir DESC, title ASC").
-		Find(&children)
+	var total int64
+	b.db.Model(&models.Child{}).Where("parent = ?", dir.ID).Count(&total)
+	log.Debug("GetDirectory total: %d for parent: %s", total, dir.ID)
+
+	query := b.db.Where("parent = ?", dir.ID)
+	if limit > 0 {
+		query = query.Limit(limit).Offset(offset)
+	}
+
+	if err := query.Order("is_dir DESC, title ASC").Find(&children).Error; err != nil {
+		log.Error("GetDirectory find error: %v", err)
+		return nil, err
+	}
+	log.Debug("GetDirectory found %d children", len(children))
+
+	var parents []models.Child
+	if dir.Parent != "" {
+		// Use a recursive CTE to fetch all ancestors in a single query.
+		// This avoids the N+1 query problem when navigating deep directory structures.
+		if err := b.db.Raw(`
+			WITH RECURSIVE ancestors AS (
+				SELECT * FROM children WHERE id = ?
+				UNION ALL
+				SELECT c.* FROM children c
+				JOIN ancestors a ON c.id = a.parent
+			)
+			SELECT * FROM ancestors
+		`, dir.Parent).Scan(&parents).Error; err != nil {
+			log.Error("GetDirectory ancestors error: %v", err)
+		}
+
+		// The CTE returns ancestors from leaf to root (closest parent first).
+		// Reverse them to get root-to-leaf order for breadcrumbs.
+		for i, j := 0, len(parents)-1; i < j; i, j = i+1, j-1 {
+			parents[i], parents[j] = parents[j], parents[i]
+		}
+	}
 
 	return &models.Directory{
 		ID:            dir.ID,
@@ -180,6 +114,8 @@ func (b *Browser) getDirectoryByFile(id string) (*models.Directory, error) {
 		AverageRating: dir.AverageRating,
 		PlayCount:     dir.PlayCount,
 		Child:         children,
+		TotalCount:    total,
+		Parents:       parents,
 	}, nil
 }
 

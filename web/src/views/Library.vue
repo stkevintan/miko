@@ -36,6 +36,9 @@ const refreshKey = ref(Date.now());
 const scanningIds = ref<string[]>([]);
 const scrapingIds = ref<string[]>([]);
 
+const rows = ref(50);
+const first = ref(0);
+
 const selectionValue = computed({
     get: () =>
         isSelectionMode.value ? selectedItems.value : selectedSong.value,
@@ -60,10 +63,10 @@ const fetchFolders = async () => {
     }
 };
 
-const fetchDirectory = async (id: string) => {
+const fetchDirectory = async (id: string, offset = first.value, limit = rows.value) => {
     loading.value = true;
     try {
-        const response = await api.get(`/library/directory?id=${id}`);
+        const response = await api.get(`/library/directory?id=${id}&offset=${offset}&limit=${limit}`);
         currentDir.value = response.data;
         updateBreadcrumbs();
     } catch (error) {
@@ -73,12 +76,32 @@ const fetchDirectory = async (id: string) => {
     }
 };
 
+const onPage = (event: any) => {
+    first.value = event.first;
+    rows.value = event.rows;
+    if (route.query.id) {
+        fetchDirectory(route.query.id as string, first.value, rows.value);
+    }
+};
+
 const updateBreadcrumbs = () => {
     const items: BreadCrumbItem[] = [
         { label: "Library", command: () => void router.push("/library") },
     ];
 
     if (currentDir.value && route.query.id) {
+        if (currentDir.value.parents) {
+            currentDir.value.parents.forEach((p) => {
+                items.push({
+                    label: p.title,
+                    command: () =>
+                        void router.push({
+                            path: "/library",
+                            query: { id: p.id },
+                        }),
+                });
+            });
+        }
         items.push({ label: currentDir.value.name });
     }
 
@@ -86,6 +109,8 @@ const updateBreadcrumbs = () => {
 };
 
 const navigate = (item: Child) => {
+    // ignore selection mode when navigating
+    if (isSelectionMode.value) return;
     if (item.isDir) {
         selectedSong.value = null;
         selectedItems.value = [];
@@ -95,6 +120,10 @@ const navigate = (item: Child) => {
                 id: item.id,
             },
         });
+    } else {
+        selectedSong.value = item;
+        selectedItems.value = [];
+        editItem(item);
     }
 };
 
@@ -127,7 +156,7 @@ const scanFolder = async (folder: Folder) => {
 const scrapeFolder = async (folder: Folder) => {
     scrapingIds.value.push(folder.directoryId);
     try {
-        await api.post("/library/song/scrape", { ids: [folder.directoryId] });
+        await api.post("/library/song/scrape", { ids: [folder.directoryId], mode: 'full' });
         toast.add({ severity: 'success', summary: 'Success', detail: 'Folder scrape started', life: 3000 });
     } catch (error: any) {
         console.error("Failed to scrape folder:", error);
@@ -151,6 +180,9 @@ const handleRoute = () => {
     const { id } = route.query;
     selectedItems.value = [];
     if (typeof id === "string") {
+        if (currentDir.value?.id !== id) {
+            first.value = 0;
+        }
         fetchDirectory(id);
     } else {
         currentDir.value = null;
@@ -224,7 +256,7 @@ const scanItem = async (item: Child) => {
 const scrapeItem = async (item: Child) => {
     scrapingIds.value.push(item.id);
     try {
-        const response = await api.post("/library/song/scrape", { ids: [item.id] });
+        const response = await api.post("/library/song/scrape", { ids: [item.id], mode: 'full' });
         await handleUpdatedIds(response.data as string[]);
         toast.add({ severity: 'success', summary: 'Success', detail: 'Metadata scraped successfully', life: 3000 });
     } catch (error: any) {
@@ -307,7 +339,7 @@ const batchScrape = () => {
             ids.forEach(id => scrapingIds.value.push(id));
             
             try {
-                const response = await api.post("/library/song/scrape", { ids });
+                const response = await api.post("/library/song/scrape", { ids, mode: 'full' });
                 await handleUpdatedIds(response.data as string[]);
                 
                 // Update selected items if they were affected (though they are usually cleared after batch)
@@ -383,6 +415,9 @@ const batchScrape = () => {
                 <LibraryTable
                     :items="currentDir?.child || []"
                     :loading="loading"
+                    :totalRecords="currentDir?.totalCount || 0"
+                    v-model:first="first"
+                    v-model:rows="rows"
                     :scanningIds="scanningIds"
                     :scrapingIds="scrapingIds"
                     v-model:isSelectionMode="isSelectionMode"
@@ -393,6 +428,7 @@ const batchScrape = () => {
                     @scrape="scrapeItem"
                     @batch-scan="batchScan"
                     @batch-scrape="batchScrape"
+                    @page="onPage"
                 />
             </div>
 

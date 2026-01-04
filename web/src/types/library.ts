@@ -25,4 +25,6 @@ export interface Directory {
     id: string;
     name: string;
     child: Child[];
+    totalCount?: number;
+    parents?: Child[];
 }

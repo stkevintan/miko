@@ -93,6 +93,24 @@ const toggleScanMenu = (event: Event) => {
   scanMenu.value.toggle(event);
 };
 
+const scrapeMenu = ref();
+const scrapeMenuItems = ref([
+  {
+    label: 'Incremental Scrape',
+    icon: 'pi pi-search-plus',
+    command: () => startScrape('inc')
+  },
+  {
+    label: 'Full Scrape',
+    icon: 'pi pi-search',
+    command: () => startScrape('full')
+  }
+]);
+
+const toggleScrapeMenu = (event: Event) => {
+  scrapeMenu.value.toggle(event);
+};
+
 const startScan = async (incremental: boolean) => {
   isScanning.value = true;
   try {
@@ -114,11 +132,16 @@ const startScan = async (incremental: boolean) => {
   }
 };
 
-const startFullScrape = async () => {
+const startScrape = async (mode: string) => {
   isScraping.value = true;
   try {
-    await api.post('/library/song/scrape/all');
-    toast.add({ severity: 'success', summary: 'Success', detail: 'Full library scrape started', life: 3000 });
+    await api.post(`/library/song/scrape/all?mode=${mode}`);
+    toast.add({ 
+      severity: 'success', 
+      summary: 'Success', 
+      detail: `${mode === 'inc' ? 'Incremental' : 'Full'} library scrape started`, 
+      life: 3000 
+    });
   } catch (error: any) {
     toast.add({ 
       severity: 'error', 
@@ -153,13 +176,14 @@ const startFullScrape = async () => {
         <Menu ref="scanMenu" :model="scanMenuItems" :popup="true" />
         <Button 
           :icon="isScraping ? 'pi pi-spin pi-spinner' : 'pi pi-search-plus'" 
-          v-tooltip="isScraping ? 'Scraping metadata...' : 'Scrape all metadata'"
+          v-tooltip="isScraping ? 'Scraping metadata...' : 'Scrape options'"
           variant="text" 
           severity="secondary" 
           size="small"
           :disabled="isScraping"
-          @click="startFullScrape"
+          @click="toggleScrapeMenu"
         />
+        <Menu ref="scrapeMenu" :model="scrapeMenuItems" :popup="true" />
         <Button 
           :icon="isDark ? 'pi pi-sun' : 'pi pi-moon'" 
           variant="text" 

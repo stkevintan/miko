@@ -85,7 +85,7 @@ type SubsonicConfig struct {
 	Folders         []string `json:"folders" mapstructure:"folders"`
 	DataDir         string   `json:"dataDir" mapstructure:"dataDir"`
 	ScanMode        string   `json:"scanMode" mapstructure:"scanMode"`
-	BrowseMode      string   `json:"browseMode" mapstructure:"browseMode"`
+	ScrapeMode      string   `json:"scrapeMode" mapstructure:"scrapeMode"`
 	IgnoredArticles string   `json:"ignoredArticles" mapstructure:"ignoredArticles"`
 }
 
