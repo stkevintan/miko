@@ -4,7 +4,6 @@ import { useAuthStore } from '../stores/auth';
 import api from '../api';
 import Card from 'primevue/card';
 import Button from 'primevue/button';
-import InputText from 'primevue/inputtext';
 import Password from 'primevue/password';
 import Message from 'primevue/message';
 import Tag from 'primevue/tag';

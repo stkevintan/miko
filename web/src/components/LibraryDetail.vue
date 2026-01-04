@@ -4,7 +4,7 @@ import Button from "primevue/button";
 import CoverArt from "./CoverArt.vue";
 import { Child } from "@/types/library";
 
-const props = defineProps<{
+defineProps<{
     item: Child | null;
     refreshKey: number;
 }>();
