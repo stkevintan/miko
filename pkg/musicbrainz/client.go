@@ -110,3 +110,21 @@ func (c *Client) GetRecording(ctx context.Context, id string) (*Recording, error
 
 	return &r, nil
 }
+
+func (c *Client) FetchCoverArt(ctx context.Context, releaseID string) ([]byte, error) {
+	// Cover Art Archive doesn't have the same rate limit as MusicBrainz API,
+	// but it's good practice to be respectful.
+	resp, err := c.restyClient.R().
+		SetContext(ctx).
+		Get("https://coverartarchive.org/release/" + releaseID + "/front")
+
+	if err != nil {
+		return nil, err
+	}
+
+	if !resp.IsSuccess() {
+		return nil, fmt.Errorf("cover art archive error: %s", resp.Status())
+	}
+
+	return resp.Body(), nil
+}

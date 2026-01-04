@@ -252,6 +252,18 @@ func (c *Scraper) ScrapeSong(ctx context.Context, song *models.Child) error {
 				newTags[tags.TrackNumber] = []string{media.Track[0].Number}
 			}
 		}
+
+		// Fetch cover art from Cover Art Archive
+		log.Debug("Fetching cover art for release: %s", release.ID)
+		if coverData, err := c.mb.FetchCoverArt(ctx, release.ID); err == nil {
+			if err := tags.WriteImage(song.Path, coverData); err != nil {
+				log.Warn("Failed to write cover art to %s: %v", song.Path, err)
+			} else {
+				log.Info("Successfully scraped cover art for: %s", song.Path)
+			}
+		} else {
+			log.Info("No cover art found for release %s: %v", release.ID, err)
+		}
 	}
 
 	// Update tags in file
