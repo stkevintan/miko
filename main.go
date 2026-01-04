@@ -158,6 +158,7 @@ func syncMusicFolders(db *gorm.DB, cfg *config.Config) {
 	if len(currentPaths) > 0 {
 		db.Where("path NOT IN ?", currentPaths).Delete(&models.MusicFolder{})
 	} else {
-		db.Where("1 = 1").Delete(&models.MusicFolder{})
+		// avoid deleting all if config is empty
+		log.Warn("No music folders configured, did you forget to set subsonic.folders in config?")
 	}
 }

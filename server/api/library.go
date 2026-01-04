@@ -75,15 +75,19 @@ func (h *Handler) handleUpdateLibrarySong(w http.ResponseWriter, r *http.Request
 
 	// Update database using scanner logic
 	sc := di.MustInvoke[*scanner.Scanner](r.Context())
-	sc.ScanPath(r.Context(), song.ID)
-
-	// Fetch updated song
-	if err := db.Where("id = ?", req.ID).First(&song).Error; err != nil {
-		JSON(w, http.StatusInternalServerError, models.ErrorResponse{Error: "Failed to fetch updated song"})
-		return
+	if _, err := sc.ScanPath(r.Context(), song.ID); err != nil {
+		log.Error("Failed to update database for song %s: %v", song.ID, err)
+		JSON(w, http.StatusInternalServerError, models.ErrorResponse{Error: "Failed to update database: " + err.Error()})
+	} else {
+		// get song
+		var updatedSong models.Child
+		if err := db.Where("id = ?", song.ID).First(&updatedSong).Error; err != nil {
+			JSON(w, http.StatusInternalServerError, models.ErrorResponse{Error: "Failed to fetch updated song: " + err.Error()})
+			return
+		}
+		JSON(w, http.StatusOK, updatedSong)
 	}
 
-	JSON(w, http.StatusOK, song)
 }
 
 func (h *Handler) handleUpdateLibrarySongCover(w http.ResponseWriter, r *http.Request) {
