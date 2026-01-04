@@ -9,6 +9,7 @@ import (
 
 	"github.com/stkevintan/miko/config"
 	"github.com/stkevintan/miko/models"
+	"github.com/stkevintan/miko/pkg/log"
 	"gorm.io/gorm"
 )
 
@@ -40,6 +41,7 @@ func (w *Walker) WalkPath(ctx context.Context, path string, folder models.MusicF
 func (w *Walker) walk(ctx context.Context, path string, folder models.MusicFolder, outChan chan<- WalkTask) error {
 	return filepath.WalkDir(path, func(p string, d fs.DirEntry, err error) error {
 		if err != nil {
+			log.Error("Failed to access path %q: %v", p, err)
 			return nil
 		}
 		select {

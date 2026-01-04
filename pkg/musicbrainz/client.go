@@ -44,20 +44,22 @@ func (c *Client) SearchRecording(ctx context.Context, artist, album, title strin
 		return nil, ctx.Err()
 	}
 
-	newQuery := func(key, val string) string {
+	var queryBuilder strings.Builder
+	writeQuery := func(key, val string) {
 		escaped := strings.ReplaceAll(val, "\"", "\\\"")
-		return fmt.Sprintf("%s:\"%s\" ", key, escaped)
+		queryBuilder.WriteString(fmt.Sprintf("%s:\"%s\" ", key, escaped))
 	}
-	query := ""
+
 	if artist != "" {
-		query += newQuery("artist", artist)
+		writeQuery("artist", artist)
 	}
 	if album != "" {
-		query += newQuery("release", album)
+		writeQuery("release", album)
 	}
 	if title != "" {
-		query += newQuery("recording", title)
+		writeQuery("recording", title)
 	}
+	query := queryBuilder.String()
 
 	var sr SearchResponse
 	resp, err := c.restyClient.R().

@@ -124,8 +124,9 @@ func (c *Scraper) ScrapeSong(ctx context.Context, song *models.Child) error {
 	// Get full details
 	recording, err := c.mb.GetRecording(ctx, searchResult.ID)
 	if err != nil {
-		// Fallback to search result if lookup fails
-		recording = searchResult
+		// If fetching full details fails, we cannot proceed with enriching the tags
+		// as the searchResult is only a summary.
+		return fmt.Errorf("failed to get full recording details from MusicBrainz: %w", err)
 	}
 
 	// Prepare tags for update
